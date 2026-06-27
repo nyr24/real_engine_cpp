@@ -43,14 +43,14 @@ struct Arena final : Allocator
     void destroy();
     sz save_mark();
     void restore_mark(sz mark);
-
-    inline u8* memory() { return (u8*)this + sizeof(Arena); }
-    inline sz remain_mem() { return this->capacity - this->cursor; }
-    inline u8* cursor_ptr() { return (u8*)this + this->cursor; }
     bool owns_ptr(void* ptr);
     bool is_last_alloc(sz cursor, void* ptr, sz alloc_size);
     void* fallback_allocate(sz size, sz alignment = 0, bool zero_mem = 0);
     void fallback_free_all();
+
+    inline u8* memory() { return (u8*)this + sizeof(Arena); }
+    inline sz remain_mem() { return this->capacity - this->cursor; }
+    inline u8* cursor_ptr() { return this->memory() + this->cursor; }
 };
 
 Arena* arena_create(Allocator* backing_alloc, sz init_capacity = ARENA_DEFAULT_CAPACITY);

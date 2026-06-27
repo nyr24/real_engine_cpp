@@ -100,7 +100,7 @@ Arena* arena_create(Allocator* backing_alloc, sz init_capacity)
 {
     ASSERT_MSG(init_capacity > 0, "Must be greater than 0");
 
-    Arena* arena = (Arena*)backing_alloc->vtable->allocate(backing_alloc, sizeof(Arena) + init_capacity, 0, false);
+    Arena* arena = (Arena*)allocator_allocate(backing_alloc, sizeof(Arena) + init_capacity);
     arena->vtable = &arena_vtable;
     arena->cursor = 0;
     arena->capacity = init_capacity;
@@ -185,7 +185,7 @@ void* Arena::fallback_allocate(sz size, sz alignment, bool zero_mem)
         curr = curr->next;
     }
 
-    curr = (FallbackAllocation*)this->backing_alloc->vtable->allocate(this->backing_alloc, size + sizeof(FallbackAllocation), alignment, zero_mem);
+    curr = (FallbackAllocation*)allocator_allocate(this->backing_alloc, size + sizeof(FallbackAllocation));
     curr->size = size;
     curr->next = null;
 

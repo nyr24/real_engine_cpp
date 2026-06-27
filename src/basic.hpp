@@ -23,11 +23,13 @@ typedef uint32_t u32;
 typedef uint64_t u64;
 typedef float f32;
 typedef double f64;
+typedef const char* CString;
 
 #define internal static
 #define cast static_cast
 #define bitcast reinterpret_cast
 #define null nullptr
+#define alias using
 
 #define ASSERT(expr) assert((expr))
 #define ASSERT_MSG(expr, msg) assert((expr) && (msg))
@@ -180,6 +182,29 @@ void* allocator_allocate(Allocator* alloc, sz size, sz alignment = 0, bool zero_
 void* allocator_reallocate(Allocator* alloc, void* ptr, sz new_size, sz alignment = 0);
 void  allocator_free(Allocator* alloc, void* ptr);
 void  allocator_display_info(Allocator* alloc);
+
+// Maybe.
+
+template <typename Type>
+struct Maybe
+{
+    Type val;
+    bool has_value;
+
+    inline operator bool() { return has_value; }
+};
+
+template <typename Type>
+inline Maybe<Type> maybe_create(Type val)
+{
+    return Maybe{ val, true };
+}
+
+template <typename Type>
+inline Maybe<Type> maybe_empty()
+{
+    return Maybe<Type>{ .has_value = false };
+}
 
 } // rg
 

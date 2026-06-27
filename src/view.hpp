@@ -84,6 +84,21 @@ bool View<Type>::operator==(View other)
     return rg::mem_compare(this->ptr, other.ptr, other.count);
 }
 
+// StrView & CStrView.
+
+struct StrView : View<char>
+{
+    inline bool is_null_term() { return this->last() == '\0'; }
+    StrView ensure_null_term(Allocator* alloc);
+};
+
+struct CStrView : View<const char>
+{
+};
+
+StrView strview_create(char* ptr, sz count);
+CStrView cstrview_create(CString cstr);
+
 } // rg
 
 #endif // _RG_VIEW_HPP_
