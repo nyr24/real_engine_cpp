@@ -69,6 +69,20 @@ DString* dstring_create_with_values(Allocator* alloc, StrView init_values)
     return dstring;
 }
 
+DString* dstring_create_with_values(Allocator* alloc, CStrView init_values)
+{
+    DString* dstring = (DString*)allocator_allocate(alloc, sizeof(DString) + init_values.count * sizeof(char));
+    dstring->count = 0;
+    dstring->capacity = init_values.count;
+    dstring->alloc = alloc;
+    
+    if (init_values.count)
+    {
+        dstring->push_many(init_values);
+    }
+    return dstring;
+}
+
 void DString::push_many(StrView str_view)
 {
     ASSERT_MSG(str_view.ptr && str_view.count, "Must be valid string view");
@@ -87,6 +101,9 @@ void DString::push_many(CStrView cstr_view)
 {
     ASSERT_MSG(cstr_view.ptr && cstr_view.count, "Must be valid cstring view");
 
+    // Remove duplicated null terminator.
+    if (this->is_null_term()) this->count--;
+
     this->reserve(cstr_view.count);
     char* data = this->data();
 
@@ -100,6 +117,8 @@ void DString::push_many(CStrView cstr_view)
 void DString::push_cstr(CString cstr)
 {
     CStrView cstr_view = cstrview_create(cstr);
+    // Remove duplicated null terminator.
+    if (this->is_null_term()) this->count--;
     this->push_many(cstr_view);
 }
 
@@ -108,11 +127,12 @@ void DString::ensure_null_term()
     ASSERT_MSG(this->is_initialized(), "Requires allocator initialization");
     if (this->is_null_term()) return;
     this->reserve(1);
-    *this->end() = '\0';
+    this->push('\0');
 }
 
 void DString::ensure_no_null_term()
 {
+    if (this->is_empty()) return;
     if (!this->is_null_term()) return;
     this->count--;
 }
@@ -120,7 +140,7 @@ void DString::ensure_no_null_term()
 void DString::foreach_codepoint(void(*fn)(Codepoint&))
 {
     if (this->is_empty()) return;
-    CodepointIterator iter = get_codepoint_iter();
+    CodepointIterator iter = this->get_codepoint_iter();
     Maybe<Codepoint> point;
     
     while (true)
@@ -131,8 +151,6 @@ void DString::foreach_codepoint(void(*fn)(Codepoint&))
     }
 }
 
-// CodepointIterator.
-
 CodepointIterator DString::get_codepoint_iter()
 {
     StrView view = this->view();
@@ -141,6 +159,8 @@ CodepointIterator DString::get_codepoint_iter()
     iter.pos = 0;
     return iter;
 }
+
+// CodepointIterator.
 
 inline u8 CodepointIterator::get_byte_at(sz offset)
 {

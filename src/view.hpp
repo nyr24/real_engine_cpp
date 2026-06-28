@@ -8,7 +8,7 @@
 namespace rg
 {
 
-template <typename Type>
+template<typename Type>
 struct View
 {
     Type* ptr;
@@ -22,22 +22,23 @@ struct View
     inline Type operator[](sz idx);
     bool operator==(View other);
 
-    inline Type* data() { return ptr; }
-    inline Type* begin() { return ptr; }
-    inline Type* end() { return ptr + count; }
-    inline Type first() { return *ptr; }
-    inline Type* first_ref() { return ptr; }
-    inline Type last() { return *(ptr + count - 1); }
-    inline Type* last_ref() { return ptr + count - 1; }
+    inline Type* data() { return this->ptr; }
+    inline Type* begin() { return this->ptr; }
+    inline Type* end() { return this->ptr + this->count; }
+    inline Type first() { return *this->ptr; }
+    inline Type* first_ref() { return this->ptr; }
+    inline Type last() { return *(this->ptr + this->count - 1); }
+    inline Type* last_ref() { return this->ptr + this->count - 1; }
+    inline bool is_valid() { return this->ptr && this->count; }
 };
 
-template <typename Type>
+template<typename Type>
 View<Type> view_create(Type* ptr, sz count)
 {
     return View{ ptr, count };
 }
 
-template <typename Type>
+template<typename Type>
 inline void View<Type>::trim_start(sz trim_count)
 {
     ASSERT_MSG(trim_count < this->count, "Shouldn't exceed inner count");
@@ -45,39 +46,39 @@ inline void View<Type>::trim_start(sz trim_count)
     this->count -= trim_count;
 }
 
-template <typename Type>
+template<typename Type>
 inline void View<Type>::trim_end(sz trim_count)
 {
     ASSERT_MSG(trim_count < this->count, "Shouldn't exceed inner count");
     this->count -= trim_count;
 }
 
-template <typename Type>
+template<typename Type>
 inline Type View<Type>::get(sz idx)
 {
     return *this->get_ref(idx);
 }
 
-template <typename Type>
+template<typename Type>
 inline Type* View<Type>::get_ref(sz idx)
 {
     return this->ptr + idx;
 }
 
-template <typename Type>
+template<typename Type>
 inline void View<Type>::set(Type val, sz idx)
 {
     Type* target = this->get_ref(idx);
     *target = val;
 }
 
-template <typename Type>
+template<typename Type>
 inline Type View<Type>::operator[](sz idx)
 {
     return this->get(idx);
 }
 
-template <typename Type>
+template<typename Type>
 bool View<Type>::operator==(View other)
 {
     if (this->count != other.count) return false;

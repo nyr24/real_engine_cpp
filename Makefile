@@ -8,7 +8,7 @@ RELEASE_OBJECTS = $(patsubst $(SRC_DIR)/%.cpp, $(RELEASE_BUILD_DIR)/%.o, $(SOURC
 EXE=app
 CXX=clang++
 DEBUG_FLAGS=-std=c++20 -g -O0 -I$(INCLUDE_DIR)
-RELEASE_FLAGS=-std=c++20 -O2 -flto -fvirtual-function-elimination -I$(INCLUDE_DIR)
+RELEASE_FLAGS=-std=c++20 -O3 -flto -I$(INCLUDE_DIR)
 
 .PHONY: debug release prepare clean run run_r rebuild rerun rebuild_r rerun_r
 

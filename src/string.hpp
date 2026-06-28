@@ -2,11 +2,14 @@
 #define _RG_STRING_HPP_
 
 #include "basic.hpp"
-#include "dynarr.hpp"
+#include "darray.hpp"
+#include "farray.hpp"
 #include "view.hpp"
 
 namespace rg
 {
+
+// CodepointIterator.
 
 typedef u32 Codepoint;
 
@@ -23,6 +26,9 @@ struct CodepointIterator
     inline bool is_at_end() { return this->pos >= this->view.count; }
 };
 
+
+// DString - dynamic string type.
+
 struct DString : DArray<char>
 {
     void push_many(StrView str_view);
@@ -34,12 +40,134 @@ struct DString : DArray<char>
     void foreach_codepoint(void(*fn)(Codepoint&));
 
     inline StrView view() { return StrView{ this->data(), this->count }; }
-    inline bool is_null_term() { return this->last() == '\0'; }
+    inline bool is_null_term() { return this->count && this->last() == '\0'; }
 };
 
 DString* dstring_create(Allocator* alloc, sz init_capacity = DSTRING_DEFAULT_CAPACITY);
 DString* dstring_create_cstr(Allocator* alloc, CString cstr, sz additional_cap = 0);
-DString* dstring_create_with_values(Allocator* alloc, StrView init_values = {});
+DString* dstring_create_with_values(Allocator* alloc, StrView init_values);
+DString* dstring_create_with_values(Allocator* alloc, CStrView init_values);
+
+// FString - fixed string type.
+
+constexpr sz FSTRING_DEFAULT_CAPACITY = 16;
+
+template<sz CAPACITY = FSTRING_DEFAULT_CAPACITY>
+struct FString : FArray<char, CAPACITY>
+{
+    void init_cstr(CString cstr);
+    void init_with_values(StrView str_view);
+    void init_with_values(CStrView str_view);
+    void push_many(StrView str_view);
+    void push_many(CStrView cstr_view);
+    void push_cstr(CString cstr);
+    bool ensure_null_term();
+    void ensure_no_null_term();
+    CodepointIterator get_codepoint_iter();
+    void foreach_codepoint(void(*fn)(Codepoint&));
+
+    inline StrView view() { return StrView{ this->data, this->count }; }
+    inline bool is_null_term() { return this->count && this->last() == '\0'; }
+};
+
+template<sz CAPACITY>
+void FString<CAPACITY>::init_cstr(CString cstr)
+{
+    this->count = 0;
+    this->push_cstr(cstr);
+}
+
+template<sz CAPACITY>
+void FString<CAPACITY>::init_with_values(StrView init_values)
+{
+    this->count = 0;
+    this->push_many(init_values);
+}
+
+template<sz CAPACITY>
+void FString<CAPACITY>::push_many(StrView str_view)
+{
+    ASSERT_MSG(str_view.is_valid(), "Must be valid string view");
+    ASSERT_MSG(this->remain() >= str_view.count, "Must have enough space");
+
+    char* data = this->data;
+
+    for (char c : str_view)
+    {
+        *(data + this->count) = c;
+        this->count++;
+    }
+}
+
+template<sz CAPACITY>
+void FString<CAPACITY>::push_many(CStrView cstr_view)
+{
+    ASSERT_MSG(cstr_view.is_valid(), "Must be valid cstring view");
+
+    // Remove duplicated null terminator.
+    if (this->is_null_term()) this->count--;
+
+    char* data = this->data;
+
+    for (char c : cstr_view)
+    {
+        *(data + this->count) = c;
+        this->count++;
+    }
+}
+
+template<sz CAPACITY>
+void FString<CAPACITY>::push_cstr(CString cstr)
+{
+    CStrView cstr_view = cstrview_create(cstr);
+    this->push_many(cstr_view);
+}
+
+template<sz CAPACITY>
+bool FString<CAPACITY>::ensure_null_term()
+{
+    ASSERT_MSG(this->is_initialized(), "Requires allocator initialization");
+    if (this->is_null_term()) return true;
+
+    sz remain = this->remain();
+    ASSERT_MSG(remain >= 1, "Must have a space for null character");
+    if (remain < 1) return false;
+    this->push('\0');
+    return true;
+}
+
+template<sz CAPACITY>
+void FString<CAPACITY>::ensure_no_null_term()
+{
+    if (this->is_empty()) return;
+    if (!this->is_null_term()) return;
+    this->count--;
+}
+
+template<sz CAPACITY>
+void FString<CAPACITY>::foreach_codepoint(void(*fn)(Codepoint&))
+{
+    if (this->is_empty()) return;
+    CodepointIterator iter = this->get_codepoint_iter();
+    Maybe<Codepoint> point;
+    
+    while (true)
+    {
+        point = iter.next();
+        if (!point) return;
+        fn(point.val);
+    }
+}
+
+template<sz CAPACITY>
+CodepointIterator FString<CAPACITY>::get_codepoint_iter()
+{
+    StrView view = this->view();
+    CodepointIterator iter; 
+    iter.view = view;
+    iter.pos = 0;
+    return iter;
+}
 
 } // rg
 

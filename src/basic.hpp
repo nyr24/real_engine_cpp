@@ -142,7 +142,7 @@ constexpr sz alignment_for_allocation(sz alignment)
 
 // Defer.
 
-template <typename Func>
+template<typename Func>
 struct _Defer
 {
 	Func f;
@@ -150,7 +150,7 @@ struct _Defer
 	~_Defer() { f(); }
 };
 
-template <typename Func>
+template<typename Func>
 _Defer<Func> defer_func(Func f) {
 	return _Defer<Func>(f);
 }
@@ -185,7 +185,7 @@ void  allocator_display_info(Allocator* alloc);
 
 // Maybe.
 
-template <typename Type>
+template<typename Type>
 struct Maybe
 {
     Type val;
@@ -194,13 +194,13 @@ struct Maybe
     inline operator bool() { return has_value; }
 };
 
-template <typename Type>
+template<typename Type>
 inline Maybe<Type> maybe_create(Type val)
 {
     return Maybe{ val, true };
 }
 
-template <typename Type>
+template<typename Type>
 inline Maybe<Type> maybe_empty()
 {
     return Maybe<Type>{ .has_value = false };
