@@ -142,39 +142,39 @@ CodepointIterator DString::get_codepoint_iter()
     return iter;
 }
 
-inline u8 CodepointIterator::curr_byte_and_move()
+inline u8 CodepointIterator::get_byte_at(sz offset)
 {
     ASSERT_MSG(!this->is_at_end(), "Codepoint iterator mustn't reach the end");
-    return this->view[this->pos++];
+    return this->view[this->pos + offset];
 }
 
 Maybe<Codepoint> CodepointIterator::next()
 {
     if (this->is_at_end()) return maybe_empty<Codepoint>();
 
-    u8 byte = this->curr_byte_and_move();
+    u8 byte = this->get_byte_at();
     Codepoint codepoint;
-    s32 num_bytes = 0;
+    s32 count_bytes = 0;
 
     // Single byte (ASCII)
     if ((byte & 0x80) == 0) {
         codepoint = u32(byte);
-        num_bytes = 1;
+        count_bytes = 1;
     }
     // 2 bytes
     else if ((byte & 0xE0) == 0xC0) {
         codepoint = u32(byte & 0x1F);
-        num_bytes = 2;
+        count_bytes = 2;
     }
     // 3 bytes
     else if ((byte & 0xF0) == 0xE0) {
         codepoint = u32(byte & 0x0F);
-        num_bytes = 3;
+        count_bytes = 3;
     }
     // 4 bytes
     else if ((byte & 0xF8) == 0xF0) {
         codepoint = u32(byte & 0x07);
-        num_bytes = 4;
+        count_bytes = 4;
     }
     // Invalid start byte
     else {
@@ -182,8 +182,8 @@ Maybe<Codepoint> CodepointIterator::next()
     }
 
     // Read continuation bytes
-    for (s32 i = 1; i < num_bytes; i++) {
-        u8 next = this->curr_byte_and_move();
+    for (s32 i = 1; i < count_bytes; i++) {
+        u8 next = this->get_byte_at(i);
         if ((next & 0xC0) != 0x80) {
             // Invalid continuation byte
             return maybe_empty<Codepoint>();
@@ -191,7 +191,7 @@ Maybe<Codepoint> CodepointIterator::next()
         codepoint = u32((codepoint << 6) | (next & 0x3F));
     }
 
-    this->pos += num_bytes;
+    this->step(count_bytes);
     return maybe_create(codepoint);
 }
 

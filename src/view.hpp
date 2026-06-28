@@ -55,13 +55,13 @@ inline void View<Type>::trim_end(sz trim_count)
 template <typename Type>
 inline Type View<Type>::get(sz idx)
 {
-    return this->get(idx);
+    return *this->get_ref(idx);
 }
 
 template <typename Type>
 inline Type* View<Type>::get_ref(sz idx)
 {
-    return &this->get(idx);
+    return this->ptr + idx;
 }
 
 template <typename Type>

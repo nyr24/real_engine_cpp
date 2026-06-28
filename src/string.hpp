@@ -18,7 +18,8 @@ struct CodepointIterator
     sz pos;
 
     Maybe<Codepoint> next();
-    inline u8 curr_byte_and_move();
+    inline u8 get_byte_at(sz offset = 0);
+    inline void step(sz count = 1) { this->pos += count; }
     inline bool is_at_end() { return this->pos >= this->view.count; }
 };
 

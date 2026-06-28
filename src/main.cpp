@@ -24,14 +24,12 @@ int main() {
     }
 
     const char* s = "Hello, 世界 🌍";
-    // for (s32 i = 0; i < slen; ++i)
-    // {
-    //     printfn("char: %08x", s[i]);
-    // }
 
     DString* ds = dstring_create_cstr(arena, s);
     StrView view = ds->view();
     printfn("string: %.*s, length: %lu", s32(view.count), view.ptr, view.count);
-    
+
+    ds->foreach_codepoint([](Codepoint& point) { printfn("codepoint: %04x", point); });
+ 
     return 0;
 }
