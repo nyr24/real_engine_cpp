@@ -30,7 +30,7 @@ void heap_display_info(Allocator* self);
 
 // This should be updated, if new data members added to Arena structure.
 const sz ARENA_HEADER_SIZE = sizeof(sz);
-internal const sz ARENA_DEFAULT_CAPACITY = 4096;
+intern const sz ARENA_DEFAULT_CAPACITY = 4096;
 
 struct Arena final : Allocator
 {

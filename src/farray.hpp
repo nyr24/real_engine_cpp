@@ -41,7 +41,10 @@ struct FArray
     inline Type* last_ref() { return this->data + this->count - 1; }
     inline bool is_empty() { return this->count == 0; }
     inline void clear() { this->count = 0; }
-    inline sz remain() { CAPACITY - this->count; }
+    inline sz remain() { return CAPACITY - this->count; }
+    inline sz byte_size_used() { return this->count * sizeof(Type); }
+    constexpr inline sz byte_size_allocated() { return sizeof(Type) * CAPACITY; }
+    constexpr inline sz byte_size_all() { return sizeof(FArray<Type>); }
 };
 
 template<typename Type, sz CAPACITY>

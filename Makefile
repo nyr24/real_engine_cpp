@@ -7,7 +7,7 @@ DEBUG_OBJECTS = $(patsubst $(SRC_DIR)/%.cpp, $(DEBUG_BUILD_DIR)/%.o, $(SOURCES))
 RELEASE_OBJECTS = $(patsubst $(SRC_DIR)/%.cpp, $(RELEASE_BUILD_DIR)/%.o, $(SOURCES))
 EXE=app
 CXX=clang++
-DEBUG_FLAGS=-std=c++20 -g -O0 -I$(INCLUDE_DIR)
+DEBUG_FLAGS=-std=c++20 -g -O0 -I$(INCLUDE_DIR) -Wall
 RELEASE_FLAGS=-std=c++20 -O3 -flto -I$(INCLUDE_DIR)
 
 .PHONY: debug release prepare clean run run_r rebuild rerun rebuild_r rerun_r

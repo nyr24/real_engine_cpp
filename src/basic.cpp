@@ -13,11 +13,36 @@ StrView strview_create(char* ptr, sz count)
     return StrView{ ptr, count };
 }
 
+void CStrView::init(CString cstr)
+{
+    this->ptr = cstr;
+    this->count = strlen(cstr) + 1;
+    ASSERT_MSG(this->last() == '\0', "Should be null-terminated view");
+}
+
 CStrView cstrview_create(CString cstr)
 {
     CStrView res;
-    res.ptr = cstr;
-    res.count = strlen(cstr);
+    res.init(cstr);
+    return res;
+}
+
+// Will allocate memory and do copy memory, because this is modifiable view.
+// Use CStrView for constant view without copying.
+void StrView::init_cstr(Allocator* alloc, CString cstr)
+{
+    sz len = strlen(cstr);
+    this->ptr = (char*)allocator_allocate(alloc, len * sizeof(char));
+    this->count = len;
+    mem_copy(this->ptr, (void*)cstr, len);
+}
+
+// Will allocate memory and do copy memory, because this is modifiable view.
+// Use CStrView for constant view without copying.
+StrView strview_create_cstr(Allocator* alloc, CString cstr)
+{
+    StrView res;
+    res.init_cstr(alloc, cstr);
     return res;
 }
 
@@ -34,61 +59,59 @@ StrView StrView::ensure_null_term(Allocator* alloc)
 
 // DString.
 
-DString* dstring_create(Allocator* alloc, sz init_capacity)
+void DString::init(Allocator* alloc, sz init_capacity)
 {
-    DString* dstring = (DString*)allocator_allocate(alloc, sizeof(DString) + init_capacity * sizeof(char));
-    dstring->count = 0;
-    dstring->capacity = init_capacity;
-    dstring->alloc = alloc;
-    return dstring;
+    this->data = (char*)allocator_allocate(alloc, init_capacity * sizeof(char));
+    this->count = 0;
+    this->capacity = init_capacity;
+    this->alloc = alloc;
 }
 
-DString* dstring_create_cstr(Allocator* alloc, CString cstr, sz additional_cap)
+void DString::init_cstr(Allocator* alloc, CString cstr)
 {
     sz len = strlen(cstr);
-    sz capacity = len + additional_cap;
-    DString* dstring = (DString*)allocator_allocate(alloc, sizeof(DString) + capacity * sizeof(char));
-    dstring->count = len;
-    dstring->capacity = capacity;
-    dstring->alloc = alloc;
-    mem_copy(dstring->data(), (void*)cstr, len);
-    return dstring;
+    // Allocate at minimum 1 more than length, for easier null termination.
+    sz init_cap = max(DSTRING_DEFAULT_CAPACITY, len + 1);
+    this->data = (char*)allocator_allocate(alloc, init_cap * sizeof(char));
+    this->count = len;
+    this->capacity = capacity;
+    this->alloc = alloc;
+    mem_copy(this->data, (void*)cstr, len);
 }
 
-DString* dstring_create_with_values(Allocator* alloc, StrView init_values)
+void DString::init_with_values(Allocator* alloc, StrView init_values, sz additional_capacity)
 {
-    DString* dstring = (DString*)allocator_allocate(alloc, sizeof(DString) + init_values.count * sizeof(char));
-    dstring->count = 0;
-    dstring->capacity = init_values.count;
-    dstring->alloc = alloc;
-    
+    sz init_cap = max(DSTRING_DEFAULT_CAPACITY, init_values.count + additional_capacity);
+    this->data = (char*)allocator_allocate(alloc, init_cap * sizeof(char));
+    this->count = 0;
+    this->capacity = init_cap;
+    this->alloc = alloc;
     if (init_values.count)
     {
-        dstring->push_many(init_values);
+        this->push_many(init_values);
     }
-    return dstring;
 }
 
-DString* dstring_create_with_values(Allocator* alloc, CStrView init_values)
+void DString::init_with_values(Allocator* alloc, CStrView init_values, sz additional_capacity)
 {
-    DString* dstring = (DString*)allocator_allocate(alloc, sizeof(DString) + init_values.count * sizeof(char));
-    dstring->count = 0;
-    dstring->capacity = init_values.count;
-    dstring->alloc = alloc;
-    
+    sz init_cap = max(DSTRING_DEFAULT_CAPACITY, init_values.count + additional_capacity);
+    this->data = (char*)allocator_allocate(alloc, init_cap * sizeof(char));
+    this->count = 0;
+    this->capacity = init_cap;
+    this->alloc = alloc;
     if (init_values.count)
     {
-        dstring->push_many(init_values);
+        this->push_many(init_values);
     }
-    return dstring;
 }
 
 void DString::push_many(StrView str_view)
 {
+    ASSERT_MSG(this->is_initialized(), "Must be initialized first");
     ASSERT_MSG(str_view.ptr && str_view.count, "Must be valid string view");
 
     this->reserve(str_view.count);
-    char* data = this->data();
+    char* data = this->data;
 
     for (char c : str_view)
     {
@@ -99,13 +122,14 @@ void DString::push_many(StrView str_view)
 
 void DString::push_many(CStrView cstr_view)
 {
+    ASSERT_MSG(this->is_initialized(), "Must be initialized first");
     ASSERT_MSG(cstr_view.ptr && cstr_view.count, "Must be valid cstring view");
 
     // Remove duplicated null terminator.
     if (this->is_null_term()) this->count--;
 
     this->reserve(cstr_view.count);
-    char* data = this->data();
+    char* data = this->data;
 
     for (char c : cstr_view)
     {
@@ -116,6 +140,7 @@ void DString::push_many(CStrView cstr_view)
 
 void DString::push_cstr(CString cstr)
 {
+    ASSERT_MSG(this->is_initialized(), "Must be initialized first");
     CStrView cstr_view = cstrview_create(cstr);
     // Remove duplicated null terminator.
     if (this->is_null_term()) this->count--;
@@ -158,6 +183,36 @@ CodepointIterator DString::get_codepoint_iter()
     iter.view = view;
     iter.pos = 0;
     return iter;
+}
+
+u64 DString::hash()
+{
+    u64 hash = FNV_OFFSET_BASIS;
+    sz byte_count = this->count;
+    char* byte = this->data;
+    char* end = byte + byte_count;
+
+    for (; byte != end; ++byte)
+    {
+        hash ^= *byte;
+        hash *= FNV_PRIME;
+    }
+
+    return hash;
+}
+
+bool operator==(DString& lhs, DString& rhs)
+{
+    if (lhs.count != rhs.count) return false;
+    char* first = lhs.data;
+    char* sec = rhs.data;
+    char* end = first + lhs.count;
+
+    for (; first != end; ++first, ++sec)
+    {
+        if (*first != *sec) return false;
+    }
+    return true;
 }
 
 // CodepointIterator.

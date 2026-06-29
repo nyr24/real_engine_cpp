@@ -25,7 +25,7 @@ typedef float f32;
 typedef double f64;
 typedef const char* CString;
 
-#define internal static
+#define intern static
 #define cast static_cast
 #define bitcast reinterpret_cast
 #define null nullptr
@@ -36,6 +36,8 @@ typedef const char* CString;
 #define ASSERT_FALSE(expr) assert((!expr))
 #define ASSERT_FALSE_MSG(expr, msg) assert((!expr) && (msg))
 #define ASSERT_NON_NULL(expr, msg) assert(((expr) != nullptr) && (msg))
+#define ASSERT_STATIC(expr) static_assert((expr))
+#define ASSERT_STATIC_MSG(expr, msg) static_assert((expr), (msg))
 #define TODO(msg) assert(false && (msg))
 
 #define printn(msg) fputs(msg, stdout)
@@ -46,7 +48,7 @@ typedef const char* CString;
 namespace rg
 {
 
-const sz DEFAULT_MEM_ALIGNMENT = sizeof(uptr) * 2;
+constexpr sz DEFAULT_MEM_ALIGNMENT = sizeof(uptr) * 2;
 
 template<typename Type>
 constexpr Type max(Type a, Type b)
@@ -55,9 +57,47 @@ constexpr Type max(Type a, Type b)
 }
 
 template<typename Type>
+constexpr Type max(Type a, Type b, Type c)
+{
+	Type res = a;
+	res = max(res, b);
+	res = max(res, c);
+	return res;
+}
+
+template<typename Type>
+constexpr Type max(Type a, Type b, Type c, Type d)
+{
+	Type res = a;
+	res = max(res, b);
+	res = max(res, c);
+	res = max(res, d);
+	return res;
+}
+
+template<typename Type>
 constexpr Type min(Type a, Type b)
 {
 	return a < b ? a : b;
+}
+
+template<typename Type>
+constexpr Type min(Type a, Type b, Type c)
+{
+	Type res = a;
+	res = min(res, b);
+	res = min(res, c);
+	return res;
+}
+
+template<typename Type>
+constexpr Type min(Type a, Type b, Type c, Type d)
+{
+	Type res = a;
+	res = min(res, b);
+	res = min(res, c);
+	res = min(res, d);
+	return res;
 }
 
 template<typename Type>
@@ -205,6 +245,11 @@ inline Maybe<Type> maybe_empty()
 {
     return Maybe<Type>{ .has_value = false };
 }
+
+// Hash (fnv1a).
+
+intern constexpr u64 FNV_PRIME = 1099511628211ull;
+intern constexpr u64 FNV_OFFSET_BASIS = 14695981039346656037ull;
 
 } // rg
 

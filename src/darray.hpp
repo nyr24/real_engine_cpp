@@ -17,14 +17,16 @@ struct DArray
     sz count;
     sz capacity;
     Allocator* alloc;
+    Type* data;
 
+    void init(Allocator* alloc, sz init_capacity = DARRAY_DEFAULT_CAPACITY);
+    void init_with_values(Allocator* alloc, View<Type> values, sz additional_capacity = 0);
     void push(Type value);
     void push_many(View<Type> values);
     Type pop();
     Type remove_unordered_at(sz idx);
     void reserve(sz needed);
     void destroy();
-    void swap_ownership(DArray<Type>* other);
     void move_ownership(DArray<Type>* other);
     View<Type> view(sz start = 0, sz end = -1);
     void foreach(void(*fn)(Type&));
@@ -36,48 +38,51 @@ struct DArray
     inline Type operator[](sz idx);
 
     inline sz len() { return this->count; }
-    inline Type* data() { return (Type*)((u8*)this + sizeof(DArray<Type>)); }
-    inline Type* begin() { return this->data(); }
-    inline Type* end() { return this->data() + this->count; }
-    inline Type first() { return *this->data(); }
-    inline Type* first_ref() { return this->data(); }
-    inline Type last() { return *(this->data() + this->count - 1); }
-    inline Type* last_ref() { return this->data() + this->count - 1; }
+    inline Type* begin() { return this->data; }
+    inline Type* end() { return this->data + this->count; }
+    inline Type first() { return *this->data; }
+    inline Type* first_ref() { return this->data; }
+    inline Type last() { return *(this->data + this->count - 1); }
+    inline Type* last_ref() { return this->data + this->count - 1; }
     inline bool is_empty() { return this->count == 0; }
     inline bool is_initialized() { return this->alloc != null; }
     inline void clear() { this->count = 0; }
+    inline sz byte_size_used() { return this->count * sizeof(Type); }
+    inline sz byte_size_allocated() { return this->capacity * sizeof(Type); }
 };
 
 template<typename Type>
-DArray<Type>* darray_create(Allocator* alloc, sz init_capacity = DARRAY_DEFAULT_CAPACITY)
+void DArray<Type>::init(Allocator* alloc, sz init_capacity)
 {
-    DArray<Type>* darray = (DArray<Type>*)allocator_allocate(alloc, sizeof(DArray<Type>) + init_capacity * sizeof(Type));
-    darray->count = 0;
-    darray->capacity = init_capacity;
-    darray->alloc = alloc;
-    return darray;
+    ASSERT_MSG(init_capacity >= 0, "Must be greater than 0");
+    init_capacity = max(DARRAY_DEFAULT_CAPACITY, init_capacity);
+    this->data = (Type*)allocator_allocate(alloc, init_capacity * sizeof(Type));
+    this->count = 0;
+    this->capacity = init_capacity;
+    this->alloc = alloc;
 }
 
 template<typename Type>
-DArray<Type>* darray_create_with_values(Allocator* alloc, View<Type> init_values = {})
+void DArray<Type>::init_with_values(Allocator* alloc, View<Type> values, sz additional_capacity)
 {
-    DArray<Type>* darray = (DArray<Type>*)allocator_allocate(alloc, sizeof(DArray<Type>) + init_values.count * sizeof(Type));
-    darray->count = 0;
-    darray->capacity = init_values.count;
-    darray->alloc = alloc;
-    
-    if (init_values.count)
+    ASSERT_MSG(values.is_valid(), "Values must be valid");
+    sz init_cap = max(DARRAY_DEFAULT_CAPACITY, values.count + additional_capacity);
+    this->data = (Type*)allocator_allocate(alloc, init_cap * sizeof(Type));
+    this->count = 0;
+    this->capacity = init_cap;
+    this->alloc = alloc;
+    if (values.count)
     {
-        darray->push_many(init_values);
+        this->push_many(values);
     }
-    return darray;
 }
 
 template<typename Type>
 void DArray<Type>::push(Type value)
 {
-    darray_reserve(this, 1);
-    Type* data = this->data();
+    ASSERT_MSG(this->is_initialized(), "Must be initialized first");
+    this->reserve(1);
+    Type* data = this->data;
     *(data + this->count) = value;
     this->count++;
 }
@@ -85,8 +90,9 @@ void DArray<Type>::push(Type value)
 template<typename Type>
 void DArray<Type>::push_many(View<Type> values)
 {
-    darray_reserve(this, values.count);
-    Type* data = this->data();
+    ASSERT_MSG(this->is_initialized(), "Must be initialized first");
+    this->reserve(values.count);
+    Type* data = this->data;
 
     for (Type val : values)
     {
@@ -124,7 +130,7 @@ template<typename Type>
 inline Type DArray<Type>::get(sz idx)
 {
     assert(idx >= 0 && idx < this->count && "Must be in bounds");
-    return this->data()[idx];
+    return this->data[idx];
 }
 
 template<typename Type>
@@ -137,7 +143,7 @@ template<typename Type>
 inline void DArray<Type>::set(Type val, sz idx)
 {
     ASSERT_MSG(idx >= 0 && idx < this->count, "Must be in bounds");
-    Type* place = this->data() + idx;
+    Type* place = this->data + idx;
     *place = val;
 }
 
@@ -155,20 +161,13 @@ inline Type DArray<Type>::operator[](sz idx)
     return this->get(idx);
 }
 
-
 template<typename Type>
 void DArray<Type>::reserve(sz needed)
 {
-    darray_reserve(this, needed);
-}
-
-template<typename Type>
-internal void darray_reserve(DArray<Type>* self, sz needed)
-{
-    sz remain = self->capacity - self->count;
+    sz remain = this->capacity - this->count;
     if (remain >= needed) return;
 
-    sz old_capacity = self->capacity;
+    sz old_capacity = this->capacity;
     sz min_required = old_capacity + needed;
     sz new_capacity = old_capacity;
 
@@ -178,8 +177,8 @@ internal void darray_reserve(DArray<Type>* self, sz needed)
         new_capacity *= 2;
     }
     
-    self = (DArray<Type>*)realloc(self, sizeof(*self) + sizeof(Type) * new_capacity);
-    self->capacity = new_capacity;
+    this->data = (Type*)allocator_reallocate(this->alloc, this->data, sizeof(Type) * new_capacity);
+    this->capacity = new_capacity;
 }
 
 template<typename Type>
@@ -188,15 +187,8 @@ View<Type> DArray<Type>::view(sz start, sz end)
     if (end == -1) end = this->count;
     sz dist = end - start;
     ASSERT_MSG(dist > 0, "Should be greater than 0");
-    Type* data = this->data();
+    Type* data = this->data;
     return View{ data + start, dist };
-}
-
-template<typename Type>
-void DArray<Type>::swap_ownership(DArray<Type>* other)
-{
-    ASSERT_MSG(this != other, "Trying to swap ownership with itself");
-    rg::swap(this, other);
 }
 
 template<typename Type>
@@ -207,7 +199,7 @@ void DArray<Type>::move_ownership(DArray<Type>* other)
 }
 
 template<typename Type>
-void DArray<Type>::foreach(void (*fn) (Type&))
+void DArray<Type>::foreach(void(*fn)(Type&))
 {
     for (Type& val : *this)
     {
@@ -218,7 +210,13 @@ void DArray<Type>::foreach(void (*fn) (Type&))
 template<typename Type>
 void DArray<Type>::destroy()
 {
-    allocator_free(this->alloc, this);
+    if (this->data)
+    {
+        this->count = 0;
+        this->capacity = 0;
+        allocator_free(this->alloc, this->data);
+        this->data = null;
+    }
 }
 
 } // rg
