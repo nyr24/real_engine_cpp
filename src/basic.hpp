@@ -1,12 +1,22 @@
 #ifndef _RG_BASIC_HPP_
 #define _RG_BASIC_HPP_
 
-#include "cstddef"
-#include "cstdint"
-#include "cstdlib"
-#include "cassert"
-#include "cstdio"
-#include "cstring"
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <cassert>
+#include <cstdio>
+#include <cstring>
+
+#ifdef _WIN32
+	#define RG_PLATFORM_WIN32
+	#include <windows.h>
+#else
+	#define RG_PLATFORM_POSIX
+	#include <fcntl.h>
+	#include <unistd.h>
+	#include <sys/stat.h>
+#endif // _WIN32
 
 // Types and keywords.
 
@@ -24,6 +34,8 @@ typedef uint64_t u64;
 typedef float f32;
 typedef double f64;
 typedef const char* CString;
+typedef s32 FileHandle;
+typedef time_t FileTimeUnit;
 
 #define intern static
 #define cast static_cast
@@ -48,6 +60,8 @@ typedef const char* CString;
 namespace rg
 {
 
+constexpr FileHandle FILE_HANDLE_INVALID = -1;
+constexpr sz INDEX_INVALID = -1;
 constexpr sz DEFAULT_MEM_ALIGNMENT = sizeof(uptr) * 2;
 
 template<typename Type>
@@ -180,6 +194,21 @@ constexpr sz alignment_for_allocation(sz alignment)
 	return max(alignment, DEFAULT_MEM_ALIGNMENT);
 }
 
+[[noreturn]] void panic(CString message = "", ...);
+// {
+//     LOG_FATAL("{}", message);
+//     std::exit(1);
+// }
+
+[[noreturn]] void unreachable(CString message = "", ...);
+// {
+// #if defined(_MSC_VER) && !defined(__clang__) // MSVC
+//     __assume(false);
+// #else // GCC, Clang
+//     __builtin_unreachable();
+// #endif
+// }
+
 // Defer.
 
 template<typename Func>
@@ -231,6 +260,8 @@ struct Maybe
     Type val;
     bool has_value;
 
+	void set_val(Type val);
+	void set_empty();
     inline operator bool() { return has_value; }
 };
 
@@ -246,10 +277,23 @@ inline Maybe<Type> maybe_empty()
     return Maybe<Type>{ .has_value = false };
 }
 
+template<typename Type>
+inline void Maybe<Type>::set_val(Type val)
+{
+	this->has_value = true;
+	this->val = val;
+}
+
+template<typename Type>
+inline void Maybe<Type>::set_empty()
+{
+	this->has_value = false;
+}
+
 // Hash (fnv1a).
 
-intern constexpr u64 FNV_PRIME = 1099511628211ull;
-intern constexpr u64 FNV_OFFSET_BASIS = 14695981039346656037ull;
+constexpr u64 FNV_PRIME = 1099511628211ull;
+constexpr u64 FNV_OFFSET_BASIS = 14695981039346656037ull;
 
 } // rg
 

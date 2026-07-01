@@ -1,8 +1,10 @@
 #ifndef _RG_FARRAY_HPP_
 #define _RG_FARRAY_HPP_
 
+#include <initializer_list>
 #include "basic.hpp"
-#include "view.hpp"
+#include "slice.hpp"
+#include "split_iterator.hpp"
 
 // Farray - fixed array type.
 
@@ -17,21 +19,26 @@ struct FArray
     sz count;
     Type data[CAPACITY];
 
+    constexpr FArray() = default;
+    constexpr FArray(std::initializer_list<Type> init_list);
+
     inline void init() { this->count = 0; }
-    void init_with_values(View<Type> values);
+    void init_slice(Slice<Type> values);
     void push(Type value);
-    void push_many(View<Type> values);
+    void push_many(Slice<Type> values);
     Type pop();
     Type remove_unordered_at(sz idx);
-    View<Type> view(sz start = 0, sz end = -1);
-    void foreach(void(*fn)(Type&));
+    Slice<Type> slice(sz start = 0, sz end = -1);
+    void foreach(void(*fn)(Type));
+    void foreach_ref(void(*fn)(Type*));
+    SplitIterator<Type> get_split_iter(Type splitter);
+    void foreach_split(Type splitter, void(*fn)(Slice<Type>));
 
-    inline Type get(sz idx);
-    inline Type* get_ref(sz idx);
+    inline Type at(sz idx);
+    inline Type* at_ref(sz idx);
     inline void set(Type val, sz idx);
     inline void swap(sz idx1, sz idx2);
     inline Type operator[](sz idx);
-
     inline sz len() { return this->count; }
     inline Type* begin() { return this->data; }
     inline Type* end() { return this->data + this->count; }
@@ -48,7 +55,19 @@ struct FArray
 };
 
 template<typename Type, sz CAPACITY>
-void FArray<Type, CAPACITY>::init_with_values(View<Type> values)
+constexpr FArray<Type, CAPACITY>::FArray(std::initializer_list<Type> init_list)
+    : count{init_list.size()}
+{
+    Type* start = this->data;    
+    for (Type el : init_list)
+    {
+        *start = el;
+        ++start;
+    }
+}
+
+template<typename Type, sz CAPACITY>
+void FArray<Type, CAPACITY>::init_slice(Slice<Type> values)
 {
     this->count = 0;
     this->push_many(values);
@@ -64,7 +83,7 @@ void FArray<Type, CAPACITY>::push(Type value)
 }
 
 template<typename Type, sz CAPACITY>
-void FArray<Type, CAPACITY>::push_many(View<Type> values)
+void FArray<Type, CAPACITY>::push_many(Slice<Type> values)
 {
     ASSERT_MSG(this->remain() >= values.count, "Must have space for a push_many");
     Type* data = this->data;
@@ -102,16 +121,16 @@ Type FArray<Type, CAPACITY>::remove_unordered_at(sz idx)
 }
 
 template<typename Type, sz CAPACITY>
-inline Type FArray<Type, CAPACITY>::get(sz idx)
+inline Type FArray<Type, CAPACITY>::at(sz idx)
 {
     assert(idx >= 0 && idx < this->count && "Must be in bounds");
     return this->data[idx];
 }
 
 template<typename Type, sz CAPACITY>
-inline Type* FArray<Type, CAPACITY>::get_ref(sz idx)
+inline Type* FArray<Type, CAPACITY>::at_ref(sz idx)
 {
-    return &this->get(idx);
+    return &this->at(idx);
 }
 
 template<typename Type, sz CAPACITY>
@@ -127,32 +146,78 @@ inline void FArray<Type, CAPACITY>::swap(sz idx1, sz idx2)
 {
     ASSERT_MSG(idx1 >= 0 && idx1 < this->count, "Must be in bounds");
     ASSERT_MSG(idx2 >= 0 && idx2 < this->count, "Must be in bounds");
-    rg::swap(this->get_ref(idx1), this->get_ref(idx2));
+    rg::swap(this->at_ref(idx1), this->at_ref(idx2));
 }
 
 template<typename Type, sz CAPACITY>
 inline Type FArray<Type, CAPACITY>::operator[](sz idx)
 {
-    return this->get(idx);
+    return this->at(idx);
 }
 
 template<typename Type, sz CAPACITY>
-View<Type> FArray<Type, CAPACITY>::view(sz start, sz end)
+Slice<Type> FArray<Type, CAPACITY>::slice(sz start, sz end)
 {
     if (end == -1) end = this->count;
     sz dist = end - start;
     ASSERT_MSG(dist > 0, "Should be greater than 0");
     Type* data = this->data;
-    return View{ data + start, dist };
+    return Slice{ data + start, dist };
 }
 
 template<typename Type, sz CAPACITY>
-void FArray<Type, CAPACITY>::foreach(void (*fn) (Type&))
+void FArray<Type, CAPACITY>::foreach(void (*fn) (Type))
 {
-    for (Type& val : *this)
+    for (Type* curr = this->begin(); curr != this->end(); ++curr)
     {
-        fn(val);
+        fn(*curr);
     }
+}
+
+template<typename Type, sz CAPACITY>
+void FArray<Type, CAPACITY>::foreach_ref(void (*fn) (Type*))
+{
+    for (Type* curr = this->begin(); curr != this->end(); ++curr)
+    {
+        fn(curr);
+    }
+}
+
+template<typename Type, sz CAPACITY>
+SplitIterator<Type> FArray<Type, CAPACITY>::get_split_iter(Type splitter)
+{
+    return { this->slice(), splitter };
+}
+
+template<typename Type, sz CAPACITY>
+void FArray<Type, CAPACITY>::foreach_split(Type splitter, void(*fn)(Slice<Type>))
+{
+    SplitIterator<Type> iter = this->get_split_iter(splitter);
+    Slice<Type> seq;
+
+    for (;;)
+    {
+        seq = iter.next();
+        if (seq.is_empty()) return;
+        fn(seq);
+    }
+}
+
+// EnumArray.
+
+template<typename Type, typename EnumType>
+struct EnumArray : FArray<Type, (sz)EnumType::EnumSize>
+{
+    using FArray<Type, (sz)EnumType::EnumSize>::FArray;
+    inline Type operator[](EnumType idx);
+};
+
+template<typename Type, typename EnumType>
+Type EnumArray<Type, EnumType>::operator[](EnumType e_idx)
+{
+    sz idx = sz(e_idx);
+    ASSERT_MSG(idx >= 0 && idx < EnumType::EnumSize, "Must be in bounds");
+    return this->data[idx];
 }
 
 } // rg

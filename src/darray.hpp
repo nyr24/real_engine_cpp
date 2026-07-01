@@ -2,7 +2,8 @@
 #define _RG_DARRAY_HPP_
 
 #include "basic.hpp"
-#include "view.hpp"
+#include "slice.hpp"
+#include "split_iterator.hpp"
 
 // Darray - dynamic array type.
 
@@ -20,19 +21,22 @@ struct DArray
     Type* data;
 
     void init(Allocator* alloc, sz init_capacity = DARRAY_DEFAULT_CAPACITY);
-    void init_with_values(Allocator* alloc, View<Type> values, sz additional_capacity = 0);
+    void init_with_values(Allocator* alloc, Slice<Type> values, sz additional_capacity = 0);
     void push(Type value);
-    void push_many(View<Type> values);
+    void push_many(Slice<Type> values);
     Type pop();
     Type remove_unordered_at(sz idx);
     void reserve(sz needed);
     void destroy();
     void move_ownership(DArray<Type>* other);
-    View<Type> view(sz start = 0, sz end = -1);
-    void foreach(void(*fn)(Type&));
+    Slice<Type> slice(sz start = 0, sz end = -1);
+    void foreach(void(*fn)(Type));
+    void foreach_ref(void(*fn)(Type*));
+    SplitIterator<Type> get_split_iter(Type splitter);
+    void foreach_split(Type splitter, void(*fn)(Slice<Type>));
 
-    inline Type get(sz idx);
-    inline Type* get_ref(sz idx);
+    inline Type at(sz idx);
+    inline Type* at_ref(sz idx);
     inline void set(Type val, sz idx);
     inline void swap(sz idx1, sz idx2);
     inline Type operator[](sz idx);
@@ -63,7 +67,7 @@ void DArray<Type>::init(Allocator* alloc, sz init_capacity)
 }
 
 template<typename Type>
-void DArray<Type>::init_with_values(Allocator* alloc, View<Type> values, sz additional_capacity)
+void DArray<Type>::init_with_values(Allocator* alloc, Slice<Type> values, sz additional_capacity)
 {
     ASSERT_MSG(values.is_valid(), "Values must be valid");
     sz init_cap = max(DARRAY_DEFAULT_CAPACITY, values.count + additional_capacity);
@@ -82,13 +86,12 @@ void DArray<Type>::push(Type value)
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized first");
     this->reserve(1);
-    Type* data = this->data;
-    *(data + this->count) = value;
+    *this->end() = value;
     this->count++;
 }
 
 template<typename Type>
-void DArray<Type>::push_many(View<Type> values)
+void DArray<Type>::push_many(Slice<Type> values)
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized first");
     this->reserve(values.count);
@@ -127,16 +130,17 @@ Type DArray<Type>::remove_unordered_at(sz idx)
 }
 
 template<typename Type>
-inline Type DArray<Type>::get(sz idx)
+inline Type DArray<Type>::at(sz idx)
 {
     assert(idx >= 0 && idx < this->count && "Must be in bounds");
     return this->data[idx];
 }
 
 template<typename Type>
-inline Type* DArray<Type>::get_ref(sz idx)
+inline Type* DArray<Type>::at_ref(sz idx)
 {
-    return &this->get(idx);
+    assert(idx >= 0 && idx < this->count && "Must be in bounds");
+    return this->data + idx;
 }
 
 template<typename Type>
@@ -152,13 +156,13 @@ inline void DArray<Type>::swap(sz idx1, sz idx2)
 {
     ASSERT_MSG(idx1 >= 0 && idx1 < this->count, "Must be in bounds");
     ASSERT_MSG(idx2 >= 0 && idx2 < this->count, "Must be in bounds");
-    rg::swap(this->get_ref(idx1), this->get_ref(idx2));
+    rg::swap(this->at_ref(idx1), this->at_ref(idx2));
 }
 
 template<typename Type>
 inline Type DArray<Type>::operator[](sz idx)
 {
-    return this->get(idx);
+    return this->at(idx);
 }
 
 template<typename Type>
@@ -182,13 +186,13 @@ void DArray<Type>::reserve(sz needed)
 }
 
 template<typename Type>
-View<Type> DArray<Type>::view(sz start, sz end)
+Slice<Type> DArray<Type>::slice(sz start, sz end)
 {
     if (end == -1) end = this->count;
     sz dist = end - start;
     ASSERT_MSG(dist > 0, "Should be greater than 0");
     Type* data = this->data;
-    return View{ data + start, dist };
+    return Slice{ data + start, dist };
 }
 
 template<typename Type>
@@ -199,11 +203,40 @@ void DArray<Type>::move_ownership(DArray<Type>* other)
 }
 
 template<typename Type>
-void DArray<Type>::foreach(void(*fn)(Type&))
+void DArray<Type>::foreach(void(*fn)(Type))
 {
-    for (Type& val : *this)
+    for (Type* curr = this->begin(); curr != this->end(); ++curr)
     {
-        fn(val);
+        fn(*curr);
+    }
+}
+
+template<typename Type>
+void DArray<Type>::foreach_ref(void(*fn)(Type*))
+{
+    for (Type* curr = this->begin(); curr != this->end(); ++curr)
+    {
+        fn(curr);
+    }
+}
+
+template<typename Type>
+SplitIterator<Type> DArray<Type>::get_split_iter(Type splitter)
+{
+    return { this->slice(), splitter };
+}
+
+template<typename Type>
+void DArray<Type>::foreach_split(Type splitter, void(*fn)(Slice<Type>))
+{
+    SplitIterator<Type> iter = this->get_split_iter(splitter);
+    Slice<Type> seq;
+
+    for (;;)
+    {
+        seq = iter.next();
+        if (seq.is_empty()) return;
+        fn(seq);
     }
 }
 

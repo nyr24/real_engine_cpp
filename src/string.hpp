@@ -4,23 +4,24 @@
 #include "basic.hpp"
 #include "darray.hpp"
 #include "farray.hpp"
-#include "view.hpp"
+#include "slice.hpp"
 
 namespace rg
 {
 
-// CodepointIterator.
+// Utf8 CodepointIterator.
 
-typedef u32 Codepoint;
+typedef u32 Utf8Codepoint;
 
-const sz DSTRING_DEFAULT_CAPACITY = 16;
+constexpr sz DSTRING_DEFAULT_CAPACITY = 16;
+constexpr u32 UTF8_CODEPOINT_INVALID = u32(-1);
 
-struct CodepointIterator
+struct Utf8CodepointIterator
 {
     StrView view;
     sz pos;
 
-    Maybe<Codepoint> next();
+    Utf8Codepoint next();
 private:
     inline u8 get_byte_at(sz offset = 0);
     inline void step(sz count = 1) { this->pos += count; }
@@ -32,19 +33,25 @@ private:
 struct DString : DArray<char>
 {
     void init(Allocator* alloc, sz init_capacity = DSTRING_DEFAULT_CAPACITY);
-    void init_cstr(Allocator* alloc, CString cstr);
-    void init_with_values(Allocator* alloc, StrView init_values, sz additional_capacity = 0);
-    void init_with_values(Allocator* alloc, CStrView init_values, sz additional_capacity = 0);
-    void push_many(StrView str_view);
-    void push_many(CStrView cstr_view);
-    void push_cstr(CString cstr);
+    void init_slice(Allocator* alloc, Slice<char> slice, sz additional_capacity = 0);
+    void init_view(Allocator* alloc, StrView str_view, sz additional_capacity = 0);
+    void init_cstr(Allocator* alloc, CString cstr, bool preserve_null_term = true);
+    void push(char c);
+    void push(StrView str_view);
+    void push(Slice<char> slice);
+    void push(CString cstr);
+    void push_fmt(CString fmt, ...);
     void ensure_null_term();
     void ensure_no_null_term();
-    CodepointIterator get_codepoint_iter();
-    void foreach_codepoint(void(*fn)(Codepoint&));
+    Utf8CodepointIterator get_codepoint_iter();
+    void foreach_codepoint(void(*fn)(Utf8Codepoint&));
     u64 hash();
 
+    CString cstr();
+    // View is constant.
     inline StrView view() { return StrView{ this->data, this->count }; }
+    // Slice is modifiable.
+    inline Slice<char> slice() { return Slice{ this->data, this->count }; }
     inline bool is_null_term() { return this->count && this->last() == '\0'; }
 };
 
@@ -57,21 +64,33 @@ constexpr sz FSTRING_DEFAULT_CAPACITY = 16;
 template<sz CAPACITY = FSTRING_DEFAULT_CAPACITY>
 struct FString : FArray<char, CAPACITY>
 {
+    FString() = default;
+    FString(CString cstr);
+
+    void init_view(StrView str_view);
+    void init_slice(Slice<char> slice);
     void init_cstr(CString cstr);
-    void init_with_values(StrView str_view);
-    void init_with_values(CStrView str_view);
     void push_many(StrView str_view);
-    void push_many(CStrView cstr_view);
+    void push_many(Slice<char> slice);
     void push_cstr(CString cstr);
     bool ensure_null_term();
     void ensure_no_null_term();
-    CodepointIterator get_codepoint_iter();
-    void foreach_codepoint(void(*fn)(Codepoint&));
+    Utf8CodepointIterator get_codepoint_iter();
+    void foreach_codepoint(void(*fn)(Utf8Codepoint&));
     u64 hash();
 
+    // View is constant.
     inline StrView view() { return StrView{ this->data, this->count }; }
+    // Slice is modifiable.
+    inline Slice<char> slice() { return Slice{ this->data, this->count }; }
     inline bool is_null_term() { return this->count && this->last() == '\0'; }
 };
+
+template<sz CAPACITY>
+FString<CAPACITY>::FString(CString cstr)
+{
+    this->init_cstr(cstr);
+}
 
 template<sz CAPACITY>
 void FString<CAPACITY>::init_cstr(CString cstr)
@@ -81,50 +100,55 @@ void FString<CAPACITY>::init_cstr(CString cstr)
 }
 
 template<sz CAPACITY>
-void FString<CAPACITY>::init_with_values(StrView init_values)
+void FString<CAPACITY>::init_view(StrView str_view)
 {
     this->count = 0;
-    this->push_many(init_values);
+    this->push_many(str_view);
+}
+
+template<sz CAPACITY>
+void FString<CAPACITY>::init_slice(Slice<char> slice)
+{
+    this->count = 0;
+    this->push_many(slice);
+}
+
+template<sz CAPACITY>
+void FString<CAPACITY>::push_many(Slice<char> slice)
+{
+    ASSERT_MSG(slice.is_valid(), "Must be valid slice");
+    ASSERT_MSG(this->remain() >= slice.count, "Must be enough space");
+
+    char* start = this->data + this->count;
+    for (char c : slice)
+    {
+        *start = c;
+        ++start;
+    }
 }
 
 template<sz CAPACITY>
 void FString<CAPACITY>::push_many(StrView str_view)
 {
-    ASSERT_MSG(str_view.is_valid(), "Must be valid string view");
-    ASSERT_MSG(this->remain() >= str_view.count, "Must have enough space");
-
-    char* data = this->data;
-
-    for (char c : str_view)
-    {
-        *(data + this->count) = c;
-        this->count++;
-    }
-}
-
-template<sz CAPACITY>
-void FString<CAPACITY>::push_many(CStrView cstr_view)
-{
-    ASSERT_MSG(cstr_view.is_valid(), "Must be valid cstring view");
-    ASSERT_MSG(cstr_view.count <= this->remain(), "Must be enough space");
+    ASSERT_MSG(str_view.is_valid(), "Must be valid slice");
+    ASSERT_MSG(this->remain() >= str_view.count, "Must be enough space");
 
     // Remove duplicated null terminator.
     if (this->is_null_term()) this->count--;
 
-    char* data = this->data;
-
-    for (char c : cstr_view)
+    char* start = this->data + this->count;
+    for (char c : str_view)
     {
-        *(data + this->count) = c;
-        this->count++;
+        *start = c;
+        ++start;
     }
 }
 
 template<sz CAPACITY>
 void FString<CAPACITY>::push_cstr(CString cstr)
 {
-    CStrView cstr_view = cstrview_create(cstr);
-    this->push_many(cstr_view);
+    StrView str_view(cstr);
+    this->push_many(str_view);
 }
 
 template<sz CAPACITY>
@@ -149,25 +173,25 @@ void FString<CAPACITY>::ensure_no_null_term()
 }
 
 template<sz CAPACITY>
-void FString<CAPACITY>::foreach_codepoint(void(*fn)(Codepoint&))
+void FString<CAPACITY>::foreach_codepoint(void(*fn)(Utf8Codepoint&))
 {
     if (this->is_empty()) return;
-    CodepointIterator iter = this->get_codepoint_iter();
-    Maybe<Codepoint> point;
+    Utf8CodepointIterator iter = this->get_codepoint_iter();
+    Utf8Codepoint point;
     
     while (true)
     {
         point = iter.next();
-        if (!point) return;
-        fn(point.val);
+        if (point == UTF8_CODEPOINT_INVALID) return;
+        fn(point);
     }
 }
 
 template<sz CAPACITY>
-CodepointIterator FString<CAPACITY>::get_codepoint_iter()
+Utf8CodepointIterator FString<CAPACITY>::get_codepoint_iter()
 {
     StrView view = this->view();
-    CodepointIterator iter; 
+    Utf8CodepointIterator iter; 
     iter.view = view;
     iter.pos = 0;
     return iter;

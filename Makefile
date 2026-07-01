@@ -6,29 +6,30 @@ SOURCES=$(wildcard $(SRC_DIR)/*.cpp)
 DEBUG_OBJECTS = $(patsubst $(SRC_DIR)/%.cpp, $(DEBUG_BUILD_DIR)/%.o, $(SOURCES))
 RELEASE_OBJECTS = $(patsubst $(SRC_DIR)/%.cpp, $(RELEASE_BUILD_DIR)/%.o, $(SOURCES))
 EXE=app
-CXX=clang++
-DEBUG_FLAGS=-std=c++20 -g -O0 -I$(INCLUDE_DIR) -Wall
-RELEASE_FLAGS=-std=c++20 -O3 -flto -I$(INCLUDE_DIR)
+COMPILER=clang++
+CPP_STANDART="-std=c++20"
+DEBUG_FLAGS=$(CPP_STANDART) -g -O0 -I$(INCLUDE_DIR) -Wall
+RELEASE_FLAGS=$(CPP_STANDART) -O3 -flto -I$(INCLUDE_DIR)
 
 .PHONY: debug release prepare clean run run_r rebuild rerun rebuild_r rerun_r
 
 debug: prepare $(DEBUG_BUILD_DIR)/$(EXE)
 
 $(DEBUG_BUILD_DIR)/$(EXE): $(DEBUG_OBJECTS)
-	$(CXX) $(DEBUG_FLAGS) -o $@ $^
+	$(COMPILER) $(DEBUG_FLAGS) -o $@ $^
 	@echo "Debug build completed!"
 
 $(DEBUG_BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
-	$(CXX) $(DEBUG_FLAGS) -o $@ -c $<
+	$(COMPILER) $(DEBUG_FLAGS) -o $@ -c $<
 
 release: prepare $(RELEASE_BUILD_DIR)/$(EXE)
 
 $(RELEASE_BUILD_DIR)/$(EXE): $(RELEASE_OBJECTS)
-	$(CXX) $(RELEASE_FLAGS) -o $@ $^
+	$(COMPILER) $(RELEASE_FLAGS) -o $@ $^
 	@echo "Release build completed!"
 
 $(RELEASE_BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
-	$(CXX) $(RELEASE_FLAGS) -o $@ -c $<
+	$(COMPILER) $(RELEASE_FLAGS) -o $@ -c $<
 
 run:
 	@echo "Running in debug mode"
