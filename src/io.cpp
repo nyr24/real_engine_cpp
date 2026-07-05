@@ -7,6 +7,9 @@ namespace rg
 
 // Path.
 
+intern void platform_process_cwd(Path* path, Allocator* alloc, sz add_cap = 0);
+intern sz get_steps_back_from_cwd_and_trim(Slice<char>* path);
+
 void Path::init(Allocator* alloc, Slice<char> path, bool null_term)
 {
     path.replace(PATH_SEPARATOR_INVALID, PATH_SEPARATOR);
@@ -21,7 +24,15 @@ void Path::init(Allocator* alloc, Slice<char> path, bool null_term)
     else
     {
         sz steps_back_from_cwd = get_steps_back_from_cwd_and_trim(&path);
-        this->init_from_cwd(alloc, steps_back_from_cwd, path.count);
+        sz add_cap = path.count;
+        platform_process_cwd(this, alloc, add_cap);
+        // Do back steps.
+        for (; steps_back_from_cwd > 0; --steps_back_from_cwd)
+        {
+            this->trim_from_end_to_last_occur(PATH_SEPARATOR);
+        }
+        // Add a path separator to the end.
+        this->push(PATH_SEPARATOR);
         ASSERT_MSG(this->last() == PATH_SEPARATOR, "Must be separated at end");
         this->ensure_no_null_term();
         this->push(path);
@@ -29,63 +40,62 @@ void Path::init(Allocator* alloc, Slice<char> path, bool null_term)
     }
 }
 
-void Path::init_from_cwd(Allocator* alloc, sz steps_back, sz add_cap)
+Path get_cwd(Allocator* alloc)
 {
-    ASSERT_MSG(add_cap >= 0, "Must be equal or greater to 0");
-#ifdef RG_PLATFORM_WIN32
-    this->capacity = add_cap + 1;
-    u32 size = ::GetCurrentDirectory(0, null);
-    this->capacity += (sz)size;
-    this->data = (char*)allocator_allocate(alloc, this->capacity);
-    this->count = ::GetCurrentDirectory(this->count, this->ptr);
-#else
-    this->capacity = PATH_INIT_CAPACITY + add_cap;
-    this->data = (char*)allocator_allocate(alloc, this->capacity);
-    while (true)
-    {
-        this->data = ::getcwd(this->data, this->capacity);
-        // Success.
-        if (this->data) break;
-        // Failure - grow the buffer.
-        this->capacity *= 2;
-        this->data = (char*)allocator_reallocate(alloc, this->data, this->capacity);
-    };
-    this->count = this->capacity;
-    this->trim_from_end_to_first_occur('\0', false);
-    // How much space left in the allocated buffer.
-    sz remain = this->capacity - this->count;
-    if (remain < add_cap)
-    {
-        sz diff = add_cap - remain;
-        this->capacity += diff;
-        this->data = (char*)allocator_reallocate(alloc, this->data, this->capacity);
-    }
-#endif
-    // Do back steps.
-    for (; steps_back > 0; --steps_back)
-    {
-        this->trim_from_end_to_last_occur(PATH_SEPARATOR);
-    }
-    // Add a path separator to the end.
-    this->push(PATH_SEPARATOR);
+    Path path;
+    platform_process_cwd(&path, alloc);
+    return path;
+}
+
+intern void platform_process_cwd(Path* path, Allocator* alloc, sz add_cap)
+{
+    #ifdef RG_PLATFORM_WIN32
+        path->capacity = add_cap + 1;
+        u32 size = ::GetCurrentDirectory(0, null);
+        path->capacity += (sz)size;
+        path->data = (char*)allocator_allocate(alloc, path->capacity);
+        path->count = ::GetCurrentDirectory(path->count, path->ptr);
+    #else
+        path->capacity = PATH_DEFAULT_CAPACITY + add_cap;
+        path->data = (char*)allocator_allocate(alloc, path->capacity);
+        while (true)
+        {
+            path->data = ::getcwd(path->data, path->capacity);
+            // Success.
+            if (path->data) break;
+            // Failure - grow the buffer.
+            path->capacity *= 2;
+            path->data = (char*)allocator_reallocate(alloc, path->data, path->capacity);
+        };
+        path->count = path->capacity;
+        path->trim_from_end_to_first_occur('\0', false);
+        // How much space left in the allocated buffer.
+        sz remain = path->capacity - path->count;
+        if (remain < add_cap)
+        {
+            sz diff = add_cap - remain;
+            path->capacity += diff;
+            path->data = (char*)allocator_reallocate(alloc, path->data, path->capacity);
+        }
+    #endif
 }
 
 // Returns a number of steps it needs to take from the cwd.
 // . == 0, ./ == 0, ../ == 1, ../../ == 2, etc.
 // if it doesn't start with a dot - returns 0
-sz get_steps_back_from_cwd_and_trim(Slice<char>* input_path)
+intern sz get_steps_back_from_cwd_and_trim(Slice<char>* input_path)
 {
     if (path_is_absolute(*input_path)) return 0;
     if (input_path->first() != '.') return 0;
 
-    if (input_path->starts_with(RELATIVE_DIR_SELF.to_char_slice_unsafe()))
+    if (common_starts_with(input_path->ptr, input_path->count, RELATIVE_DIR_SELF.to_char_slice_unsafe()))
     {
         input_path->trim_start_n(2);
         return 0;
     }
 
     sz steps = 0;
-    while (input_path->starts_with(RELATIVE_DIR_PARENT.to_char_slice_unsafe()))
+    if (common_starts_with(input_path->ptr, input_path->count, RELATIVE_DIR_PARENT.to_char_slice_unsafe()))
     {
         input_path->trim_start_n(3);
         ++steps;
@@ -144,7 +154,7 @@ bool file_open(Path* path, FileHandle* out_handle, FileOpenBit flags)
     if (flags & FileOpenBit::READ)    windows_flags |= GENERIC_READ;
     if (flags & FileOpenBit::WRITE)   windows_flags |= GENERIC_WRITE;
 
-    if (path->contains_non_ascii())
+    if (contains_non_ascii(path->data, path->end()))
     {
         path->convert_to_utf16();
         *out_handle = ::CreateFileW(path->data,

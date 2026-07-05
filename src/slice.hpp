@@ -22,10 +22,6 @@ struct Slice
     void trim_start_n(sz count);
     // Trims 'count' characters from end.
     void trim_end_n(sz count);
-    // Trims any value from the set. (input isn't considered sequential)
-    void trim_value_set_start(Slice<Type> value_set);
-    // Trims any value from the set. (input isn't considered sequential)
-    void trim_value_set_end(Slice<Type> value_set);
     // Trims sequentially values from the start of input. (input is considered sequential)
     bool trim_sequence_start(Slice<Type> seq);
     // Trims sequentially values from the end of input. (input is considered sequential)
@@ -66,6 +62,46 @@ struct Slice
     inline sz byte_size() const { return sizeof(Type) * this->count; }
 };
 
+#define FMT_SLICE(slice) (s32)slice.count, slice.ptr
+#define FMT_SLICE_PTR(slice) (s32)slice->count, slice->ptr
+
+// Predeclare common calls.
+
+// Trims 'count' characters from start.
+template<typename Type>
+inline void common_trim_start_n(Type** start, sz* item_count, sz trim_count);
+// Trims 'count' characters from start.
+template<typename Type>
+inline void common_trim_end_n(Type** start, sz* item_count, sz trim_count);
+template<typename Type>
+bool common_starts_with(Type* ptr, sz count, Slice<Type> input);
+template<typename Type>
+bool common_ends_with(Type* ptr, sz count, Slice<Type> input);
+template<typename Type>
+bool common_trim_sequence_start(Type** ptr, sz* count, Slice<Type> trim_seq);
+template<typename Type>
+bool common_trim_sequence_end(Type** ptr, sz* count, Slice<Type> trim_seq);
+template<typename Type>
+void common_trim_from_start_to_first_occur(Type** start, sz* count, Type search, bool inclusive);
+template<typename Type>
+void common_trim_from_start_to_last_occur(Type** start, sz* count, Type search, bool inclusive);
+template<typename Type>
+void common_trim_from_end_to_first_occur(Type** start, sz* count, Type search, bool inclusive);
+template<typename Type>
+void common_trim_from_end_to_last_occur(Type** start, sz* count, Type search, bool inclusive);
+template<typename Type>
+sz common_index_of(Type* start, sz count, Type search);
+template<typename Type>
+sz common_index_of(Type* start, sz count, Slice<Type> slice);
+template<typename Type>
+sz common_last_index_of(Type* start, sz count, Type search);
+template<typename Type>
+sz common_last_index_of(Type* start, sz count, Slice<Type> seq);
+template<typename Type>
+bool common_has(Type* start, sz count, Type search);
+template<typename Type>
+bool common_has(Type* start, sz count, Slice<Type> slice);
+
 template<typename Type>
 Slice<Type>::Slice(Type* ptr, sz count)
 {
@@ -84,227 +120,90 @@ template<typename Type>
 void Slice<Type>::trim_start_n(sz trim_count)
 {
     ASSERT_MSG(trim_count < this->count, "Shouldn't exceed inner count");
-    this->ptr += trim_count;
-    this->count -= trim_count;
+    common_trim_start_n(&this->ptr, &this->count, trim_count);
 }
 
 template<typename Type>
 void Slice<Type>::trim_end_n(sz trim_count)
 {
     ASSERT_MSG(trim_count < this->count, "Shouldn't exceed inner count");
-    this->count -= trim_count;
+    common_trim_end_n(&this->ptr, this->count, trim_count);
 }
 
 template<typename Type>
-void Slice<Type>::trim_value_set_start(Slice<Type> trim_vals)
+bool Slice<Type>::trim_sequence_start(Slice<Type> trim_seq)
 {
-    ASSERT_MSG(trim_vals.count, "Should be more than 0 values");
-    Type curr;
-    sz trim_count = 0;
-    bool was_trim = false;
-
-    while (trim_count < this->count)
-    {
-        curr = this->at(trim_count);
-        for (Type val : trim_vals)
-        {
-            if (val == curr)
-            {
-                was_trim = true;
-                break;
-            }
-        }
-        // Return case.
-        if (!was_trim)
-        {
-            this->ptr += trim_count;
-            return;
-        }
-        ++trim_count;
-    }
+    return common_trim_sequence_start(&this->ptr, &this->count, trim_seq);
 }
 
 template<typename Type>
-void Slice<Type>::trim_value_set_end(Slice<Type> trim_vals)
+bool Slice<Type>::trim_sequence_end(Slice<Type> trim_seq)
 {
-    ASSERT_MSG(trim_vals.count, "Should be more than 0 values");
-
-    Type curr;
-    sz trim_count = this->count - 1;
-    bool was_trim = false;
-
-    while (trim_count >= 0)
-    {
-        curr = this->at(trim_count);
-        for (Type val : trim_vals)
-        {
-            if (val == curr)
-            {
-                was_trim = true;
-                break;
-            }
-        }
-        // Return case.
-        if (!was_trim)
-        {
-            this->count -= trim_count;
-            return;
-        }
-        --trim_count;
-    }
-}
-
-template<typename Type>
-bool Slice<Type>::trim_sequence_start(Slice<Type> trim_vals)
-{
-    if (!this->starts_with(trim_vals)) return false;
-    this->ptr += trim_vals.count;
-    this->count -= trim_vals.count;
-}
-
-template<typename Type>
-bool Slice<Type>::trim_sequence_end(Slice<Type> trim_vals)
-{
-    if (!this->ends_with(trim_vals)) return false;
-    this->count -= trim_vals.count;
+    return common_trim_sequence_end(&this->ptr, &this->count, trim_seq);
 }
 
 template<typename Type>
 void Slice<Type>::trim_from_start_to_first_occur(Type search, bool inclusive)
 {
-    sz idx = this->index_of(search);
-    if (idx == INDEX_INVALID || idx == 0) return;
-    if (!inclusive) idx++;
-    this->ptr += idx;
+    return common_trim_from_start_to_first_occur(&this->ptr, &this->count, search, inclusive);
 }
 
 template<typename Type>
 void Slice<Type>::trim_from_start_to_last_occur(Type search, bool inclusive)
 {
-    sz idx = this->last_index_of(search);
-    if (idx == INDEX_INVALID || idx == 0) return;
-    if (!inclusive) idx++;
-    this->ptr += idx;
+    return common_trim_from_start_to_last_occur(&this->ptr, &this->count, search, inclusive);
 }
 
 template<typename Type>
 void Slice<Type>::trim_from_end_to_first_occur(Type search, bool inclusive)
 {
-    sz idx = this->index_of(search);
-    if (idx == INDEX_INVALID || idx == 0) return;
-    if (inclusive) idx++;
-    this->count = idx;
+    return common_trim_from_end_to_first_occur(&this->ptr, &this->count, search, inclusive);
 }
 
 template<typename Type>
 void Slice<Type>::trim_from_end_to_last_occur(Type search, bool inclusive)
 {
-    sz idx = this->last_index_of(search);
-    if (idx == INDEX_INVALID || idx == 0) return;
-    if (inclusive) idx++;
-    this->count = idx;
+    return common_trim_from_end_to_last_occur(&this->ptr, &this->count, search, inclusive);
 }
 
 template<typename Type>
 sz Slice<Type>::index_of(Type search) const
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized");
-
-    for (sz i = 0; i < this->count; ++i)
-    {
-        if (this->at(i) == search) return i;
-    }
-    return INDEX_INVALID;
+    return common_index_of(&this->ptr, this->count, search);
 }
 
 template<typename Type>
 sz Slice<Type>::index_of(Slice<Type> slice) const
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized");
-    if (slice.count == 1) return this->index_of(slice[0]);
-
-    Type* curr;
-    Type* inp_curr = slice.at_ref(1);
-    Type match_start = slice[0];
-    Type* end = this->end();
-    Type* inp_end = slice->end();
-    sz i = 0;
-
-    for (; i < this->count && (this->count - i) >= slice.count; ++i)
-    {
-        if (this->at(i) == match_start)
-        {
-            curr = this->at_ref(i + 1);
-            while (inp_curr != inp_end && curr != end && *curr == *inp_curr)
-            {
-                ++curr;
-                ++inp_curr;
-            }
-            // Test for success.
-            if (inp_curr == inp_end) return i;
-            inp_curr = slice.at_ref(1);
-        }
-    }
-    return INDEX_INVALID;
+    return common_index_of(&this->ptr, this->count, slice);
 }
 
 template<typename Type>
 sz Slice<Type>::last_index_of(Type search) const
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized");
-
-    sz i = this->count - 1;
-    for (; i >= 0; --i)
-    {
-        if (this->at(i) == search) return i;
-    }
-    return INDEX_INVALID;
+    return common_last_index_of(&this->ptr, this->count, search);
 }
 
 template<typename Type>
-sz Slice<Type>::last_index_of(Slice<Type> seq) const
+sz Slice<Type>::last_index_of(Slice<Type> slice) const
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized");
-    if (seq.count == 1) return this->last_index_of(seq[0]);
-
-    Type match_start = seq.last();
-    Type* curr;
-    Type* inp_curr = seq.last_ref() - 1;
-    Type* begin = this->begin() - 1;
-    Type* inp_begin = seq->begin() - 1;
-    sz i = this->count - 1;
-    sz j;
-
-    for (; i >= 0 && (i+1) >= seq.count; --i)
-    {
-        if (this->at(i) == match_start)
-        {
-            j = i;
-            curr = this->at_ref(j - 1);
-            while (inp_curr != inp_begin && curr != begin && *curr == *inp_curr)
-            {
-                --curr;
-                --inp_curr;
-                --j;
-            }
-            // Test for success.
-            if (inp_curr == inp_begin) return j + 1;
-            inp_curr = seq.last_ref() - 1;
-        }
-    }
-    return INDEX_INVALID;
+    return common_last_index_of(&this->ptr, this->count, slice);
 }
 
 template<typename Type>
 bool Slice<Type>::has(Type search) const
 {
-    return this->index_of(search) != INDEX_INVALID;
+    return common_has(&this->ptr, this->count, search);
 }
 
 template<typename Type>
 bool Slice<Type>::has(Slice<Type> slice) const
 {
-    return this->index_of(slice) != INDEX_INVALID;
+    return common_has(&this->ptr, this->count, slice);
 }
 
 template<typename Type>
@@ -336,16 +235,13 @@ void Slice<Type>::replace(Type find, Type replace)
 template<typename Type>
 bool Slice<Type>::starts_with(Slice<Type> input) const
 {
-    if (input.count > this->count) return false;
-    return mem_compare(this->ptr, input.ptr, input.byte_size());
+    return common_starts_with(&this->ptr, this->count, input);
 }
 
 template<typename Type>
 bool Slice<Type>::ends_with(Slice<Type> input) const
 {
-    if (input.count > this->count) return false;
-    Type* start = this->at_ref(this->count - input.count);
-    return mem_compare(start, input.ptr, input.byte_size());
+    return common_ends_with(&this->ptr, this->count, input);
 }
 
 template<typename Type>
@@ -404,24 +300,186 @@ u64 Slice<Type>::hash() const
     return hash;
 }
 
-// StrView.
+// Common array operations so different containers can share them.
 
-struct StrView : Slice<const char>
+// Trims 'count' characters from start.
+template<typename Type>
+inline void common_trim_start_n(Type** start, sz* item_count, sz trim_count)
 {
-    StrView() = default;
-    StrView(CString cstr);
-    StrView(CString cstr, sz count);
-    void init(CString cstr, bool preserve_null_term = true);
-    void trim_until_null(bool inclusive = true);
-    StrView slice_until_null(bool inclusive = true);
-    bool contains_non_ascii();
-    bool starts_with(StrView input);
-    bool starts_with(CString input);
-    // Removes const qualifier from pointer, be careful.
-    inline Slice<u8> to_byte_slice_unsafe() { return { (u8*)this->ptr, this->count }; }
-    // Removes const qualifier from pointer, be careful.
-    inline Slice<char> to_char_slice_unsafe() { return { (char*)this->ptr, this->count }; }
-};
+    *start += trim_count;
+    *item_count -= trim_count;
+}
+
+// Trims 'count' characters from start.
+template<typename Type>
+inline void common_trim_end_n(Type** start, sz* item_count, sz trim_count)
+{
+    *item_count -= trim_count;
+}
+
+template<typename Type>
+bool common_starts_with(Type* ptr, sz count, Slice<Type> input)
+{
+    if (input.count > count) return false;
+    return mem_compare((void*)ptr, (void*)input.ptr, input.byte_size());
+}
+
+template<typename Type>
+bool common_ends_with(Type* ptr, sz count, Slice<Type> input)
+{
+    if (input.count > count) return false;
+    Type* start = ptr + (count - input.count);
+    return mem_compare(start, input.ptr, input.byte_size());
+}
+
+template<typename Type>
+bool common_trim_sequence_start(Type** ptr, sz* count, Slice<Type> trim_seq)
+{
+    if (!common_starts_with(*ptr, count, trim_seq)) return false;
+    *ptr += trim_seq.count;
+    *count -= trim_seq.count;
+}
+
+template<typename Type>
+bool common_trim_sequence_end(Type** ptr, sz* count, Slice<Type> trim_seq)
+{
+    if (!common_ends_with(*ptr, count, trim_seq)) return false;
+    count -= trim_seq.count;
+}
+
+template<typename Type>
+void common_trim_from_start_to_first_occur(Type** start, sz* count, Type search, bool inclusive)
+{
+    sz idx = common_index_of(*start, *count, search);
+    if (idx == INDEX_INVALID || idx == 0) return;
+    if (!inclusive) idx++;
+    *start += idx;
+    *count -= idx;
+}
+
+template<typename Type>
+void common_trim_from_start_to_last_occur(Type** start, sz* count, Type search, bool inclusive)
+{
+    sz idx = common_last_index_of(*start, *count, search);
+    if (idx == INDEX_INVALID || idx == 0) return;
+    if (!inclusive) idx++;
+    *start += idx;
+    *count -= idx;
+}
+
+template<typename Type>
+void common_trim_from_end_to_first_occur(Type** start, sz* count, Type search, bool inclusive)
+{
+    sz idx = common_index_of(*start, *count, search);
+    if (idx == INDEX_INVALID || idx == 0) return;
+    if (inclusive) idx++;
+    *count = idx;
+}
+
+template<typename Type>
+void common_trim_from_end_to_last_occur(Type** start, sz* count, Type search, bool inclusive)
+{
+    sz idx = common_index_of(*start, *count, search);
+    if (idx == INDEX_INVALID || idx == 0) return;
+    if (inclusive) idx++;
+    *count = idx;
+}
+
+template<typename Type>
+sz common_index_of(Type* start, sz count, Type search)
+{
+    for (sz i = 0; i < count; ++i)
+    {
+        if (start[i] == search) return i;
+    }
+    return INDEX_INVALID;
+}
+
+template<typename Type>
+sz common_index_of(Type* start, sz count, Slice<Type> slice)
+{
+    if (slice.count == 1) return common_index_of(slice[0]);
+
+    Type* curr;
+    Type* inp_curr = slice.at_ref(1);
+    Type match_start = slice[0];
+    Type* end = start + count;
+    Type* inp_end = slice->end();
+    sz i = 0;
+
+    for (; i < count && (count - i) >= slice.count; ++i)
+    {
+        if (start[i] == match_start)
+        {
+            curr = start + (i + 1);
+            while (inp_curr != inp_end && curr != end && *curr == *inp_curr)
+            {
+                ++curr;
+                ++inp_curr;
+            }
+            // Test for success.
+            if (inp_curr == inp_end) return i;
+            inp_curr = slice.at_ref(1);
+        }
+    }
+    return INDEX_INVALID;
+}
+
+template<typename Type>
+sz common_last_index_of(Type* start, sz count, Type search)
+{
+    sz i = count - 1;
+    for (; i >= 0; --i)
+    {
+        if (start[i] == search) return i;
+    }
+    return INDEX_INVALID;
+}
+
+template<typename Type>
+sz common_last_index_of(Type* start, sz count, Slice<Type> seq)
+{
+    if (seq.count == 1) return common_last_index_of(seq[0]);
+
+    Type match_start = seq.last();
+    Type* curr;
+    Type* inp_curr = seq.last_ref() - 1;
+    Type* begin = start - 1;
+    Type* inp_begin = seq->begin() - 1;
+    sz i = count - 1;
+    sz j;
+
+    for (; i >= 0 && (i+1) >= seq.count; --i)
+    {
+        if (start[i] == match_start)
+        {
+            j = i;
+            curr = start + (j - 1);
+            while (inp_curr != inp_begin && curr != begin && *curr == *inp_curr)
+            {
+                --curr;
+                --inp_curr;
+                --j;
+            }
+            // Test for success.
+            if (inp_curr == inp_begin) return j + 1;
+            inp_curr = seq.last_ref() - 1;
+        }
+    }
+    return INDEX_INVALID;
+}
+
+template<typename Type>
+bool common_has(Type* start, sz count, Type search)
+{
+    return common_index_of(start, count, search) != INDEX_INVALID;
+}
+
+template<typename Type>
+bool common_has(Type* start, sz count, Slice<Type> slice)
+{
+    return common_index_of(start, count, slice) != INDEX_INVALID;
+}
 
 } // rg
 

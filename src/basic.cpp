@@ -3,11 +3,12 @@
 #include "basic.hpp"
 #include "slice.hpp"
 #include "string.hpp"
+#include "system.hpp"
 
 namespace rg
 {
 
-void get_system_info(SystemInfo* sys_info)
+void get_system_info(Allocator* alloc, SystemInfo* sys_info)
 {
 #ifdef RG_PLATFORM_WIN32
     SYSTEM_INFO win_sys_info;
@@ -19,6 +20,7 @@ void get_system_info(SystemInfo* sys_info)
     sys_info->page_size = sz(::sysconf(_SC_PAGESIZE));
     ASSERT_MSG(sys_info->thread_count != -1 && sys_info->page_size != -1, "Error while getting system parameters");
 #endif
+    sys_info->cwd = get_cwd(alloc);
 }
 
 [[noreturn]] void panic(CString message, ...)
@@ -65,27 +67,11 @@ void StrView::init(CString cstr, bool preserve_null_term)
     if (preserve_null_term) this->count++;
 }
 
-bool StrView::contains_non_ascii()
-{
-    for (char c : *this)
-    {
-        if (c > 0x7F) return true;
-    }
-    return false;
-}
-
-void StrView::trim_until_null(bool inclusive)
-{
-    this->trim_from_end_to_first_occur('\0', inclusive);
-}
-
 bool StrView::starts_with(StrView input)
 {
     ASSERT_INITIALIZED(this);
     ASSERT_INITIALIZED_VAL(input);
-
-    if (input.count > this->count) return false;
-    return mem_compare((void*)this->ptr, (void*)input.ptr, input.byte_size());
+    return common_starts_with<const char>(this->ptr, this->count, input);
 }
 
 bool StrView::starts_with(CString input)
@@ -100,6 +86,55 @@ bool StrView::starts_with(CString input)
     {
     }
     return *inp_curr == '\0';
+}
+
+bool contains_non_ascii(const char* start, const char* end)
+{
+    for (; start != end; ++start)
+    {
+        if (*start > 0x7F) return true;
+    }
+    return false;
+}
+
+bool is_space(char c)
+{
+    // Bits set: 9 (tab), 10 (LF), 11 (VT), 12 (FF), 13 (CR), 32 (Space)
+    return (1ULL << c) & 0x200006200ULL;
+}
+
+void trim_space_start(const char** start, sz* count)
+{
+    const char* curr = *start;
+    const char* end = curr + *count;
+
+    while (curr != end && is_space(*curr)) { ++curr; }
+
+    sz dist = curr - *start;
+    if (dist)
+    {
+        *start += dist;
+        *count -= dist;
+    }
+}
+
+void trim_space_end(const char* start, sz* count)
+{
+    const char* end = start + *count - 1;
+    const char* curr = end;
+    while (curr != start && is_space(*curr)) { --curr; }
+
+    sz dist = end - curr;
+    if (dist)
+    {
+        *count -= dist;
+    }
+}
+
+void trim_space_both(const char** start, sz* count)
+{
+    trim_space_start(start, count); 
+    trim_space_end(*start, count); 
 }
 
 // DString.
@@ -219,15 +254,6 @@ CString DString::cstr()
 {
     this->ensure_null_term();
     return (CString)this->data;
-}
-
-bool DString::contains_non_ascii()
-{
-    for (char c : *this)
-    {
-        if (c > 0x7F) return true;
-    }
-    return false;
 }
 
 void DString::ensure_null_term()

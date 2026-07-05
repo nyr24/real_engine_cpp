@@ -9,6 +9,29 @@
 namespace rg
 {
 
+// StrView - view over a cstring, read-only.
+
+struct StrView : Slice<const char>
+{
+    StrView() = default;
+    StrView(CString cstr);
+    StrView(CString cstr, sz count);
+    void init(CString cstr, bool preserve_null_term = true);
+    void trim_until_null(bool inclusive = true);
+    bool starts_with(StrView input);
+    bool starts_with(CString input);
+    // Removes const qualifier from pointer, be careful.
+    inline Slice<u8> to_byte_slice_unsafe() { return { (u8*)this->ptr, this->count }; }
+    // Removes const qualifier from pointer, be careful.
+    inline Slice<char> to_char_slice_unsafe() { return { (char*)this->ptr, this->count }; }
+};
+
+inline bool is_digit(char c) { return c >= '0'  && c <= '9'; }
+bool contains_non_ascii(const char* start, const char* end);
+void trim_space_start(const char** start, sz* count);
+void trim_space_end(const char* start, sz* count);
+void trim_space_both(const char** start, sz* count);
+
 // Utf8 CodepointIterator.
 
 typedef u32 Utf8Codepoint;
@@ -48,8 +71,6 @@ struct DString : DArray<char>
     Utf8CodepointIterator get_codepoint_iter();
     void foreach_codepoint(void(*fn)(Utf8Codepoint&));
     u64 hash();
-    bool contains_non_ascii();
-
     CString cstr();
     // View is constant.
     inline StrView view() { return StrView{ this->data, this->count }; }

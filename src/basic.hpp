@@ -96,13 +96,7 @@ constexpr sz KB = 1024;
 constexpr sz MB = 1024 * 1024;
 constexpr sz GB = 1024 * 1024 * 1024;
 
-struct SystemInfo
-{
-	sz thread_count;
-	sz page_size;
-};
-
-void get_system_info(SystemInfo* sys_info);
+bool is_space(char c);
 
 // Logging.
 
