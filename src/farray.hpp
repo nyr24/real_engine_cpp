@@ -25,38 +25,40 @@ struct FArray
     inline void init() { this->count = 0; }
     void init_slice(Slice<Type> values);
     void push(Type value);
-    void push_many(Slice<Type> values);
+    void push(Slice<Type> values);
     Type pop();
     Type remove_unordered_at(sz idx);
     Slice<Type> slice(sz start = 0, sz end = -1);
-    void foreach(void(*fn)(Type));
+    void foreach(void(*fn)(Type)) const;
     void foreach_ref(void(*fn)(Type*));
     SplitIterator<Type> get_split_iter(Type splitter);
     void foreach_split(Type splitter, void(*fn)(Slice<Type>));
 
-    inline Type at(sz idx);
+    inline Type at(sz idx) const;
     inline Type* at_ref(sz idx);
     inline void set(Type val, sz idx);
     inline void swap(sz idx1, sz idx2);
-    inline Type operator[](sz idx);
-    inline sz len() { return this->count; }
+    inline Type operator[](sz idx) const;
+    inline sz len() const { return this->count; }
     inline Type* begin() { return this->data; }
     inline Type* end() { return this->data + this->count; }
-    inline Type first() { return *this->data; }
+    inline const Type* begin() const { return this->data; }
+    inline const Type* end() const { return this->data + this->count; }
+    inline Type first() const { return *this->data; }
     inline Type* first_ref() { return this->data; }
-    inline Type last() { return *(this->data + this->count - 1); }
+    inline Type last() const { return *(this->data + this->count - 1); }
     inline Type* last_ref() { return this->data + this->count - 1; }
-    inline bool is_empty() { return this->count == 0; }
+    inline bool is_empty() const { return this->count == 0; }
     inline void clear() { this->count = 0; }
-    inline sz remain() { return CAPACITY - this->count; }
-    inline sz byte_size_used() { return this->count * sizeof(Type); }
-    constexpr inline sz byte_size_allocated() { return sizeof(Type) * CAPACITY; }
-    constexpr inline sz byte_size_all() { return sizeof(FArray<Type>); }
+    inline sz remain() const { return CAPACITY - this->count; }
+    inline sz byte_size_used() const { return this->count * sizeof(Type); }
+    constexpr inline sz byte_size_allocated() const { return sizeof(Type) * CAPACITY; }
+    constexpr inline sz byte_size_all() const { return sizeof(FArray<Type>); }
 };
 
 template<typename Type, sz CAPACITY>
 constexpr FArray<Type, CAPACITY>::FArray(std::initializer_list<Type> init_list)
-    : count{init_list.size()}
+    : count{(sz)init_list.size()}
 {
     Type* start = this->data;    
     for (Type el : init_list)
@@ -70,7 +72,7 @@ template<typename Type, sz CAPACITY>
 void FArray<Type, CAPACITY>::init_slice(Slice<Type> values)
 {
     this->count = 0;
-    this->push_many(values);
+    this->push(values);
 }
 
 template<typename Type, sz CAPACITY>
@@ -83,22 +85,19 @@ void FArray<Type, CAPACITY>::push(Type value)
 }
 
 template<typename Type, sz CAPACITY>
-void FArray<Type, CAPACITY>::push_many(Slice<Type> values)
+void FArray<Type, CAPACITY>::push(Slice<Type> input)
 {
-    ASSERT_MSG(this->remain() >= values.count, "Must have space for a push_many");
-    Type* data = this->data;
-
-    for (Type val : values)
-    {
-        *(data + this->count) = val;
-        this->count++;
-    }
+    ASSERT_MSG(this->remain() >= input.count, "Must have space for a push_many");
+    Type* curr = this->end();
+    Type* inp_curr = input.ptr;
+    mem_copy(curr, inp_curr, input.byte_size());
+    this->count += input.count;
 }
 
 template<typename Type, sz CAPACITY>
 Type FArray<Type, CAPACITY>::pop()
 {
-    ASSERT_MSG(this->count > 0, "Must be greater than 0");
+    ASSERT_GREATER_ZERO(this->count);
     Type val = this->last();
     this->count--;
     return val;
@@ -107,7 +106,7 @@ Type FArray<Type, CAPACITY>::pop()
 template<typename Type, sz CAPACITY>
 Type FArray<Type, CAPACITY>::remove_unordered_at(sz idx)
 {
-    ASSERT_MSG(idx >= 0 && idx < this->count, "Must be in bounds");
+    ASSERT_IN_BOUNDS(idx >= 0 && idx < this->count);
 
     if (idx == this->count - 1)
     {
@@ -121,9 +120,9 @@ Type FArray<Type, CAPACITY>::remove_unordered_at(sz idx)
 }
 
 template<typename Type, sz CAPACITY>
-inline Type FArray<Type, CAPACITY>::at(sz idx)
+inline Type FArray<Type, CAPACITY>::at(sz idx) const
 {
-    assert(idx >= 0 && idx < this->count && "Must be in bounds");
+    ASSERT_IN_BOUNDS(idx >= 0 && idx < this->count);
     return this->data[idx];
 }
 
@@ -136,7 +135,7 @@ inline Type* FArray<Type, CAPACITY>::at_ref(sz idx)
 template<typename Type, sz CAPACITY>
 inline void FArray<Type, CAPACITY>::set(Type val, sz idx)
 {
-    ASSERT_MSG(idx >= 0 && idx < this->count, "Must be in bounds");
+    ASSERT_IN_BOUNDS(idx >= 0 && idx < this->count);
     Type* place = this->data + idx;
     *place = val;
 }
@@ -144,13 +143,13 @@ inline void FArray<Type, CAPACITY>::set(Type val, sz idx)
 template<typename Type, sz CAPACITY>
 inline void FArray<Type, CAPACITY>::swap(sz idx1, sz idx2)
 {
-    ASSERT_MSG(idx1 >= 0 && idx1 < this->count, "Must be in bounds");
-    ASSERT_MSG(idx2 >= 0 && idx2 < this->count, "Must be in bounds");
+    ASSERT_IN_BOUNDS(idx1 >= 0 && idx1 < this->count);
+    ASSERT_IN_BOUNDS(idx2 >= 0 && idx2 < this->count);
     rg::swap(this->at_ref(idx1), this->at_ref(idx2));
 }
 
 template<typename Type, sz CAPACITY>
-inline Type FArray<Type, CAPACITY>::operator[](sz idx)
+inline Type FArray<Type, CAPACITY>::operator[](sz idx) const
 {
     return this->at(idx);
 }
@@ -160,13 +159,13 @@ Slice<Type> FArray<Type, CAPACITY>::slice(sz start, sz end)
 {
     if (end == -1) end = this->count;
     sz dist = end - start;
-    ASSERT_MSG(dist > 0, "Should be greater than 0");
+    ASSERT_GREATER_ZERO(dist);
     Type* data = this->data;
     return Slice{ data + start, dist };
 }
 
 template<typename Type, sz CAPACITY>
-void FArray<Type, CAPACITY>::foreach(void (*fn) (Type))
+void FArray<Type, CAPACITY>::foreach(void (*fn) (Type)) const
 {
     for (Type* curr = this->begin(); curr != this->end(); ++curr)
     {
@@ -209,14 +208,14 @@ template<typename Type, typename EnumType>
 struct EnumArray : FArray<Type, (sz)EnumType::EnumSize>
 {
     using FArray<Type, (sz)EnumType::EnumSize>::FArray;
-    inline Type operator[](EnumType idx);
+    inline Type operator[](EnumType idx) const;
 };
 
 template<typename Type, typename EnumType>
-Type EnumArray<Type, EnumType>::operator[](EnumType e_idx)
+Type EnumArray<Type, EnumType>::operator[](EnumType e_idx) const
 {
     sz idx = sz(e_idx);
-    ASSERT_MSG(idx >= 0 && idx < EnumType::EnumSize, "Must be in bounds");
+    ASSERT_IN_BOUNDS(idx >= 0 && idx < (sz)EnumType::EnumSize);
     return this->data[idx];
 }
 

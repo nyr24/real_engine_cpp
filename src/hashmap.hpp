@@ -2,7 +2,7 @@
 #define _RG_HASHMAP_HPP_
 
 #include "basic.hpp"
-#include "view.hpp"
+#include "slice.hpp"
 
 // Hashmap.
 // Enforces capacity of power of 2's for more efficient index calc.
@@ -54,7 +54,7 @@ struct HashmapEntry
 template<typename Key, typename Value>
 struct HashmapIter
 {
-    View<HashmapEntry<Key, Value>> view;
+    Slice<HashmapEntry<Key, Value>> view;
     sz pos;
 
     HashmapEntry<Key, Value>* next_entry();
@@ -74,31 +74,35 @@ intern constexpr u64 HASH_FIRST_VALID = 2;
 template<typename Key, typename Value>
 struct Hashmap
 {
+    HashmapEntry<Key, Value>* data;
+    Allocator* alloc;
     sz count;
     sz capacity;
-    Allocator* alloc;
     f32 load_factor;
-    HashmapEntry<Key, Value>* data;
 
+    // Constructor is just to detect initialized state.
+    Hashmap();
     void init(Allocator* alloc, sz init_capacity = HASHMAP_DEFAULT_CAPACITY, f32 load_factor = HASHMAP_DEFAULT_LOAD_FACTOR);
-    void init_with_key_values(Allocator* alloc, View<HashmapKVPair<Key, Value>> pairs, sz init_capacity = HASHMAP_DEFAULT_CAPACITY, f32 load_factor = HASHMAP_DEFAULT_LOAD_FACTOR);
+    void init_with_key_values(Allocator* alloc, Slice<HashmapKVPair<Key, Value>> pairs, sz init_capacity = HASHMAP_DEFAULT_CAPACITY, f32 load_factor = HASHMAP_DEFAULT_LOAD_FACTOR);
     void put(Key key, Value val);
     bool has(Key key);
     Value* get(Key key);
     bool remove(Key key);
-    void clear(View<HashmapEntry<Key, Value>> entries);
+    void clear(Slice<HashmapEntry<Key, Value>> entries);
     void destroy();
     HashmapIter<Key, Value> get_iter();
-    void foreach_entry(void(*fn)(HashmapEntry<Key, Value>&));
-    void foreach_key(void(*fn)(Key&));
-    void foreach_value(void(*fn)(Value&));
+    void foreach_entry(void(*fn)(HashmapEntry<Key, Value>));
+    void foreach_entry_ref(void(*fn)(HashmapEntry<Key, Value>*));
+    void foreach_key(void(*fn)(Key));
+    void foreach_key_ref(void(*fn)(Key*));
+    void foreach_value(void(*fn)(Value));
+    void foreach_value_ref(void(*fn)(Value*));
 
     inline sz len() { return this->count; }
     inline bool is_empty() { return this->count == 0; }
-    inline bool is_initialized() { return this->alloc != null && this->capacity; }
+    inline bool is_initialized() { return this->data != null && this->alloc != null; }
     inline sz byte_size_used() { return this->count * sizeof(HashmapEntry<Key, Value>); }
     inline sz byte_size_allocated() { return this->capacity * sizeof(HashmapEntry<Key, Value>); }
-
 private:
     inline HashmapEntry<Key, Value> at(sz idx) { return *(this->data + idx); }
     inline HashmapEntry<Key, Value>* at_ref(sz idx) { return this->data + idx; }
@@ -112,6 +116,12 @@ intern u64 calc_hash(Key key);
 intern sz get_idx_for_hash(u64 hash, sz capacity);
 
 template<typename Key, typename Value>
+Hashmap<Key, Value>::Hashmap()
+    : data{null}, alloc{null} 
+{
+}
+
+template<typename Key, typename Value>
 void Hashmap<Key, Value>::init(Allocator* alloc, sz init_capacity, f32 load_factor)
 {
     ASSERT_MSG(load_factor > 0, "Must be bigger than 0");
@@ -120,11 +130,11 @@ void Hashmap<Key, Value>::init(Allocator* alloc, sz init_capacity, f32 load_fact
     this->capacity = init_capacity;
     this->alloc = alloc;
     this->load_factor = load_factor;
-    this->clear(view_create(this->data, this->capacity));
+    this->clear({ this->data, this->capacity });
 }
 
 template<typename Key, typename Value>
-void Hashmap<Key, Value>::init_with_key_values(Allocator* alloc, View<HashmapKVPair<Key, Value>> pairs, sz init_capacity, f32 load_factor)
+void Hashmap<Key, Value>::init_with_key_values(Allocator* alloc, Slice<HashmapKVPair<Key, Value>> pairs, sz init_capacity, f32 load_factor)
 {
     ASSERT_MSG(load_factor > 0, "Must be bigger than 0");
     init_capacity = next_power_of_2(max(HASHMAP_DEFAULT_CAPACITY, pairs.count, init_capacity));
@@ -141,7 +151,7 @@ void Hashmap<Key, Value>::init_with_key_values(Allocator* alloc, View<HashmapKVP
 }
 
 template<typename Key, typename Value>
-void Hashmap<Key, Value>::clear(View<HashmapEntry<Key, Value>> entries)
+void Hashmap<Key, Value>::clear(Slice<HashmapEntry<Key, Value>> entries)
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized");
     this->count = 0;
@@ -336,7 +346,7 @@ HashmapIter<Key, Value> Hashmap<Key, Value>::get_iter()
 }
 
 template<typename Key, typename Value>
-void Hashmap<Key, Value>::foreach_entry(void(*fn)(HashmapEntry<Key, Value>&))
+void Hashmap<Key, Value>::foreach_entry(void(*fn)(HashmapEntry<Key, Value>))
 {
     HashmapIter<Key, Value> iter = this->get_iter();
     HashmapEntry<Key, Value>* curr_entry;
@@ -350,7 +360,21 @@ void Hashmap<Key, Value>::foreach_entry(void(*fn)(HashmapEntry<Key, Value>&))
 }
 
 template<typename Key, typename Value>
-void Hashmap<Key, Value>::foreach_key(void(*fn)(Key&))
+void Hashmap<Key, Value>::foreach_entry_ref(void(*fn)(HashmapEntry<Key, Value>*))
+{
+    HashmapIter<Key, Value> iter = this->get_iter();
+    HashmapEntry<Key, Value>* curr_entry;
+    
+    for (;;)
+    {
+        curr_entry = iter.next_entry();
+        if (!curr_entry) break;
+        fn(curr_entry);
+    }
+}
+
+template<typename Key, typename Value>
+void Hashmap<Key, Value>::foreach_key(void(*fn)(Key))
 {
     HashmapIter<Key, Value> iter = this->get_iter();
     Key* curr_key;
@@ -364,7 +388,21 @@ void Hashmap<Key, Value>::foreach_key(void(*fn)(Key&))
 }
 
 template<typename Key, typename Value>
-void Hashmap<Key, Value>::foreach_value(void(*fn)(Value&))
+void Hashmap<Key, Value>::foreach_key_ref(void(*fn)(Key*))
+{
+    HashmapIter<Key, Value> iter = this->get_iter();
+    Key* curr_key;
+    
+    for (;;)
+    {
+        curr_key = iter.next_key();
+        if (!curr_key) break;
+        fn(curr_key);
+    }
+}
+
+template<typename Key, typename Value>
+void Hashmap<Key, Value>::foreach_value(void(*fn)(Value))
 {
     HashmapIter<Key, Value> iter = this->get_iter();
     Value* curr_val;
@@ -374,6 +412,20 @@ void Hashmap<Key, Value>::foreach_value(void(*fn)(Value&))
         curr_val = iter.next_value();
         if (!curr_val) break;
         fn(*curr_val);
+    }
+}
+
+template<typename Key, typename Value>
+void Hashmap<Key, Value>::foreach_value_ref(void(*fn)(Value*))
+{
+    HashmapIter<Key, Value> iter = this->get_iter();
+    Value* curr_val;
+    
+    for (;;)
+    {
+        curr_val = iter.next_value();
+        if (!curr_val) break;
+        fn(curr_val);
     }
 }
 

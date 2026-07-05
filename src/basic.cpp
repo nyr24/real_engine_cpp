@@ -1,14 +1,41 @@
-#include <stdarg.h>
+#include <cstdarg>
 #include <unistd.h>
 #include "basic.hpp"
 #include "slice.hpp"
-#include "split_iterator.hpp"
 #include "string.hpp"
 #include "io.hpp"
-#include "log.hpp"
 
 namespace rg
 {
+
+void get_system_info(SystemInfo* sys_info)
+{
+#ifdef RG_PLATFORM_WIN32
+    SYSTEM_INFO win_sys_info;
+    GetSystemInfo(&win_sys_info);
+    sys_info->thread_count = sz(win_sys_info.dwNumberOfProcessors);
+    sys_info->page_size = sz(win_sys_info.dwPageSize);
+#else
+    sys_info->thread_count = sz(::sysconf(_SC_NPROCESSORS_CONF));
+    sys_info->page_size = sz(::sysconf(_SC_PAGESIZE));
+    ASSERT_MSG(sys_info->thread_count != -1 && sys_info->page_size != -1, "Error while getting system parameters");
+#endif
+}
+
+[[noreturn]] void panic(CString message, ...)
+{
+    LOG_FATAL("{}", message);
+    exit(1);
+}
+
+[[noreturn]] void unreachable(CString message, ...)
+{
+#if defined(_MSC_VER) && !defined(__clang__) // MSVC
+    __assume(false);
+#else // GCC, Clang
+    __builtin_unreachable();
+#endif
+}
 
 // StrView & CStrView.
 
@@ -50,35 +77,30 @@ bool StrView::contains_non_ascii()
 
 void StrView::trim_until_null(bool inclusive)
 {
-    this->trim_until('\0', inclusive);
+    this->trim_from_end_to_last_occur('\0', inclusive);
 }
 
-StrView StrView::slice_until_null(bool inclusive)
+bool StrView::starts_with(StrView input)
 {
-    Slice<const char> res = this->slice_until('\0', inclusive);
-    return { res.ptr, res.count };
+    ASSERT_INITIALIZED(this);
+    ASSERT_INITIALIZED_VAL(input);
+
+    if (input.count > this->count) return false;
+    return mem_compare((void*)this->ptr, (void*)input.ptr, input.byte_size());
 }
 
-StrView utf8_to_utf16(Allocator* alloc, StrView str_view)
+bool StrView::starts_with(CString input)
 {
-#ifdef RG_PLATFORM_WIN32
-    s32 wide_len = MultiByteToWideChar(CP_UTF8, 0, str_view.ptr, str_view.count, NULL, 0);
-    if (wide_len == 0)
-    {
-        return {};
-    }
+    ASSERT_INITIALIZED(this);
+    if (!input || *input == '\0') return false;
 
-    sz new_size = (sizeof(wchar_t)) * wide_len;
-    char* wide_str_out = (char*)allocator_allocate(alloc, new_size);
-
-    if (MultiByteToWideChar(CP_UTF8, 0, str_view.ptr, str_view.count, wide_str_out, wide_len) == 0)
+    const char* inp_curr = input;
+    const char* curr = this->begin();
+    const char* end = this->end();
+    for (; *inp_curr != '\0' && curr != end && *inp_curr == *curr; ++inp_curr, ++curr)
     {
-        return { wide_str_out, new_size, true };
     }
-    return {};
-#else
-    return str_view;
-#endif
+    return *inp_curr == '\0';
 }
 
 // DString.
@@ -112,7 +134,7 @@ void DString::init_slice(Allocator* alloc, Slice<char> slice, sz additional_capa
     this->alloc = alloc;
     if (slice.count)
     {
-        this->push_many(slice);
+        this->push(slice);
     }
 }
 
@@ -132,7 +154,7 @@ void DString::init_view(Allocator* alloc, StrView str_view, sz additional_capaci
 void DString::push(StrView str_view)
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized first");
-    ASSERT_MSG(str_view.is_valid(), "Must be valid string view");
+    ASSERT_MSG(str_view.is_initialized(), "Must be valid string view");
 
     // Remove duplicated null terminator.
     if (this->is_null_term()) this->count--;
@@ -149,17 +171,22 @@ void DString::push(StrView str_view)
 
 void DString::push(Slice<char> slice)
 {
-    ASSERT_MSG(this->is_initialized(), "Must be initialized first");
-    ASSERT_MSG(slice.is_valid(), "Must be valid slice");
-
+    ASSERT_INITIALIZED(this);
+    ASSERT_INITIALIZED_VAL(slice);
     this->reserve(slice.count);
-
     char* start = this->data + this->count;
-    for (char c : slice)
-    {
-        *start = c; 
-        ++start;
-    }
+    mem_copy(start, slice.ptr, slice.byte_size());
+    this->count += slice.count;
+}
+
+void DString::push(Slice<u8> slice)
+{
+    ASSERT_INITIALIZED(this);
+    ASSERT_INITIALIZED_VAL(slice);
+    this->reserve(slice.count);
+    char* start = this->data + this->count;
+    mem_copy(start, slice.ptr, slice.byte_size());
+    this->count += slice.count;
 }
 
 void DString::push(CString cstr)
@@ -197,6 +224,15 @@ CString DString::cstr()
 {
     this->ensure_null_term();
     return (CString)this->data;
+}
+
+bool DString::contains_non_ascii()
+{
+    for (char c : *this)
+    {
+        if (c > 0x7F) return true;
+    }
+    return false;
 }
 
 void DString::ensure_null_term()
@@ -251,18 +287,12 @@ u64 DString::hash()
     return hash;
 }
 
-bool operator==(DString& lhs, DString& rhs)
+bool operator==(const DString& lhs, const DString& rhs)
 {
     if (lhs.count != rhs.count) return false;
     char* first = lhs.data;
     char* sec = rhs.data;
-    char* end = first + lhs.count;
-
-    for (; first != end; ++first, ++sec)
-    {
-        if (*first != *sec) return false;
-    }
-    return true;
+    return mem_compare(first, sec, lhs.count);
 }
 
 // CodepointIterator.
@@ -328,188 +358,26 @@ Utf8Codepoint Utf8CodepointIterator::next()
 
 // Logging
 
+constexpr EnumArray<CString, LogLevel> LOG_INTROS = {
+    "\x1b[1;32m[INFO]: ",
+    "\x1b[1;34m[TRACE]: ",
+    "\x1b[1;28m[DEBUG]: ",
+    "\x1b[45;37m[TEST]: ",
+    "\x1b[1;33m[WARN]: ",
+    "\x1b[1;31m[ERROR]: ",
+    "\x1b[0;41m[FATAL]: ",
+};
+
+const CString LOG_COLOR_RESET = "\x1b[0m\n";
+
 void log_proc(LogLevel level, CString fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
-    fputs(stdout, LOG_INTROS[level]);
+    fputs(LOG_INTROS[level], stdout);
     vfprintf(stdout, fmt, args);
     fputs(LOG_COLOR_RESET, stdout);
     va_end(args);
 }
-
-// Path.
-
-// NOTE: do we need to add a separator at end?
-void Path::init_from_cwd(Allocator* alloc, sz add_cap)
-{
-    ASSERT_MSG(add_cap >= 0, "Must be equal or greater to 0");
-#ifdef RG_PLATFORM_WIN32
-    this->capacity = add_cap + 1;
-    u32 size = GetCurrentDirectory(0, null);
-    this->capacity += (sz)size;
-    this->data = (char*)allocator_allocate(alloc, this->capacity);
-    this->count = GetCurrentDirectory(this->count, this->ptr);
-#else
-    this->capacity = 256 + add_cap + 1;
-    this->data = (char*)allocator_allocate(alloc, this->capacity);
-    while (true)
-    {
-        this->data = getcwd(this->data, this->capacity);
-        // Success.
-        if (this->data) break;
-        // Failure - grow the buffer.
-        this->capacity *= 2;
-        this->data = (char*)allocator_reallocate(alloc, this->data, this->capacity);
-    };
-    auto res{ this->view() };
-    res.trim_until('\0', false);
-    // How much space left in the allocated buffer.
-    sz remain = this->capacity - res.count;
-    if (remain < add_cap)
-    {
-        sz diff = add_cap - remain;
-        this->capacity += diff;
-        this->data = (char*)allocator_reallocate(alloc, this->data, this->capacity);
-    }
-    else res.count += add_cap;
-    this->count = res.count;
-#endif
-    this->push(PATH_SEPARATOR);
-}
-
-void Path::init_absolute(Allocator* alloc, StrView path, bool null_term)
-{
-    this->init_from_cwd(alloc, path.count);
-    ASSERT_MSG(this->last() == PATH_SEPARATOR, "Must be separated at end");
-    ASSERT_MSG(this->last() != '\0', "Mustn't be null terminated");
-    this->alloc = alloc;
-    path.replace(PATH_SEPARATOR_INVALID, PATH_SEPARATOR);
-    this->push(path);
-    if (null_term) this->ensure_null_term();
-}
-
-void Path::init_absolute(Allocator* alloc, CString path, bool null_term)
-{
-    StrView str_view(path);
-    this->init_absolute(alloc, str_view, null_term);
-}
-
-// Files.
-
-enum struct FileOpenBit
-{
-    READ = 1 << 0,
-    WRITE = 1 << 1,
-    READ_WRITE = READ | WRITE,
-};
-
-inline s32 operator|(FileOpenBit a, FileOpenBit b) { return a | b; }
-inline s32 operator&(FileOpenBit a, FileOpenBit b) { return a & b; }
-FileOpenBit& operator|=(FileOpenBit& a, FileOpenBit b);
-
-// TODO:
-bool file_open(Path* path, FileHandle& handle_out, FileOpenBit flags)
-{
-#ifdef RG_PLATFORM_WIN32
-    SECURITY_ATTRIBUTES sa;
-    memory_zero(&sa, sizeof(SECURITY_ATTRIBUTES));
-    sa.nLength = sizeof(SECURITY_ATTRIBUTES);
-    sa.lpSecurityDescriptor = NULL;
-    sa.bInheritHandle = TRUE;
-    DWORD windows_flags = 0;
-    if (flags & FileOpenBit::READ)    windows_flags |= GENERIC_READ;
-    if (flags & FileOpenBit::WRITE)   windows_flags |= GENERIC_WRITE;
-
-    // TODO:
-    if ()
-    handle_out = CreateFileA(file_path,
-        windows_flags,
-        FILE_SHARE_READ | FILE_SHARE_WRITE,
-        &sa,
-        OPEN_EXISTING,
-        NULL,
-        NULL);
-#else
-    u32 unix_flags = O_RDONLY;
-    if (u32(flags & FileOpenBit::WRITE))
-    {
-        if (u32(flags & FileOpenBit::READ)) unix_flags = O_RDWR;
-        else unix_flags = O_WRONLY;
-    }
-    handle_out = ::open(path->cstr(), (s32)unix_flags);
-#endif
-    if (handle_out == FILE_HANDLE_INVALID) {
-        report_error("Could not open file \"%s\"", error_string(file_path, is_wide));
-        return false;
-    }
-    return true;
-}
-
-bool File::close()
-{
-    if (this->handle == FILE_HANDLE_INVALID) return false;
-    #ifdef RG_PLATFORM_WIN32
-        if (!CloseHandle(this->handle)) return false;
-    #else
-        if (this->handle <= 2) return false;  // Don't close stdin(0), stdout(1), stderr(2)
-        if (::close(this->handle) != 0) return false;
-    #endif // RG_PLATFORM_WIN32
-    return true;
-}
-
-// bool file_open(Path* file_path, File* out_file, CString options = FILE_OPEN_OPTS[(sz)FileOpenOption::READ_WRITE])
-// {
-//     ASSERT(out_file != null);
-//     out_file->handle = fopen(file_path->cstr(), options);
-//     return out_file->handle != null;
-// }
-
-// void File::close()
-// {
-//     fclose(this->handle);
-//     this->handle = null;
-// }
-
-// sz File::len()
-// {
-//     ASSERT_MSG(this->handle != null, "Must be valid file handle");
-//     fseek(this->handle, 0, SEEK_END);
-//     sz len = ftell(this->handle);
-//     rewind(this->handle);
-//     return len;
-// }
-
-// bool file_read_entire(Allocator* alloc, Path* path, DString* out_res)
-// {
-//     ASSERT(out_res != null);
-    
-//     path->ensure_null_term();
-//     File file;
-//     bool open_res = file_open(path, &file, FILE_OPEN_OPTS[(sz)FileOpenOption::READ]);
-//     if (!open_res) return false;
-//     sz flen = file.len();
-//     out_res->init(alloc, flen);
-//     sz res = fread(out_res->data, flen, 1, file.handle);
-//     return res > 0;
-// }
-
-// bool file_read_entire_into(Path* path, StrView buff)
-// {
-//     path->ensure_null_term();
-//     File file;
-//     bool open_res = file_open(path, &file, FILE_OPEN_OPTS[(sz)FileOpenOption::READ]);
-//     if (!open_res) return false;
-//     sz flen = file.len();
-//     ASSERT_MSG(buff.count >= flen, "Not enough memory in the buffer");
-//     sz res = fread(buff.ptr, flen, 1, file.handle);
-//     return res > 0;
-// }
-
-// // TODO:
-// void file_write(Path path, StrView write_buff)
-// {
-    
-// }
 
 } // rg

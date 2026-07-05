@@ -11,11 +11,16 @@
 #ifdef _WIN32
 	#define RG_PLATFORM_WIN32
 	#include <windows.h>
+	#define FMT_STR_NULL "%S"
+	#define FMT_STR_LEN "%.*S"
 #else
 	#define RG_PLATFORM_POSIX
 	#include <fcntl.h>
 	#include <unistd.h>
 	#include <sys/stat.h>
+	#include <sys/mman.h>	
+	#define FMT_STR_NULL "%s"
+	#define FMT_STR_LEN "%.*s"
 #endif // _WIN32
 
 // Types and keywords.
@@ -45,13 +50,33 @@ typedef time_t FileTimeUnit;
 
 #define ASSERT(expr) assert((expr))
 #define ASSERT_MSG(expr, msg) assert((expr) && (msg))
-#define ASSERT_FALSE(expr) assert((!expr))
-#define ASSERT_FALSE_MSG(expr, msg) assert((!expr) && (msg))
-#define ASSERT_NON_NULL(expr, msg) assert(((expr) != nullptr) && (msg))
+#define ASSERT_EQ_ZERO(expr) assert((expr) == 0 && "Must be equal to 0")
+#define ASSERT_NON_ZERO(expr) assert((expr) != 0 && "Mustn't be equal to 0")
+#define ASSERT_GREATER_ZERO(expr) assert((expr) > 0 && "Must be greater than 0")
+#define ASSERT_GREATER_EQ_ZERO(expr) assert((expr) >= 0 && "Must be greater or equal to 0")
+#define ASSERT_BELOW_ZERO(expr) assert((expr) < 0 && "Must be smaller than 0")
+#define ASSERT_BELOW_EQ_ZERO(expr) assert((expr) <= 0 && "Must be smaller or equal to 0")
+#define ASSERT_IN_BOUNDS(expr) assert((expr) && "Must be in bounds")
+#define ASSERT_NON_NULL(expr) assert((expr) != null && "Mustn't be null")
+#define ASSERT_NON_EMPTY(expr) assert(!(expr)->is_empty() && "Must be non-empty");
+#define ASSERT_NON_EMPTY_VAL(expr) assert(!(expr).is_empty() && "Must be non-empty");
+#define ASSERT_INITIALIZED(expr) assert(expr->is_initialized() && "Must be initialized");
+#define ASSERT_INITIALIZED_VAL(expr) assert(expr.is_initialized() && "Must be initialized");
+#define ASSERT_NON_INITIALIZED(expr) assert(!expr->is_initialized() && "Not expected to be initialized");
+#define ASSERT_NON_INITIALIZED_VAL(expr) assert(!expr.is_initialized() && "Not expected to be initialized");
 #define ASSERT_STATIC(expr) static_assert((expr))
 #define ASSERT_STATIC_MSG(expr, msg) static_assert((expr), (msg))
 #define TODO(msg) assert(false && (msg))
+#define CONCAT(a, b) a b
 
+#define GET_FMT_STR(str_p) str_p->count, str_p->data
+#define GET_FMT_STR_VAL(str) str.count, str.data
+#define GET_FMT_STR_VIEW(str_view) str_view.count, str_view.ptr
+// Statically determine cstring length without doing costly strlen().
+#define CSTR_SIZED(cstr) cstr, sizeof(cstr) - 1
+#define CSTR_SIZED_NULL(cstr) cstr, sizeof(cstr)
+#define CARRAY_LEN(carr) sizeof(carr) / sizeof(carr[0])
+#define CARRAY_SIZED(carr) carr, CARRAY_LEN(carr)
 #define printn(msg) fputs(msg, stdout)
 #define printfn(fmt, args...) fprintf(stdout, fmt "\n", args)
 #define eprintn(msg) fputs(msg, stderr)
@@ -60,9 +85,59 @@ typedef time_t FileTimeUnit;
 namespace rg
 {
 
+#ifdef RG_PLATFORM_WIN32
+constexpr FileHandle FILE_HANDLE_INVALID = INVALID_HANDLE_VALUE;
+#else
 constexpr FileHandle FILE_HANDLE_INVALID = -1;
+#endif
 constexpr sz INDEX_INVALID = -1;
 constexpr sz DEFAULT_MEM_ALIGNMENT = sizeof(uptr) * 2;
+constexpr sz KB = 1024;
+constexpr sz MB = 1024 * 1024;
+constexpr sz GB = 1024 * 1024 * 1024;
+
+struct SystemInfo
+{
+	sz thread_count;
+	sz page_size;
+};
+
+void get_system_info(SystemInfo* sys_info);
+
+// Logging.
+
+enum struct LogLevel
+{
+	INFO,
+	TRACE,
+	DEBUG,
+	TEST,
+	WARN,
+	ERROR,
+	FATAL,
+	EnumSize
+};
+
+void log_proc(LogLevel level, CString fmt, ...);
+
+#ifdef RG_DEBUG
+    #define LOG_INFO(fmt, ...) log_proc(LogLevel::INFO, fmt, ##__VA_ARGS__);
+    #define LOG_TRACE(fmt, ...) log_proc(LogLevel::TRACE, fmt, ##__VA_ARGS__);
+    #define LOG_DEBUG(fmt, ...) log_proc(LogLevel::DEBUG, fmt, ##__VA_ARGS__);
+    #define LOG_TEST(fmt, ...) log_proc(LogLevel::TEST, fmt, ##__VA_ARGS__);
+    #define LOG_WARN(fmt, ...) log_proc(LogLevel::WARN, fmt, ##__VA_ARGS__);
+    #define LOG_ERROR(fmt, ...) log_proc(LogLevel::ERROR, fmt, ##__VA_ARGS__);
+    #define LOG_FATAL(fmt, ...) log_proc(LogLevel::FATAL, fmt, ##__VA_ARGS__);
+#else
+    #define LOG_INFO(fmt, ...);
+    #define LOG_TRACE(fmt, ...);
+    #define LOG_DEBUG(fmt, ...);
+    #define LOG_TEST(fmt, ...);
+    #define LOG_WARN(fmt, ...);
+    #define LOG_ERROR(fmt, ...) log_proc(LogLevel::ERROR, fmt, ##__VA_ARGS__);
+    #define LOG_FATAL(fmt, ...) log_proc(LogLevel::FATAL, fmt, ##__VA_ARGS__);
+#endif
+
 
 template<typename Type>
 constexpr Type max(Type a, Type b)
@@ -134,6 +209,9 @@ constexpr bool is_power_of_two(Type val)
 	return val != 0 && (val & (val - 1)) == 0;
 }
 
+#define ASSERT_POW_OF_TWO(expr) assert(is_power_of_two(expr) && "Must be a power of 2")
+#define ASSERT_POW_OF_TWO_STATIC(expr) static_assert(is_power_of_two(expr), "Must be a power of 2")
+
 template<typename Type>
 constexpr Type next_power_of_2(Type x)
 {
@@ -168,25 +246,25 @@ constexpr PtrType align_ptr(PtrType ptr, sz alignment)
 	return PtrType(align((uptr)ptr, alignment));
 }
 
-inline void mem_copy(void* dest, void* src, sz len)
+inline void mem_copy(void* dest, void* src, sz byte_size)
 {
-	memcpy(dest, src, len);
+	memcpy(dest, src, byte_size);
 }
 
-inline bool mem_compare(void* a, void* b, sz len)
+inline bool mem_compare(void* a, void* b, sz byte_size)
 {
-	return memcmp(a, b, len) == 0;
+	return memcmp(a, b, byte_size) == 0;
 }
 
 template<typename Type>
-inline void mem_set(void* ptr, sz len, Type val)
+inline void mem_set(void* ptr, sz byte_size, Type val)
 {
-	memset(ptr, val, len);
+	memset(ptr, val, byte_size);
 }
 
-inline void mem_zero(void* ptr, sz len)
+inline void mem_zero(void* ptr, sz byte_size)
 {
-	memset(ptr, 0, len);
+	memset(ptr, 0, byte_size);
 }
 
 constexpr sz alignment_for_allocation(sz alignment)
@@ -195,19 +273,7 @@ constexpr sz alignment_for_allocation(sz alignment)
 }
 
 [[noreturn]] void panic(CString message = "", ...);
-// {
-//     LOG_FATAL("{}", message);
-//     std::exit(1);
-// }
-
 [[noreturn]] void unreachable(CString message = "", ...);
-// {
-// #if defined(_MSC_VER) && !defined(__clang__) // MSVC
-//     __assume(false);
-// #else // GCC, Clang
-//     __builtin_unreachable();
-// #endif
-// }
 
 // Defer.
 

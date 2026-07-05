@@ -15,15 +15,17 @@ constexpr sz DARRAY_DEFAULT_CAPACITY = 16;
 template<typename Type>
 struct DArray
 {
+    Type* data;
+    Allocator* alloc;
     sz count;
     sz capacity;
-    Allocator* alloc;
-    Type* data;
 
+    // Constructor is just to detect initialized state.
+    DArray();
     void init(Allocator* alloc, sz init_capacity = DARRAY_DEFAULT_CAPACITY);
-    void init_with_values(Allocator* alloc, Slice<Type> values, sz additional_capacity = 0);
+    void init_slice(Allocator* alloc, Slice<Type> values, sz additional_capacity = 0);
     void push(Type value);
-    void push_many(Slice<Type> values);
+    void push(Slice<Type> values);
     Type pop();
     Type remove_unordered_at(sz idx);
     void reserve(sz needed);
@@ -49,16 +51,22 @@ struct DArray
     inline Type last() { return *(this->data + this->count - 1); }
     inline Type* last_ref() { return this->data + this->count - 1; }
     inline bool is_empty() { return this->count == 0; }
-    inline bool is_initialized() { return this->alloc != null; }
+    inline bool is_initialized() const { return this->data != null && this->alloc != null; }
     inline void clear() { this->count = 0; }
     inline sz byte_size_used() { return this->count * sizeof(Type); }
     inline sz byte_size_allocated() { return this->capacity * sizeof(Type); }
 };
 
 template<typename Type>
+DArray<Type>::DArray()
+    : data{null}, alloc{null}
+{
+}
+
+template<typename Type>
 void DArray<Type>::init(Allocator* alloc, sz init_capacity)
 {
-    ASSERT_MSG(init_capacity >= 0, "Must be greater than 0");
+    ASSERT_GREATER_EQ_ZERO(init_capacity);
     init_capacity = max(DARRAY_DEFAULT_CAPACITY, init_capacity);
     this->data = (Type*)allocator_allocate(alloc, init_capacity * sizeof(Type));
     this->count = 0;
@@ -67,9 +75,9 @@ void DArray<Type>::init(Allocator* alloc, sz init_capacity)
 }
 
 template<typename Type>
-void DArray<Type>::init_with_values(Allocator* alloc, Slice<Type> values, sz additional_capacity)
+void DArray<Type>::init_slice(Allocator* alloc, Slice<Type> values, sz additional_capacity)
 {
-    ASSERT_MSG(values.is_valid(), "Values must be valid");
+    ASSERT_NON_EMPTY_VAL(values);
     sz init_cap = max(DARRAY_DEFAULT_CAPACITY, values.count + additional_capacity);
     this->data = (Type*)allocator_allocate(alloc, init_cap * sizeof(Type));
     this->count = 0;
@@ -77,37 +85,34 @@ void DArray<Type>::init_with_values(Allocator* alloc, Slice<Type> values, sz add
     this->alloc = alloc;
     if (values.count)
     {
-        this->push_many(values);
+        this->push(values);
     }
 }
 
 template<typename Type>
 void DArray<Type>::push(Type value)
 {
-    ASSERT_MSG(this->is_initialized(), "Must be initialized first");
+    ASSERT_INITIALIZED(this);
     this->reserve(1);
     *this->end() = value;
     this->count++;
 }
 
 template<typename Type>
-void DArray<Type>::push_many(Slice<Type> values)
+void DArray<Type>::push(Slice<Type> input)
 {
-    ASSERT_MSG(this->is_initialized(), "Must be initialized first");
-    this->reserve(values.count);
-    Type* data = this->data;
-
-    for (Type val : values)
-    {
-        *(data + this->count) = val;
-        this->count++;
-    }
+    ASSERT_INITIALIZED(this);
+    this->reserve(input.count);
+    Type* curr = this->end();
+    Type* inp_curr = input.ptr;
+    mem_copy(curr, inp_curr, input.byte_size());
+    this->count += input.count;
 }
 
 template<typename Type>
 Type DArray<Type>::pop()
 {
-    ASSERT_MSG(this->count > 0, "Must be greater than 0");
+    ASSERT_GREATER_ZERO(this->count);
     Type val = this->last();
     this->count--;
     return val;
@@ -116,7 +121,7 @@ Type DArray<Type>::pop()
 template<typename Type>
 Type DArray<Type>::remove_unordered_at(sz idx)
 {
-    ASSERT_MSG(idx >= 0 && idx < this->count, "Must be in bounds");
+    ASSERT_IN_BOUNDS(idx >= 0 && idx < this->count);
 
     if (idx == this->count - 1)
     {
@@ -132,21 +137,21 @@ Type DArray<Type>::remove_unordered_at(sz idx)
 template<typename Type>
 inline Type DArray<Type>::at(sz idx)
 {
-    assert(idx >= 0 && idx < this->count && "Must be in bounds");
+    ASSERT_IN_BOUNDS(idx >= 0 && idx < this->count);
     return this->data[idx];
 }
 
 template<typename Type>
 inline Type* DArray<Type>::at_ref(sz idx)
 {
-    assert(idx >= 0 && idx < this->count && "Must be in bounds");
+    ASSERT_IN_BOUNDS(idx >= 0 && idx < this->count);
     return this->data + idx;
 }
 
 template<typename Type>
 inline void DArray<Type>::set(Type val, sz idx)
 {
-    ASSERT_MSG(idx >= 0 && idx < this->count, "Must be in bounds");
+    ASSERT_IN_BOUNDS(idx >= 0 && idx < this->count);
     Type* place = this->data + idx;
     *place = val;
 }
@@ -154,8 +159,8 @@ inline void DArray<Type>::set(Type val, sz idx)
 template<typename Type>
 inline void DArray<Type>::swap(sz idx1, sz idx2)
 {
-    ASSERT_MSG(idx1 >= 0 && idx1 < this->count, "Must be in bounds");
-    ASSERT_MSG(idx2 >= 0 && idx2 < this->count, "Must be in bounds");
+    ASSERT_IN_BOUNDS(idx1 >= 0 && idx1 < this->count);
+    ASSERT_IN_BOUNDS(idx2 >= 0 && idx2 < this->count);
     rg::swap(this->at_ref(idx1), this->at_ref(idx2));
 }
 
@@ -190,7 +195,7 @@ Slice<Type> DArray<Type>::slice(sz start, sz end)
 {
     if (end == -1) end = this->count;
     sz dist = end - start;
-    ASSERT_MSG(dist > 0, "Should be greater than 0");
+    ASSERT_GREATER_ZERO(dist);
     Type* data = this->data;
     return Slice{ data + start, dist };
 }

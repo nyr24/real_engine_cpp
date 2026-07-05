@@ -32,6 +32,7 @@ private:
 
 struct DString : DArray<char>
 {
+    using DArray<char>::DArray;
     void init(Allocator* alloc, sz init_capacity = DSTRING_DEFAULT_CAPACITY);
     void init_slice(Allocator* alloc, Slice<char> slice, sz additional_capacity = 0);
     void init_view(Allocator* alloc, StrView str_view, sz additional_capacity = 0);
@@ -39,6 +40,7 @@ struct DString : DArray<char>
     void push(char c);
     void push(StrView str_view);
     void push(Slice<char> slice);
+    void push(Slice<u8> slice);
     void push(CString cstr);
     void push_fmt(CString fmt, ...);
     void ensure_null_term();
@@ -46,16 +48,23 @@ struct DString : DArray<char>
     Utf8CodepointIterator get_codepoint_iter();
     void foreach_codepoint(void(*fn)(Utf8Codepoint&));
     u64 hash();
+    bool contains_non_ascii();
 
     CString cstr();
     // View is constant.
     inline StrView view() { return StrView{ this->data, this->count }; }
+    // Use this, when you know what you're doing.
+    inline void set_from_slice(Slice<char> slice) { this->data = slice.ptr; this->count = slice.count; }
     // Slice is modifiable.
     inline Slice<char> slice() { return Slice{ this->data, this->count }; }
     inline bool is_null_term() { return this->count && this->last() == '\0'; }
 };
 
-bool operator==(DString& lhs, DString& rhs);
+bool operator==(const DString& lhs, const DString& rhs);
+
+// For printf formatting with length (%.*s).
+#define FMT_DSTRING(dstr) (s32)dstr->count, dstr->data
+#define FMT_DSTRING_VAL(dstr) (s32)dstr.count, dstr.data
 
 // FString - fixed string type.
 
@@ -66,17 +75,21 @@ struct FString : FArray<char, CAPACITY>
 {
     FString() = default;
     FString(CString cstr);
-
-    void init_view(StrView str_view);
+    FString(CString cstr, sz size);
+    FString(Slice<char> slice);
+    FString(StrView view);
     void init_slice(Slice<char> slice);
+    void init_view(StrView str_view);
     void init_cstr(CString cstr);
-    void push_many(StrView str_view);
-    void push_many(Slice<char> slice);
+    void init_cstr_sized(CString cstr, sz size);
+    void push(StrView str_view);
+    void push(Slice<char> slice);
     void push_cstr(CString cstr);
+    void push_cstr_sized(CString cstr, sz size);
     bool ensure_null_term();
     void ensure_no_null_term();
     Utf8CodepointIterator get_codepoint_iter();
-    void foreach_codepoint(void(*fn)(Utf8Codepoint&));
+    void foreach_codepoint(void(*fn)(Utf8Codepoint));
     u64 hash();
 
     // View is constant.
@@ -89,66 +102,82 @@ struct FString : FArray<char, CAPACITY>
 template<sz CAPACITY>
 FString<CAPACITY>::FString(CString cstr)
 {
-    this->init_cstr(cstr);
+    this->count = 0;
+    this->push_cstr(cstr);
 }
 
 template<sz CAPACITY>
-void FString<CAPACITY>::init_cstr(CString cstr)
+FString<CAPACITY>::FString(CString cstr, sz size)
 {
     this->count = 0;
-    this->push_cstr(cstr);
+    this->push_cstr_sized(cstr, size);
+}
+
+template<sz CAPACITY>
+FString<CAPACITY>::FString(Slice<char> slice)
+{
+    this->count = 0;
+    this->push(slice);
+}
+
+template<sz CAPACITY>
+FString<CAPACITY>::FString(StrView view)
+{
+    this->count = 0;
+    this->push(view);
 }
 
 template<sz CAPACITY>
 void FString<CAPACITY>::init_view(StrView str_view)
 {
     this->count = 0;
-    this->push_many(str_view);
+    this->push(str_view);
 }
 
 template<sz CAPACITY>
 void FString<CAPACITY>::init_slice(Slice<char> slice)
 {
     this->count = 0;
-    this->push_many(slice);
+    this->push(slice);
 }
 
 template<sz CAPACITY>
-void FString<CAPACITY>::push_many(Slice<char> slice)
+void FString<CAPACITY>::push(Slice<char> slice)
 {
-    ASSERT_MSG(slice.is_valid(), "Must be valid slice");
+    ASSERT_INITIALIZED_VAL(slice);
     ASSERT_MSG(this->remain() >= slice.count, "Must be enough space");
 
     char* start = this->data + this->count;
-    for (char c : slice)
-    {
-        *start = c;
-        ++start;
-    }
+    mem_copy(start, slice.ptr, slice.count);
+    this->count += slice.count;
 }
 
 template<sz CAPACITY>
-void FString<CAPACITY>::push_many(StrView str_view)
+void FString<CAPACITY>::push(StrView str_view)
 {
-    ASSERT_MSG(str_view.is_valid(), "Must be valid slice");
+    ASSERT_INITIALIZED_VAL(str_view);
     ASSERT_MSG(this->remain() >= str_view.count, "Must be enough space");
 
     // Remove duplicated null terminator.
     if (this->is_null_term()) this->count--;
 
     char* start = this->data + this->count;
-    for (char c : str_view)
-    {
-        *start = c;
-        ++start;
-    }
+    mem_copy(start, (void*)str_view.ptr, str_view.count);
+    this->count += str_view.count;
 }
 
 template<sz CAPACITY>
 void FString<CAPACITY>::push_cstr(CString cstr)
 {
     StrView str_view(cstr);
-    this->push_many(str_view);
+    this->push(str_view);
+}
+
+template<sz CAPACITY>
+void FString<CAPACITY>::push_cstr_sized(CString cstr, sz size)
+{
+    StrView str_view(cstr, size);
+    this->push(str_view);
 }
 
 template<sz CAPACITY>
@@ -173,7 +202,7 @@ void FString<CAPACITY>::ensure_no_null_term()
 }
 
 template<sz CAPACITY>
-void FString<CAPACITY>::foreach_codepoint(void(*fn)(Utf8Codepoint&))
+void FString<CAPACITY>::foreach_codepoint(void(*fn)(Utf8Codepoint))
 {
     if (this->is_empty()) return;
     Utf8CodepointIterator iter = this->get_codepoint_iter();
@@ -215,19 +244,17 @@ u64 FString<CAPACITY>::hash()
 }
 
 template<sz CAPACITY>
-bool operator==(FString<CAPACITY>& lhs, FString<CAPACITY>& rhs)
+bool operator==(const FString<CAPACITY>& lhs, const FString<CAPACITY>& rhs)
 {
     if (lhs.count != rhs.count) return false;
     char* first = lhs.data;
     char* sec = rhs.data;
-    char* end = first + lhs.count;
-
-    for (; first != end; ++first, ++sec)
-    {
-        if (*first != *sec) return false;
-    }
-    return true;
+    return mem_compare(first, sec, lhs.count);
 }
+
+// For printf formatting with length (%.*s).
+#define FMT_FSTRING(fstr) fstr->count, fstr->data
+#define FMT_FSTRING_VAL(fstr) fstr.count, fstr.data
 
 } // rg
 
