@@ -19,15 +19,16 @@ namespace rg
     inline StrView RELATIVE_DIR_PARENT = { CSTR_SIZED("../") };
 #endif
 
+    constexpr sz PATH_INIT_CAPACITY = 128;
     constexpr sz FILE_MEMORY_MAP_BOUNDARY = 10 * MB;
 
     struct Path : DString
     {
+        using DString::DString;
+        using DString::init;
         void init(Allocator* alloc, Slice<char> input_path, bool null_term = true);
     private:
         void init_from_cwd(Allocator* alloc, sz steps_back = 0, sz add_cap = 0);
-        sz get_steps_back_from_cwd(Slice<char> input_path);
-
     #ifdef RG_PLATFORM_WIN32
     public:
         bool is_utf16;
@@ -36,6 +37,9 @@ namespace rg
         void convert_to_utf16();
     #endif
     };
+
+    sz get_steps_back_from_cwd_and_trim(Slice<char>* path);
+    inline bool path_is_absolute(Slice<char> path);
 
     struct MemoryMapEntry
     {

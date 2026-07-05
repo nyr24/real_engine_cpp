@@ -10,13 +10,23 @@ namespace rg
 void Path::init(Allocator* alloc, Slice<char> path, bool null_term)
 {
     path.replace(PATH_SEPARATOR_INVALID, PATH_SEPARATOR);
-    sz steps_back_from_cwd = this->get_steps_back_from_cwd(path);
     this->alloc = alloc;
-    this->init_from_cwd(alloc, steps_back_from_cwd, path.count);
-    ASSERT_MSG(this->last() == PATH_SEPARATOR, "Must be separated at end");
-    this->ensure_no_null_term();
-    this->push(path);
-    if (null_term) this->ensure_null_term();
+
+    if (path_is_absolute(path))
+    {
+        this->init(alloc, path.count);
+        this->push(path);
+        if (null_term) this->ensure_null_term();
+    }
+    else
+    {
+        sz steps_back_from_cwd = get_steps_back_from_cwd_and_trim(&path);
+        this->init_from_cwd(alloc, steps_back_from_cwd, path.count);
+        ASSERT_MSG(this->last() == PATH_SEPARATOR, "Must be separated at end");
+        this->ensure_no_null_term();
+        this->push(path);
+        if (null_term) this->ensure_null_term();
+    }
 }
 
 void Path::init_from_cwd(Allocator* alloc, sz steps_back, sz add_cap)
@@ -29,7 +39,7 @@ void Path::init_from_cwd(Allocator* alloc, sz steps_back, sz add_cap)
     this->data = (char*)allocator_allocate(alloc, this->capacity);
     this->count = ::GetCurrentDirectory(this->count, this->ptr);
 #else
-    this->capacity = 256 + add_cap + 1;
+    this->capacity = PATH_INIT_CAPACITY + add_cap;
     this->data = (char*)allocator_allocate(alloc, this->capacity);
     while (true)
     {
@@ -40,26 +50,22 @@ void Path::init_from_cwd(Allocator* alloc, sz steps_back, sz add_cap)
         this->capacity *= 2;
         this->data = (char*)allocator_reallocate(alloc, this->data, this->capacity);
     };
-    StrView res = this->view();
-    res.trim_until_null(false);
+    this->count = this->capacity;
+    this->trim_from_end_to_first_occur('\0', false);
     // How much space left in the allocated buffer.
-    sz remain = this->capacity - res.count;
+    sz remain = this->capacity - this->count;
     if (remain < add_cap)
     {
         sz diff = add_cap - remain;
         this->capacity += diff;
         this->data = (char*)allocator_reallocate(alloc, this->data, this->capacity);
     }
-    else res.count += add_cap;
-    this->count = res.count;
 #endif
     // Do back steps.
-    Slice<char> path_slice = this->slice();
     for (; steps_back > 0; --steps_back)
     {
-        path_slice.trim_from_end_to_last_occur(PATH_SEPARATOR);
+        this->trim_from_end_to_last_occur(PATH_SEPARATOR);
     }
-    this->set_from_slice(path_slice);
     // Add a path separator to the end.
     this->push(PATH_SEPARATOR);
 }
@@ -67,26 +73,31 @@ void Path::init_from_cwd(Allocator* alloc, sz steps_back, sz add_cap)
 // Returns a number of steps it needs to take from the cwd.
 // . == 0, ./ == 0, ../ == 1, ../../ == 2, etc.
 // if it doesn't start with a dot - returns 0
-sz Path::get_steps_back_from_cwd(Slice<char> input_path)
+sz get_steps_back_from_cwd_and_trim(Slice<char>* input_path)
 {
-    if (input_path.first() != '.') return 0;
+    if (path_is_absolute(*input_path)) return 0;
+    if (input_path->first() != '.') return 0;
 
-    if (input_path.starts_with(RELATIVE_DIR_SELF.to_char_slice_unsafe()))
+    if (input_path->starts_with(RELATIVE_DIR_SELF.to_char_slice_unsafe()))
     {
-        input_path.trim_start_n(2);
+        input_path->trim_start_n(2);
         return 0;
     }
 
     sz steps = 0;
-    for (; input_path.first() == '.';)
+    while (input_path->starts_with(RELATIVE_DIR_PARENT.to_char_slice_unsafe()))
     {
-        if (input_path.starts_with(RELATIVE_DIR_PARENT.to_char_slice_unsafe())) return steps;
-        input_path.trim_start_n(3);
+        input_path->trim_start_n(3);
         ++steps;
     }
 
-    ASSERT_MSG(input_path.first() != PATH_SEPARATOR, "Path separators should be trimmed");
+    ASSERT_MSG(input_path->first() != PATH_SEPARATOR, "Path separators should be trimmed");
     return steps;
+}
+
+inline bool path_is_absolute(Slice<char> path)
+{
+    return path.first() == PATH_SEPARATOR;
 }
 
 #ifdef RG_PLATFORM_WIN32

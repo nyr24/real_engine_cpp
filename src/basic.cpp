@@ -3,7 +3,6 @@
 #include "basic.hpp"
 #include "slice.hpp"
 #include "string.hpp"
-#include "io.hpp"
 
 namespace rg
 {
@@ -77,7 +76,7 @@ bool StrView::contains_non_ascii()
 
 void StrView::trim_until_null(bool inclusive)
 {
-    this->trim_from_end_to_last_occur('\0', inclusive);
+    this->trim_from_end_to_first_occur('\0', inclusive);
 }
 
 bool StrView::starts_with(StrView input)
@@ -160,13 +159,9 @@ void DString::push(StrView str_view)
     if (this->is_null_term()) this->count--;
 
     this->reserve(str_view.count);
-
-    char* start = this->data + this->count;
-    for (char c : str_view)
-    {
-        *start = c; 
-        ++start;
-    }
+    char* copy_start = this->end();
+    mem_copy(copy_start, (void*)str_view.ptr, str_view.count);
+    this->count += str_view.count;
 }
 
 void DString::push(Slice<char> slice)
@@ -174,8 +169,8 @@ void DString::push(Slice<char> slice)
     ASSERT_INITIALIZED(this);
     ASSERT_INITIALIZED_VAL(slice);
     this->reserve(slice.count);
-    char* start = this->data + this->count;
-    mem_copy(start, slice.ptr, slice.byte_size());
+    char* copy_start = this->end();
+    mem_copy(copy_start, slice.ptr, slice.count);
     this->count += slice.count;
 }
 
@@ -184,8 +179,8 @@ void DString::push(Slice<u8> slice)
     ASSERT_INITIALIZED(this);
     ASSERT_INITIALIZED_VAL(slice);
     this->reserve(slice.count);
-    char* start = this->data + this->count;
-    mem_copy(start, slice.ptr, slice.byte_size());
+    char* copy_start = this->end();
+    mem_copy(copy_start, slice.ptr, slice.count);
     this->count += slice.count;
 }
 

@@ -57,7 +57,7 @@ s32 main() {
     // map.foreach_key([](StrView key) { printfn("Map has key: %s", key.ptr); });
 
     Path path;
-    FString<100> init_path(CSTR_SIZED("../build/debug"));
+    FString<100> init_path(CSTR_SIZED("/home/nyr/dev/c++/real_engine/build/debug"));
     path.init(arena, init_path.slice());
     printfn("Path is: " FMT_STR_LEN, FMT_DSTRING_VAL(path));
 

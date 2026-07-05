@@ -27,9 +27,9 @@ struct Slice
     // Trims any value from the set. (input isn't considered sequential)
     void trim_value_set_end(Slice<Type> value_set);
     // Trims sequentially values from the start of input. (input is considered sequential)
-    void trim_sequence_start(Slice<Type> seq);
+    bool trim_sequence_start(Slice<Type> seq);
     // Trims sequentially values from the end of input. (input is considered sequential)
-    void trim_sequence_end(Slice<Type> seq);
+    bool trim_sequence_end(Slice<Type> seq);
     void trim_from_start_to_first_occur(Type search, bool inclusive = false);
     void trim_from_start_to_last_occur(Type search, bool inclusive = false);
     void trim_from_end_to_first_occur(Type search, bool inclusive = false);
@@ -152,6 +152,21 @@ void Slice<Type>::trim_value_set_end(Slice<Type> trim_vals)
         }
         --trim_count;
     }
+}
+
+template<typename Type>
+bool Slice<Type>::trim_sequence_start(Slice<Type> trim_vals)
+{
+    if (!this->starts_with(trim_vals)) return false;
+    this->ptr += trim_vals.count;
+    this->count -= trim_vals.count;
+}
+
+template<typename Type>
+bool Slice<Type>::trim_sequence_end(Slice<Type> trim_vals)
+{
+    if (!this->ends_with(trim_vals)) return false;
+    this->count -= trim_vals.count;
 }
 
 template<typename Type>

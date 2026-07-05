@@ -53,8 +53,6 @@ struct DString : DArray<char>
     CString cstr();
     // View is constant.
     inline StrView view() { return StrView{ this->data, this->count }; }
-    // Use this, when you know what you're doing.
-    inline void set_from_slice(Slice<char> slice) { this->data = slice.ptr; this->count = slice.count; }
     // Slice is modifiable.
     inline Slice<char> slice() { return Slice{ this->data, this->count }; }
     inline bool is_null_term() { return this->count && this->last() == '\0'; }
