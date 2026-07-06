@@ -6,6 +6,7 @@
 #include "hashmap.hpp"
 #include "io.hpp"
 #include "conversions.hpp"
+#include "math.hpp"
 
 using namespace rg;
 
@@ -89,5 +90,19 @@ s32 main() {
     // printfn("Reverse conversions:\nint_str: %.*s, uint_str: %.*s, float_str: %.*s,",
     //     FMT_SLICE(int_res2), FMT_SLICE(uint_res2), FMT_SLICE(float_res2));
     
-    // return 0;
+    Mat4 a = Mat4::translation({ 1, 2, 3 }); 
+    Mat4 b = Mat4::scale({ 2, 2, 2 }); 
+    Mat4 res = a * b;
+    res *= res;
+
+    // f32 arr[16];
+    // _mm512_storeu_ps(arr, res.repr);
+    // res.to_arr(arr);
+
+    for (f32 val : res.arr)
+    {
+        printfn("%f ", val);
+    }
+    
+    return 0;
 }

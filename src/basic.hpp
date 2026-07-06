@@ -64,8 +64,6 @@ typedef time_t FileTimeUnit;
 #define ASSERT_INITIALIZED_VAL(expr) assert(expr.is_initialized() && "Must be initialized");
 #define ASSERT_NON_INITIALIZED(expr) assert(!expr->is_initialized() && "Not expected to be initialized");
 #define ASSERT_NON_INITIALIZED_VAL(expr) assert(!expr.is_initialized() && "Not expected to be initialized");
-#define ASSERT_STATIC(expr) static_assert((expr))
-#define ASSERT_STATIC_MSG(expr, msg) static_assert((expr), (msg))
 #define TODO(msg) assert(false && (msg))
 #define CONCAT(a, b) a b
 
