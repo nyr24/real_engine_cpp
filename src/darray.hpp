@@ -20,55 +20,59 @@ struct DArray
     sz count;
     sz capacity;
 
-    // Constructor is just to detect initialized state.
     DArray();
+    DArray(const DArray& rhs) = delete;
+    DArray& operator=(const DArray&& rhs) = delete;
+    DArray(DArray&& rhs);
+    DArray& operator=(DArray&& rhs);
+
     void init(Allocator* alloc, sz init_capacity = DARRAY_DEFAULT_CAPACITY);
     void init_slice(Allocator* alloc, Slice<Type> values, sz additional_capacity = 0);
-    void push(Type value);
+    void push(const Type& value);
     void push(Slice<Type> values);
     Type pop();
     Type remove_unordered_at(sz idx);
     void reserve(sz needed);
     void destroy();
-    void move_ownership(DArray<Type>* other);
+    DArray<Type> clone();
     Slice<Type> slice(sz start = 0, sz offset = -1) const;
     Slice<Type> slice_idx(sz start = 0, sz end = -1) const;
     Slice<Type> slice_start_n(sz count);
     Slice<Type> slice_sequence_start(Slice<Type> value_set);
-    Slice<Type> slice_from_start_to_first_occur(Type search, bool inclusive = false);
-    Slice<Type> slice_from_start_to_last_occur(Type search, bool inclusive = false);
+    Slice<Type> slice_from_start_to_first_occur(const Type& search, bool inclusive = false);
+    Slice<Type> slice_from_start_to_last_occur(const Type& search, bool inclusive = false);
     // Trims 'count' items from end.
     void trim_end_n(sz count);
     // Trims items sequentially from the end. (input is considered sequential)
     bool trim_sequence_end(Slice<Type> seq);
-    void trim_from_end_to_first_occur(Type search, bool inclusive = false);
-    void trim_from_end_to_last_occur(Type search, bool inclusive = false);
+    void trim_from_end_to_first_occur(const Type& search, bool inclusive = false);
+    void trim_from_end_to_last_occur(const Type& search, bool inclusive = false);
     bool starts_with(Slice<Type> input) const;
     bool ends_with(Slice<Type> input) const;
-    sz index_of(Type val) const;
+    sz index_of(const Type& val) const;
     sz index_of(Slice<Type> slice) const;
-    sz last_index_of(Type val) const;
+    sz last_index_of(const Type& val) const;
     sz last_index_of(Slice<Type> slice) const;
-    bool has(Type val) const;
+    bool has(const Type& val) const;
     bool has(Slice<Type> val) const;
-    void replace(Type find, Type replace);
+    void replace(const Type& find, const Type& replace);
     void foreach(void(*fn)(Type));
     void foreach_ref(void(*fn)(Type*));
-    SplitIterator<Type> get_split_iter(Type splitter);
-    void foreach_split(Type splitter, void(*fn)(Slice<Type>));
+    SplitIterator<Type> get_split_iter(const Type& splitter);
+    void foreach_split(const Type& splitter, void(*fn)(Slice<Type>));
 
     inline Type at(sz idx) const;
     inline Type* at_ref(sz idx);
-    inline void set(Type val, sz idx);
+    inline void set(const Type& val, sz idx);
     inline void swap(sz idx1, sz idx2);
     inline Type operator[](sz idx) const;
 
     inline sz len() const { return this->count; }
     inline Type* begin() { return this->data; }
     inline Type* end() { return this->data + this->count; }
-    inline Type first() const { return *this->data; }
+    inline const Type& first() const { return *this->data; }
     inline Type* first_ref() { return this->data; }
-    inline Type last() const { return *(this->data + this->count - 1); }
+    inline const Type& last() const { return *(this->data + this->count - 1); }
     inline Type* last_ref() { return this->data + this->count - 1; }
     inline bool is_empty() const { return this->count == 0; }
     inline bool is_initialized() const { return this->data != null && this->alloc != null; }
@@ -79,8 +83,35 @@ struct DArray
 
 template<typename Type>
 DArray<Type>::DArray()
-    : data{null}, alloc{null}
+    : data{null}, alloc{null}, count{0}, capacity{0}
 {
+}
+
+template<typename Type>
+DArray<Type>::DArray(DArray&& rhs)
+    : data{rhs.data}, alloc{rhs.alloc}, count{rhs.count}, capacity{rhs.capacity}
+{
+    rhs.data = null;
+    rhs.alloc = null;
+    rhs.count = 0;
+    rhs.capacity = 0;
+}
+
+template<typename Type>
+DArray<Type>& DArray<Type>::operator=(DArray&& rhs)
+{
+    if (this == &rhs) return *this;
+
+    this->data = rhs.data;
+    this->alloc = rhs.alloc;
+    this->count = rhs.count;
+    this->capacity = rhs.capacity;
+
+    rhs.data = null;
+    rhs.alloc = null;
+    rhs.count = 0;
+    rhs.capacity = 0;
+    return *this;
 }
 
 template<typename Type>
@@ -110,7 +141,7 @@ void DArray<Type>::init_slice(Allocator* alloc, Slice<Type> values, sz additiona
 }
 
 template<typename Type>
-void DArray<Type>::push(Type value)
+void DArray<Type>::push(const Type& value)
 {
     ASSERT_INITIALIZED(this);
     this->reserve(1);
@@ -169,7 +200,7 @@ inline Type* DArray<Type>::at_ref(sz idx)
 }
 
 template<typename Type>
-inline void DArray<Type>::set(Type val, sz idx)
+inline void DArray<Type>::set(const Type& val, sz idx)
 {
     ASSERT_IN_BOUNDS(idx >= 0 && idx < this->count);
     Type* place = this->data + idx;
@@ -259,7 +290,7 @@ bool DArray<Type>::trim_sequence_end(Slice<Type> trim_seq)
 }
 
 template<typename Type>
-Slice<Type> DArray<Type>::slice_from_start_to_first_occur(Type search, bool inclusive)
+Slice<Type> DArray<Type>::slice_from_start_to_first_occur(const Type& search, bool inclusive)
 {
     Slice<Type> slice = this->slice();
     slice.trim_from_start_to_first_occur(search, inclusive);
@@ -267,7 +298,7 @@ Slice<Type> DArray<Type>::slice_from_start_to_first_occur(Type search, bool incl
 }
 
 template<typename Type>
-Slice<Type> DArray<Type>::slice_from_start_to_last_occur(Type search, bool inclusive)
+Slice<Type> DArray<Type>::slice_from_start_to_last_occur(const Type& search, bool inclusive)
 {
     Slice<Type> slice = this->slice();
     slice.slice_from_start_to_last_occur(search, inclusive);
@@ -275,19 +306,19 @@ Slice<Type> DArray<Type>::slice_from_start_to_last_occur(Type search, bool inclu
 }
 
 template<typename Type>
-void DArray<Type>::trim_from_end_to_first_occur(Type search, bool inclusive)
+void DArray<Type>::trim_from_end_to_first_occur(const Type& search, bool inclusive)
 {
     return common_trim_from_end_to_first_occur(&this->data, &this->count, search, inclusive);
 }
 
 template<typename Type>
-void DArray<Type>::trim_from_end_to_last_occur(Type search, bool inclusive)
+void DArray<Type>::trim_from_end_to_last_occur(const Type& search, bool inclusive)
 {
     return common_trim_from_end_to_last_occur(&this->data, &this->count, search, inclusive);
 }
 
 template<typename Type>
-sz DArray<Type>::index_of(Type search) const
+sz DArray<Type>::index_of(const Type& search) const
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized");
     return common_index_of(&this->data, this->count, search);
@@ -301,7 +332,7 @@ sz DArray<Type>::index_of(Slice<Type> slice) const
 }
 
 template<typename Type>
-sz DArray<Type>::last_index_of(Type search) const
+sz DArray<Type>::last_index_of(const Type& search) const
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized");
     return common_last_index_of(&this->data, this->count, search);
@@ -315,7 +346,7 @@ sz DArray<Type>::last_index_of(Slice<Type> slice) const
 }
 
 template<typename Type>
-bool DArray<Type>::has(Type search) const
+bool DArray<Type>::has(const Type& search) const
 {
     return common_has(&this->data, this->count, search);
 }
@@ -339,7 +370,7 @@ bool DArray<Type>::ends_with(Slice<Type> input) const
 }
 
 template<typename Type>
-void DArray<Type>::replace(Type find, Type replace)
+void DArray<Type>::replace(const Type& find, const Type& replace)
 {
     for (Type* val = this->begin(); val != this->end(); ++val)
     {
@@ -348,10 +379,18 @@ void DArray<Type>::replace(Type find, Type replace)
 }
 
 template<typename Type>
-void DArray<Type>::move_ownership(DArray<Type>* other)
+DArray<Type> DArray<Type>::clone()
 {
-    this = other;
-    other = null;
+    ASSERT_INITIALIZED(this);
+
+    DArray<Type> res; 
+    sz allocated = this->byte_size_allocated();
+    res.data = (Type*)allocator_allocate(this->alloc, allocated);
+    mem_copy(res.data, this->data, allocated);
+    res.count = this->count;
+    res.capacity = this->capacity;
+    res.alloc = this->alloc;
+    return res;
 }
 
 template<typename Type>
@@ -373,13 +412,13 @@ void DArray<Type>::foreach_ref(void(*fn)(Type*))
 }
 
 template<typename Type>
-SplitIterator<Type> DArray<Type>::get_split_iter(Type splitter)
+SplitIterator<Type> DArray<Type>::get_split_iter(const Type& splitter)
 {
     return { this->slice(), splitter };
 }
 
 template<typename Type>
-void DArray<Type>::foreach_split(Type splitter, void(*fn)(Slice<Type>))
+void DArray<Type>::foreach_split(const Type& splitter, void(*fn)(Slice<Type>))
 {
     SplitIterator<Type> iter = this->get_split_iter(splitter);
     Slice<Type> seq;

@@ -19,10 +19,9 @@ struct FArray
     sz count;
     Type data[CAPACITY];
 
-    constexpr FArray() = default;
+    constexpr FArray(): count{0} {}
     constexpr FArray(std::initializer_list<Type> init_list);
 
-    inline void init() { this->count = 0; }
     void init_slice(Slice<Type> values);
     void push(Type value);
     void push(Slice<Type> values);

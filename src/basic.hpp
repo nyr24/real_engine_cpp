@@ -7,6 +7,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 
 #ifdef _WIN32
 	#define RG_PLATFORM_WIN32
@@ -232,8 +233,9 @@ constexpr Type align(Type val, sz alignment)
 }
 
 template<typename PtrType>
-constexpr PtrType align_ptr(PtrType ptr, sz alignment)
+constexpr PtrType align_ptr(PtrType ptr, sz alignment = 0)
 {
+	alignment = alignment ? alignment : alignof(PtrType);
 	ASSERT(is_power_of_two(alignment));
 	return PtrType(align((uptr)ptr, alignment));
 }
@@ -318,19 +320,22 @@ struct Maybe
     Type val;
     bool has_value;
 
+    static Maybe<Type> create(Type val);
+    static Maybe<Type> create_empty();
+
 	void set_val(Type val);
 	void set_empty();
     inline operator bool() { return has_value; }
 };
 
 template<typename Type>
-inline Maybe<Type> maybe_create(Type val)
+inline Maybe<Type> Maybe<Type>::create(Type val)
 {
     return Maybe{ val, true };
 }
 
 template<typename Type>
-inline Maybe<Type> maybe_empty()
+inline Maybe<Type> Maybe<Type>::create_empty()
 {
     return Maybe<Type>{ .has_value = false };
 }
@@ -347,6 +352,65 @@ inline void Maybe<Type>::set_empty()
 {
 	this->has_value = false;
 }
+
+// Tuples.
+
+template<typename First, typename Second>
+struct Pair
+{
+	First first;
+	Second second;
+};
+
+template<typename First, typename Second, typename Third>
+struct Triplet
+{
+	First first;
+	Second second;
+	Third third;
+};
+
+template<typename First, typename Second, typename Third, typename Fourth>
+struct Quadriplet
+{
+	First first;
+	Second second;
+	Third third;
+	Fourth fourth;
+};
+
+// Rng
+
+struct XorshiftRNG {
+private:
+    uint32_t state;
+
+public:
+    XorshiftRNG(uint32_t seed = 0) {
+        // Xorshift state must NEVER be initialized to 0
+        if (seed == 0) {
+            state = static_cast<uint32_t>(time(nullptr));
+        } else {
+            state = seed;
+        }
+    }
+
+    // Algorithm: Xorshift32
+    uint32_t next() {
+        uint32_t x = state;
+        x ^= x << 13;
+        x ^= x >> 17;
+        x ^= x << 5;
+        state = x;
+        return x;
+    }
+
+    // Closed range uniform distribution [min, max]
+    int nextRange(int min, int max) {
+        uint32_t range = max - min + 1;
+        return min + static_cast<int>(next() % range);
+    }
+};
 
 // Hash (fnv1a).
 

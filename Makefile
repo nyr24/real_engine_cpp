@@ -2,15 +2,22 @@ SRC_DIR=src
 DEBUG_BUILD_DIR=build/debug
 RELEASE_BUILD_DIR=build/release
 INCLUDE_DIR=include
+HEADERS=$(wildcard $(SRC_DIR)/*.hpp)
 SOURCES=$(wildcard $(SRC_DIR)/*.cpp)
 DEBUG_OBJECTS = $(patsubst $(SRC_DIR)/%.cpp, $(DEBUG_BUILD_DIR)/%.o, $(SOURCES))
 RELEASE_OBJECTS = $(patsubst $(SRC_DIR)/%.cpp, $(RELEASE_BUILD_DIR)/%.o, $(SOURCES))
+DEBUG_DEPS = $(DEBUG_OBJECTS:.o=.d)
+RELEASE_DEPS = $(RELEASE_OBJECTS:.o=.d)
 EXE=app
 COMPILER=clang++
 CPP_STANDART=-std=c++20
-FLAGS=-march=native -Wall
+FLAGS=-march=native -Wall -MMD
 DEBUG_FLAGS=$(CPP_STANDART) -g -O0 $(FLAGS)
 RELEASE_FLAGS=$(CPP_STANDART) -O3 -flto $(FLAGS)
+
+# -include $(DEBUG_DEPS)
+# -include $(RELEASE_DEPS)
+# -include $(HEADERS)
 
 .PHONY: debug release prepare clean run run_r rebuild rerun rebuild_r rerun_r
 

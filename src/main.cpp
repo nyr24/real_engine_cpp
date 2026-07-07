@@ -7,8 +7,29 @@
 #include "io.hpp"
 #include "conversions.hpp"
 #include "math.hpp"
+#include <cstdlib>
 
 using namespace rg;
+
+s32 rand_in_range(s32 start, s32 end)
+{
+    return (rand() % (end - start)) + start;
+}
+
+void populate_buff_ascii(char* buff, sz capacity)
+{
+    char* curr = buff;
+    char* end = buff + capacity;
+    for (; curr != end; ++curr)
+    {
+        *curr = rand_in_range('a', 'z');
+    }
+}
+
+void print_buff_ascii(char* buff, sz capacity)
+{
+    printfn("%.*s", (s32)capacity, buff);
+}
 
 s32 main() {
     HeapAlloc mem;
@@ -16,44 +37,39 @@ s32 main() {
     Arena* arena = arena_create((Allocator*)&mem);
     defer (arena->destroy());
 
-    // s32 arr[10] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
-    // Slice<s32> init_values{ CARRAY_SIZED(arr) };
+    HashmapSOA<FString<12>, s32> map;
+    map.init(arena, 128);
 
-    // DArray<s32> darr;
-    // darr.init_slice(arena, init_values);
-    // defer(darr.destroy());
-    // darr.foreach_ref([](s32* val) { *val = *val * 2; });
-
-    // for (const s32& v : darr)
-    // {
-    //     printfn("%d", v);
-    // }
-
-    // StrView sv{ CSTR_SIZED("Hello, 世界 🌍") };
-
-    // DString* ds = dstring_create_cstr(arena, s);
-    // StrView view = ds->view();
-    // prs32fn("string: %.*s, length: %lu", s32(view.count), view.ptr, view.count);
-
-    // ds->foreach_codepos32([](Codepos32& pos32) { prs32fn("codepos32: %04x", pos32); });
- 
-    // FString<24> str = sv;
-    // str.foreach_codepoint([](Utf8Codepoint point) { printfn("codepos32: %04x", point); });
-
-    // Hashmap<StrView, s32> map;
+    // HashmapSOA<FString<12>, s32> map;
     // map.init(arena);
 
-    // StrView key1 = { CSTR_SIZED("hello") };
-    // StrView key2 = { CSTR_SIZED("world") };
-    // StrView key3 = { CSTR_SIZED("third") };
+    const sz COUNT = 256;
+    const sz KEY_LEN = 12;
+    FString<KEY_LEN> keys[COUNT];
+    s32 values[COUNT];
 
-    // map.put(key1, 123);
-    // map.put(key2, 288);
-    // map.put(key3, 399);
+    for (sz i = 0; i < COUNT; ++i)
+    {
+        populate_buff_ascii(keys[i].data, KEY_LEN);
+        keys[i].count = KEY_LEN;
+        values[i] = rand_in_range(0, 1024);
+        map.put(keys[i], values[i]);
+    }
 
-    // ASSERT(*map.get(key1) == 123);
-    // ASSERT(*map.get(key2) == 288);
-    // ASSERT(*map.get(key3) == 399);
+    for (sz i = 0; i < COUNT; ++i)
+    {
+        ASSERT(*map.get(keys[i]) == values[i]);
+    }
+
+    for (sz i = 0; i < COUNT; ++i)
+    {
+        map.remove(keys[i]);
+    }
+
+    for (sz i = 0; i < COUNT; ++i)
+    {
+        ASSERT(map.get(keys[i]) == null);
+    }
 
     // map.foreach_value([](s32 val) { printfn("Map has value: %d", val); });
     // map.foreach_key([](StrView key) { printfn("Map has key: %s", key.ptr); });
@@ -89,20 +105,6 @@ s32 main() {
 
     // printfn("Reverse conversions:\nint_str: %.*s, uint_str: %.*s, float_str: %.*s,",
     //     FMT_SLICE(int_res2), FMT_SLICE(uint_res2), FMT_SLICE(float_res2));
-    
-    Mat4 a = Mat4::translation({ 1, 2, 3 }); 
-    Mat4 b = Mat4::scale({ 2, 2, 2 }); 
-    Mat4 res = a * b;
-    res *= res;
-
-    // f32 arr[16];
-    // _mm512_storeu_ps(arr, res.repr);
-    // res.to_arr(arr);
-
-    for (f32 val : res.arr)
-    {
-        printfn("%f ", val);
-    }
     
     return 0;
 }

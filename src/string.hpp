@@ -250,7 +250,7 @@ u64 FString<CAPACITY>::hash()
 {
     u64 hash = FNV_OFFSET_BASIS;
     sz byte_count = this->count;
-    char* byte = this->ptr;
+    char* byte = this->data;
     char* end = byte + byte_count;
 
     for (; byte != end; ++byte)
@@ -266,9 +266,9 @@ template<sz CAPACITY>
 bool operator==(const FString<CAPACITY>& lhs, const FString<CAPACITY>& rhs)
 {
     if (lhs.count != rhs.count) return false;
-    char* first = lhs.data;
-    char* sec = rhs.data;
-    return mem_compare(first, sec, lhs.count);
+    auto* first = lhs.data;
+    auto* sec = rhs.data;
+    return mem_compare((void*)first, (void*)sec, lhs.count);
 }
 
 // For printf formatting with length (%.*s).
