@@ -1,7 +1,7 @@
 #include <cmath>
 #include <cstdio>
-#include "slice.hpp"
-#include "string.hpp"
+#include "collections/slice.hpp"
+#include "collections/string.hpp"
 
 namespace rg
 {

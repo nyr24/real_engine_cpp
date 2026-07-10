@@ -2,9 +2,9 @@
 #define _RG_FARRAY_HPP_
 
 #include <initializer_list>
-#include "basic.hpp"
-#include "slice.hpp"
-#include "split_iterator.hpp"
+#include "core/basic.hpp"
+#include "collections/slice.hpp"
+#include "collections/split_iterator.hpp"
 
 // Farray - fixed array type.
 
@@ -16,11 +16,15 @@ constexpr sz FARRAY_DEFAULT_CAPACITY = 16;
 template<typename Type, sz CAPACITY = FARRAY_DEFAULT_CAPACITY>
 struct FArray
 {
-    sz count;
     Type data[CAPACITY];
+    sz count;
 
     constexpr FArray(): count{0} {}
     constexpr FArray(std::initializer_list<Type> init_list);
+    FArray(const FArray& rhs);
+    FArray(FArray&& rhs);
+    FArray& operator=(const FArray& rhs);
+    FArray& operator=(FArray&& rhs);
 
     void init_slice(Slice<Type> values);
     void push(Type value);
@@ -53,27 +57,27 @@ struct FArray
     SplitIterator<Type> get_split_iter(Type splitter);
     void foreach_split(Type splitter, void(*fn)(Slice<Type>));
 
-    inline Type at(sz idx) const;
-    inline Type* at_ref(sz idx);
-    inline void set(Type val, sz idx);
-    inline void swap(sz idx1, sz idx2);
-    inline Type operator[](sz idx) const;
-    inline sz len() const { return this->count; }
+    Type at(sz idx) const;
+    Type* at_ref(sz idx);
+    void set(Type val, sz idx);
+    void swap(sz idx1, sz idx2);
+    Type operator[](sz idx) const;
+    sz len() const { return this->count; }
     constexpr sz capacity() const { return CAPACITY; }
-    inline Type* begin() { return this->data; }
-    inline Type* end() { return this->data + this->count; }
-    inline const Type* begin() const { return this->data; }
-    inline const Type* end() const { return this->data + this->count; }
-    inline Type first() const { return *this->data; }
-    inline Type* first_ref() { return this->data; }
-    inline Type last() const { return *(this->data + this->count - 1); }
-    inline Type* last_ref() { return this->data + this->count - 1; }
-    inline bool is_empty() const { return this->count == 0; }
-    inline void clear() { this->count = 0; }
-    inline sz remain() const { return CAPACITY - this->count; }
-    inline sz byte_size_used() const { return this->count * sizeof(Type); }
-    constexpr inline sz byte_size_allocated() const { return sizeof(Type) * CAPACITY; }
-    constexpr inline sz byte_size_all() const { return sizeof(FArray<Type>); }
+    Type* begin() { return this->data; }
+    Type* end() { return this->data + this->count; }
+    const Type* begin() const { return this->data; }
+    const Type* end() const { return this->data + this->count; }
+    Type first() const { return *this->data; }
+    Type* first_ref() { return this->data; }
+    Type last() const { return *(this->data + this->count - 1); }
+    Type* last_ref() { return this->data + this->count - 1; }
+    bool is_empty() const { return this->count == 0; }
+    void clear() { this->count = 0; }
+    sz remain() const { return CAPACITY - this->count; }
+    sz byte_size_used() const { return this->count * sizeof(Type); }
+    constexpr sz byte_size_allocated() const { return sizeof(Type) * CAPACITY; }
+    constexpr sz byte_size_all() const { return sizeof(FArray<Type>); }
 };
 
 template<typename Type, sz CAPACITY>
@@ -86,6 +90,36 @@ constexpr FArray<Type, CAPACITY>::FArray(std::initializer_list<Type> init_list)
         *start = el;
         ++start;
     }
+}
+
+template<typename Type, sz CAPACITY>
+FArray<Type, CAPACITY>::FArray(const FArray& rhs)
+    : count{rhs.count}
+{
+    mem_copy(this->data, rhs.data, rhs.byte_size_allocated()); 
+}
+
+template<typename Type, sz CAPACITY>
+FArray<Type, CAPACITY>::FArray(FArray&& rhs)
+    : count{rhs.count}
+{
+    mem_copy(this->data, rhs.data, rhs.byte_size_allocated()); 
+}
+
+template<typename Type, sz CAPACITY>
+FArray<Type, CAPACITY>& FArray<Type, CAPACITY>::operator=(const FArray& rhs)
+{
+    this->count = rhs.count;
+    mem_copy(this->data, rhs.data, rhs.byte_size_allocated()); 
+    return *this;
+}
+
+template<typename Type, sz CAPACITY>
+FArray<Type, CAPACITY>& FArray<Type, CAPACITY>::operator=(FArray&& rhs)
+{
+    this->count = rhs.count;
+    mem_copy(this->data, rhs.data, rhs.byte_size_allocated()); 
+    return *this;
 }
 
 template<typename Type, sz CAPACITY>

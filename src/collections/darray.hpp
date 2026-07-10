@@ -1,9 +1,9 @@
 #ifndef _RG_DARRAY_HPP_
 #define _RG_DARRAY_HPP_
 
-#include "basic.hpp"
-#include "slice.hpp"
-#include "split_iterator.hpp"
+#include "core/basic.hpp"
+#include "collections/slice.hpp"
+#include "collections/split_iterator.hpp"
 
 // Darray - dynamic array type.
 
@@ -21,15 +21,19 @@ struct DArray
     sz capacity;
 
     DArray();
-    DArray(const DArray& rhs) = delete;
-    DArray& operator=(const DArray&& rhs) = delete;
+    // Performs shallow copy (use clone() for deep).
+    DArray(const DArray& rhs);
     DArray(DArray&& rhs);
     DArray& operator=(DArray&& rhs);
+    // Performs shallow copy (use clone() for deep).
+    DArray& operator=(const DArray& rhs);
 
     void init(Allocator* alloc, sz init_capacity = DARRAY_DEFAULT_CAPACITY);
     void init_slice(Allocator* alloc, Slice<Type> values, sz additional_capacity = 0);
     void push(const Type& value);
     void push(Slice<Type> values);
+    Type* emplace();
+    Slice<Type> emplace(sz count);
     Type pop();
     Type remove_unordered_at(sz idx);
     void reserve(sz needed);
@@ -61,24 +65,24 @@ struct DArray
     SplitIterator<Type> get_split_iter(const Type& splitter);
     void foreach_split(const Type& splitter, void(*fn)(Slice<Type>));
 
-    inline Type at(sz idx) const;
-    inline Type* at_ref(sz idx);
-    inline void set(const Type& val, sz idx);
-    inline void swap(sz idx1, sz idx2);
-    inline Type operator[](sz idx) const;
+    Type at(sz idx) const;
+    Type* at_ref(sz idx);
+    void set(const Type& val, sz idx);
+    void swap(sz idx1, sz idx2);
+    Type operator[](sz idx) const;
 
-    inline sz len() const { return this->count; }
-    inline Type* begin() { return this->data; }
-    inline Type* end() { return this->data + this->count; }
-    inline const Type& first() const { return *this->data; }
-    inline Type* first_ref() { return this->data; }
-    inline const Type& last() const { return *(this->data + this->count - 1); }
-    inline Type* last_ref() { return this->data + this->count - 1; }
-    inline bool is_empty() const { return this->count == 0; }
-    inline bool is_initialized() const { return this->data != null && this->alloc != null; }
-    inline void clear() { this->count = 0; }
-    inline sz byte_size_used() const { return this->count * sizeof(Type); }
-    inline sz byte_size_allocated() const { return this->capacity * sizeof(Type); }
+    sz len() const { return this->count; }
+    Type* begin() { return this->data; }
+    Type* end() { return this->data + this->count; }
+    const Type& first() const { return *this->data; }
+    Type* first_ref() { return this->data; }
+    const Type& last() const { return *(this->data + this->count - 1); }
+    Type* last_ref() { return this->data + this->count - 1; }
+    bool is_empty() const { return this->count == 0; }
+    bool is_initialized() const { return this->data != null && this->alloc != null; }
+    void clear() { this->count = 0; }
+    sz byte_size_used() const { return this->count * sizeof(Type); }
+    sz byte_size_allocated() const { return this->capacity * sizeof(Type); }
 };
 
 template<typename Type>
@@ -98,6 +102,12 @@ DArray<Type>::DArray(DArray&& rhs)
 }
 
 template<typename Type>
+DArray<Type>::DArray(const DArray& rhs)
+    : data{rhs.data}, alloc{rhs.alloc}, count{rhs.count}, capacity{rhs.capacity}
+{
+}
+
+template<typename Type>
 DArray<Type>& DArray<Type>::operator=(DArray&& rhs)
 {
     if (this == &rhs) return *this;
@@ -111,6 +121,17 @@ DArray<Type>& DArray<Type>::operator=(DArray&& rhs)
     rhs.alloc = null;
     rhs.count = 0;
     rhs.capacity = 0;
+    return *this;
+}
+
+template<typename Type>
+DArray<Type>& DArray<Type>::operator=(const DArray& rhs)
+{
+    if (this == &rhs) return *this;
+    this->data = rhs.data;
+    this->alloc = rhs.alloc;
+    this->count = rhs.count;
+    this->capacity = rhs.capacity;
     return *this;
 }
 
@@ -158,6 +179,27 @@ void DArray<Type>::push(Slice<Type> input)
     Type* inp_curr = input.ptr;
     mem_copy(curr, inp_curr, input.byte_size());
     this->count += input.count;
+}
+
+template<typename Type>
+Type* DArray<Type>::emplace()
+{
+    ASSERT_INITIALIZED(this);
+    this->reserve(1);
+    Type* res = this->end();
+    this->count++;
+    return res;
+}
+
+template<typename Type>
+Slice<Type> DArray<Type>::emplace(sz count)
+{
+    ASSERT_GREATER_ZERO(count);
+    ASSERT_INITIALIZED(this);
+    this->reserve(count);
+    Slice<Type> res = { this->end(), count };
+    this->count += count;
+    return res;
 }
 
 template<typename Type>

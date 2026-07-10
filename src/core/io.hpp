@@ -1,9 +1,9 @@
 #ifndef _RG_IO_HPP_
 #define _RG_IO_HPP_
 
-#include "basic.hpp"
-#include "slice.hpp"
-#include "string.hpp"
+#include "core/basic.hpp"
+#include "collections/slice.hpp"
+#include "collections/string.hpp"
 
 namespace rg
 {
@@ -40,7 +40,7 @@ namespace rg
     Path get_cwd(Allocator* alloc);
     inline bool path_is_absolute(Slice<char> path);
 
-    struct MemoryMapEntry
+    struct FileMapEntry
     {
     #ifdef RG_PLATFORM_WIN32
         FileHandle file_handle;
@@ -80,16 +80,15 @@ namespace rg
     inline s32 operator&(FileOpenBit a, FileOpenBit b) { return s32(u32(a) & u32(b)); }
     inline s32 operator|=(FileOpenBit& a, FileOpenBit b) { return s32(u32(a) & u32(b)); }
 
-    bool file_open(Path* path, FileHandle* out_handle, FileOpenBit open_flags);
+    Maybe<FileHandle> file_open(Path* path, FileOpenBit open_flags);
     bool file_close(FileHandle handle);
     sz file_get_size(FileHandle handle);
     sz file_get_size_from_path(Path* path);
     bool file_read(Allocator* alloc, Path* path, DString* out_data);
     bool file_write(Path* path, Slice<u8> data, bool at_end = true);
-    bool file_memory_map(Path* path, MemoryMapEntry* out_entry, sz file_size = 0);
+    bool file_memory_map(Path* path, FileMapEntry* out_entry, sz file_size = 0);
     bool file_set_cursor(FileHandle handle, FileSeekPos mode, sz offset = 0);
-    bool file_get_cursor(FileHandle handle, sz* out_cursor);
-    bool memory_map(MemoryMapEntry* out_entry);
+    Maybe<sz> file_get_cursor(FileHandle handle);
 
 } // rg
 

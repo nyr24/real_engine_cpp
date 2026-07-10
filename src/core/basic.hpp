@@ -24,6 +24,18 @@
 	#define FMT_STR_LEN "%.*s"
 #endif // _WIN32
 
+#ifdef PAGE_SIZE
+#define RG_PAGE_SIZE PAGE_SIZE; 
+#else
+#define RG_PAGE_SIZE 4096; 
+#endif
+
+#ifdef THREAD_COUNT
+#define RG_THREAD_COUNT THREAD_COUNT; 
+#else
+#define RG_THREAD_COUNT 4096; 
+#endif
+
 // Types and keywords.
 
 typedef uintptr_t uptr;
@@ -48,6 +60,29 @@ typedef time_t FileTimeUnit;
 #define bitcast reinterpret_cast
 #define null nullptr
 #define alias using
+
+#if defined(_DEBUG)
+    #if defined(_MSC_VER)
+        extern void __cdecl __debugbreak(void);
+        #define DEBUG_BREAK() __debugbreak()
+    #elif ( (!defined(__NACL__)) && ((defined(__GNUC__) || defined(__clang__)) && (defined(__i386__) || defined(__x86_64__))) )
+        #define DEBUG_BREAK() __asm__ __volatile__ ( "int $3\n\t" )
+    #elif (defined(__GNUC__) || defined(__clang__)) && defined(__riscv)
+        #define DEBUG_BREAK() __asm__ __volatile__ ( "ebreak\n\t" )
+    #elif ( defined(__APPLE__) && (defined(__arm64__) || defined(__aarch64__)) )
+        #define DEBUG_BREAK() __asm__ __volatile__ ( "brk #22\n\t" )
+    #elif defined(__APPLE__) && defined(__arm__)
+        #define DEBUG_BREAK() __asm__ __volatile__ ( "bkpt #22\n\t" )
+    #elif defined(__386__) && defined(__WATCOMC__)
+        #define DEBUG_BREAK() { _asm { int 0x03 } }
+    #elif defined(HAVE_SIGNAL_H) && !defined(__WATCOMC__)
+        #define DEBUG_BREAK() raise(SIGTRAP)
+    #else
+        #define DEBUG_BREAK()
+    #endif
+#else
+    #define DEBUG_BREAK()
+#endif //_DEBUG
 
 #define ASSERT(expr) assert((expr))
 #define ASSERT_MSG(expr, msg) assert((expr) && (msg))
@@ -90,12 +125,10 @@ constexpr FileHandle FILE_HANDLE_INVALID = INVALID_HANDLE_VALUE;
 constexpr FileHandle FILE_HANDLE_INVALID = -1;
 #endif
 constexpr sz INDEX_INVALID = -1;
-constexpr sz DEFAULT_MEM_ALIGNMENT = sizeof(uptr) * 2;
 constexpr sz KB = 1024;
 constexpr sz MB = 1024 * 1024;
 constexpr sz GB = 1024 * 1024 * 1024;
-
-bool is_space(char c);
+constexpr sz DEFAULT_MEM_ALIGNMENT = sizeof(uptr) * 2;
 
 // Logging.
 
@@ -130,7 +163,6 @@ void log_proc(LogLevel level, CString fmt, ...);
     #define LOG_ERROR(fmt, ...) log_proc(LogLevel::ERROR, fmt, ##__VA_ARGS__);
     #define LOG_FATAL(fmt, ...) log_proc(LogLevel::FATAL, fmt, ##__VA_ARGS__);
 #endif
-
 
 template<typename Type>
 constexpr Type max(Type a, Type b)
@@ -232,6 +264,13 @@ constexpr Type align(Type val, sz alignment)
 	return (val + alignment - 1) & ~(alignment - 1);
 }
 
+template<typename Type>
+constexpr Type align_backward(Type val, sz alignment)
+{
+	ASSERT(is_power_of_two(alignment));
+	return val - (val & alignment - 1);
+}
+
 template<typename PtrType>
 constexpr PtrType align_ptr(PtrType ptr, sz alignment = 0)
 {
@@ -240,10 +279,30 @@ constexpr PtrType align_ptr(PtrType ptr, sz alignment = 0)
 	return PtrType(align((uptr)ptr, alignment));
 }
 
-inline void mem_copy(void* dest, void* src, sz byte_size)
+template<typename PtrType>
+constexpr PtrType align_ptr_backward(PtrType ptr, sz alignment = 0)
+{
+	alignment = alignment ? alignment : alignof(PtrType);
+	ASSERT(is_power_of_two(alignment));
+	return (uptr)ptr - ((uptr)ptr & alignment - 1);
+}
+
+template<typename PtrType>
+constexpr bool is_ptr_aligned(PtrType ptr, sz alignment)
+{
+	ASSERT(is_power_of_two(alignment));
+	return (uptr(ptr) & alignment - 1) == 0;
+}
+
+#define ASSERT_ALIGNED(ptr, align) ASSERT_MSG(is_ptr_aligned(ptr, align), "Pointer must be aligned")
+
+inline void _mem_copy(void* dest, void* src, sz byte_size)
 {
 	memcpy(dest, src, byte_size);
 }
+
+
+#define mem_copy(a, b, size) _mem_copy((void*)a, (void*)b, size)
 
 inline bool mem_compare(void* a, void* b, sz byte_size)
 {
@@ -280,7 +339,8 @@ struct _Defer
 };
 
 template<typename Func>
-_Defer<Func> defer_func(Func f) {
+_Defer<Func> defer_func(Func f)
+{
 	return _Defer<Func>(f);
 }
 
@@ -295,7 +355,7 @@ struct AllocatorVtable;
 
 struct Allocator
 {
-    AllocatorVtable* vtable;
+    const AllocatorVtable* vtable;
 };
 
 struct AllocatorVtable
@@ -318,39 +378,28 @@ template<typename Type>
 struct Maybe
 {
     Type val;
-    bool has_value;
+    bool is_ok;
 
-    static Maybe<Type> create(Type val);
-    static Maybe<Type> create_empty();
+    Maybe(): is_ok{false} {}
+    Maybe(bool want_ok): is_ok{want_ok} {}
+    Maybe(Type new_val, bool want_ok): val{new_val}, is_ok{want_ok} {}
 
 	void set_val(Type val);
 	void set_empty();
-    inline operator bool() { return has_value; }
+    inline operator bool() { return is_ok; }
 };
-
-template<typename Type>
-inline Maybe<Type> Maybe<Type>::create(Type val)
-{
-    return Maybe{ val, true };
-}
-
-template<typename Type>
-inline Maybe<Type> Maybe<Type>::create_empty()
-{
-    return Maybe<Type>{ .has_value = false };
-}
 
 template<typename Type>
 inline void Maybe<Type>::set_val(Type val)
 {
-	this->has_value = true;
+	this->is_ok = true;
 	this->val = val;
 }
 
 template<typename Type>
 inline void Maybe<Type>::set_empty()
 {
-	this->has_value = false;
+	this->is_ok = false;
 }
 
 // Tuples.
@@ -381,41 +430,34 @@ struct Quadriplet
 
 // Rng
 
-struct XorshiftRNG {
-private:
-    uint32_t state;
+struct XorshiftRng
+{
+    u64 state;
 
-public:
-    XorshiftRNG(uint32_t seed = 0) {
-        // Xorshift state must NEVER be initialized to 0
-        if (seed == 0) {
-            state = static_cast<uint32_t>(time(nullptr));
-        } else {
-            state = seed;
-        }
-    }
+    XorshiftRng(u64 seed)
+	{
+	    if (seed == 0)
+	    {
+	        state = u64(time(null));
+	    }
+	    else
+	    {
+	        state = seed;
+	    }
+	};
 
-    // Algorithm: Xorshift32
-    uint32_t next() {
-        uint32_t x = state;
-        x ^= x << 13;
-        x ^= x >> 17;
-        x ^= x << 5;
-        state = x;
-        return x;
-    }
-
-    // Closed range uniform distribution [min, max]
-    int nextRange(int min, int max) {
-        uint32_t range = max - min + 1;
-        return min + static_cast<int>(next() % range);
-    }
+    template<typename Type>
+    Type next();
+    template<typename Type>
+    Type next_in_range(Type min, Type max);
 };
 
 // Hash (fnv1a).
 
 constexpr u64 FNV_PRIME = 1099511628211ull;
 constexpr u64 FNV_OFFSET_BASIS = 14695981039346656037ull;
+
+bool is_space(char c);
 
 } // rg
 

@@ -2,7 +2,7 @@
 #define _RG_MATH_HPP_
 
 #include <immintrin.h>
-#include "basic.hpp"
+#include "core/basic.hpp"
 
 namespace rg
 {
@@ -105,10 +105,10 @@ struct Mat4 : Mat512<4>
 
     Mat4 transposed();
     void transpose();
-    Mat4& operator*=(Mat4);
+    Mat4& operator*=(const Mat4&);
 };
 
-Mat4 operator*(Mat4 a, Mat4 b);
+Mat4 operator*(const Mat4& a, const Mat4& b);
 
 } // rg
 

@@ -1,6 +1,6 @@
-#include "basic.hpp"
-#include "io.hpp"
-#include "slice.hpp"
+#include "core/basic.hpp"
+#include "core/io.hpp"
+#include "collections/slice.hpp"
 
 namespace rg
 {
@@ -238,38 +238,7 @@ sz file_get_size_from_path(Path* path)
 #endif
 }
 
-MemoryMapEntry memory_map(sz size)
-{
-#ifdef RG_PLATFORM_WIN32
-    MemoryMapEntry entry;
-    entry.file_handle = FILE_HANDLE_INVALID;
-    usz usize = usz(size);
-    DWORD size_high = DWORD(usize >> 32);
-    DWORD size_low = DWORD(usize);
-    entry.file_mapping = ::CreateFileMapping(
-        FILE_HANDLE_INVALID, 
-        0, 
-        PAGE_READWRITE, 
-        0, 0,
-        0
-    );
-
-    out_entry->mapped_mem = (u8*)::MapViewOfFile(
-        out_entry->file_mapping, 
-        FILE_MAP_ALL_ACCESS, 
-        0, 0,
-        0
-    );
-#else
-    ASSERT_GREATER_ZERO(size);
-    MemoryMapEntry entry;
-    entry.mapped_mem = (u8*)::mmap(null, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, 0, 0);
-    ASSERT_MSG(entry.mapped_mem != MAP_FAILED, "Memory map failed");
-    return entry;
-#endif
-}
-
-bool file_memory_map(Path* path, MemoryMapEntry* out_entry, sz file_size)
+bool file_memory_map(Path* path, FileMapEntry* out_entry, sz file_size)
 {
 #ifdef RG_PLATFORM_WIN32
     path->ensure_utf16();
@@ -383,7 +352,7 @@ intern bool file_read_mmap(Path* path, DString* out_data, sz precomputed_file_si
 {
     ASSERT_INITIALIZED(out_data);
 
-    MemoryMapEntry mmap_entry;
+    FileMapEntry mmap_entry;
     if (!file_memory_map(path, &mmap_entry, precomputed_file_size)) return false;
     defer(mmap_entry.unmap());
 
@@ -488,7 +457,7 @@ intern bool file_write_default(Path* path, Slice<u8> data, bool at_end)
 
 intern bool file_write_mmap(Path* path, Slice<u8> data, bool at_end)
 {
-    MemoryMapEntry mmap_entry;
+    FileMapEntry mmap_entry;
     if (!file_memory_map(path, &mmap_entry)) return false;
     defer(mmap_entry.unmap());
     u8* start = mmap_entry.mapped_mem; 
@@ -497,7 +466,7 @@ intern bool file_write_mmap(Path* path, Slice<u8> data, bool at_end)
     return true;
 }
 
-void MemoryMapEntry::unmap()
+void FileMapEntry::unmap()
 {
 #ifdef RG_PLATFORM_WIN32
     if (this->mapped_mem == null) return;

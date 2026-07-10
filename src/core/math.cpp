@@ -50,18 +50,18 @@ void Mat4::transpose()
     this->repr = _mm512_permutexvar_ps(TRANSPOSE_MASK_MAT4, this->repr);
 }
 
-Mat4& Mat4::operator*=(Mat4 mat)
+Mat4& Mat4::operator*=(const Mat4& mat)
 {
     *this = *this * mat;
     return *this;
 }
 
-Mat4 operator*(Mat4 a, Mat4 b)
+Mat4 operator*(const Mat4& a, const Mat4& b)
 {
     // b contains rows 0, 1, 2, 3 as contiguous 128-bit blocks:
     // [ B3, B2, B1, B0 ] where each Bn is an __m128 (4 floats)
     // We can broadcast a single row of B across all 4 lanes of an __m512 register.
-    
+
     // Broadcast Row 0 of B to all 4 quarters of a 512-bit register
     __m512 b_row0 = _mm512_shuffle_f32x4(b.repr, b.repr, _MM_SHUFFLE(0, 0, 0, 0));
     // Broadcast Row 1 of B

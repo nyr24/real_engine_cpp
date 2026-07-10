@@ -1,13 +1,12 @@
-#include "basic.hpp"
-#include "string.hpp"
-#include "darray.hpp"
-#include "allocators.hpp"
-#include "slice.hpp"
-#include "hashmap.hpp"
-#include "io.hpp"
-#include "conversions.hpp"
-#include "math.hpp"
-#include <cstdlib>
+#include "core/basic.hpp"
+#include "core/allocators.hpp"
+#include "core/conversions.hpp"
+#include "core/math.hpp"
+#include "core/io.hpp"
+#include "collections/string.hpp"
+#include "collections/darray.hpp"
+#include "collections/slice.hpp"
+#include "collections/hashmap.hpp"
 
 using namespace rg;
 
@@ -32,54 +31,90 @@ void print_buff_ascii(char* buff, sz capacity)
 }
 
 s32 main() {
-    HeapAlloc mem;
-    heap_init(&mem);
-    Arena* arena = arena_create((Allocator*)&mem);
-    defer (arena->destroy());
+    // HeapAlloc mem;
+    // mem.init();
+    VmemAllocator* mem = VmemAllocator::create(1 * GB);
+    defer(mem->destroy());
+    Arena* arena = Arena::create(mem, 1 << 14);
+    // defer (arena->destroy());
 
-    HashmapSOA<FString<12>, s32> map;
-    map.init(arena, 128);
+// TLSF.
+    void* memory = allocator_allocate(mem, 16384);
 
-    // HashmapSOA<FString<12>, s32> map;
-    // map.init(arena);
+    tlsf_t Tlsf = tlsf_create_with_pool(memory, 16384);
+    defer(tlsf_destroy(Tlsf));
 
-    const sz COUNT = 256;
-    const sz KEY_LEN = 12;
-    FString<KEY_LEN> keys[COUNT];
-    s32 values[COUNT];
+    char* block_1024 = (char*)tlsf_malloc(Tlsf, 1024);
+    char* block_512 = (char*)tlsf_malloc(Tlsf, 512);
+    char* block_256 = (char*)tlsf_malloc(Tlsf, 256);
+    char* block_256_2 = (char*)tlsf_malloc(Tlsf, 256);
 
-    for (sz i = 0; i < COUNT; ++i)
-    {
-        populate_buff_ascii(keys[i].data, KEY_LEN);
-        keys[i].count = KEY_LEN;
-        values[i] = rand_in_range(0, 1024);
-        map.put(keys[i], values[i]);
-    }
+    populate_buff_ascii(block_1024, 24);
+    populate_buff_ascii(block_512, 24);
+    printfn("first block: %.*s", 24, block_1024);
+    printfn("second block: %.*s", 24, block_512);
+    
+    void* tlsf_realloc(tlsf_t tlsf, void* ptr, size_t size);
+    void tlsf_free(tlsf_t tlsf, void* ptr);
 
-    for (sz i = 0; i < COUNT; ++i)
-    {
-        ASSERT(*map.get(keys[i]) == values[i]);
-    }
+// Map benchmark.
 
-    for (sz i = 0; i < COUNT; ++i)
-    {
-        map.remove(keys[i]);
-    }
+    // const sz COUNT = 100'000'00;
+    // const sz KEY_LEN = 12;
+    // const sz MAP_INIT_CAP = 128;
 
-    for (sz i = 0; i < COUNT; ++i)
-    {
-        ASSERT(map.get(keys[i]) == null);
-    }
+    // DArray<FString<KEY_LEN>> keys;
+    // keys.init(arena, COUNT);
 
-    // map.foreach_value([](s32 val) { printfn("Map has value: %d", val); });
-    // map.foreach_key([](StrView key) { printfn("Map has key: %s", key.ptr); });
+    // DArray<s32> values;
+    // values.init(arena, COUNT);
+
+    // Hashmap<FString<12>, s32> map;
+    // map.init(arena, MAP_INIT_CAP);
+
+    // for (sz i = 0; i < COUNT; ++i)
+    // {
+    //     FString<12> new_key;
+    //     populate_buff_ascii(new_key.data, KEY_LEN);
+    //     new_key.count = KEY_LEN;
+    //     s32 new_val = rand_in_range(0, 1024);
+    //     keys.push(new_key);
+    //     values.push(new_val);
+    // }
+
+    // sz start = clock();
+
+    // for (sz i = 0; i < COUNT; ++i)
+    // {
+    //     map.put(keys[i], values[i]);
+    // }
+
+    // for (sz i = 0; i < COUNT; ++i)
+    // {
+    //     ASSERT(*map.get(keys[i]) == values[i]);
+    // }
+
+    // for (sz i = 0; i < COUNT; ++i)
+    // {
+    //     map.remove(keys[i]);
+    // }
+
+    // for (sz i = 0; i < COUNT; ++i)
+    // {
+    //     ASSERT(map.get(keys[i]) == null);
+    // }
+
+    // sz end = clock();
+    // LOG_INFO("Benchmark ended, result: %d ns\n", end - start);
+
+// PATHS
 
     // Path path;
     // FString<100> init_path(CSTR_SIZED("/home/nyr/dev/c++/real_engine/build/debug"));
     // path.init(arena, init_path.slice());
     // printfn("Path is: " FMT_STR_LEN, FMT_DSTRING_VAL(path));
 
-    // Conversions test.
+// Conversions test.
     
     // s32 int_val   = -1224;
     // u32 uint_val  = 32228;

@@ -1,25 +1,9 @@
 #include <cstdarg>
-#include <unistd.h>
-#include "basic.hpp"
-#include "system.hpp"
+#include "core/basic.hpp"
+#include "collections/farray.hpp"
 
 namespace rg
 {
-
-void get_system_info(Allocator* alloc, SystemInfo* sys_info)
-{
-#ifdef RG_PLATFORM_WIN32
-    SYSTEM_INFO win_sys_info;
-    GetSystemInfo(&win_sys_info);
-    sys_info->thread_count = sz(win_sys_info.dwNumberOfProcessors);
-    sys_info->page_size = sz(win_sys_info.dwPageSize);
-#else
-    sys_info->thread_count = sz(::sysconf(_SC_NPROCESSORS_CONF));
-    sys_info->page_size = sz(::sysconf(_SC_PAGESIZE));
-    ASSERT_MSG(sys_info->thread_count != -1 && sys_info->page_size != -1, "Error while getting system parameters");
-#endif
-    sys_info->cwd = get_cwd(alloc);
-}
 
 [[noreturn]] void panic(CString message, ...)
 {

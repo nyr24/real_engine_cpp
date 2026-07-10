@@ -1,10 +1,10 @@
 #ifndef _RG_STRING_HPP_
 #define _RG_STRING_HPP_
 
-#include "basic.hpp"
-#include "darray.hpp"
-#include "farray.hpp"
-#include "slice.hpp"
+#include "core/basic.hpp"
+#include "collections/darray.hpp"
+#include "collections/farray.hpp"
+#include "collections/slice.hpp"
 
 namespace rg
 {
@@ -21,9 +21,9 @@ struct StrView : Slice<const char>
     bool starts_with(StrView input);
     bool starts_with(CString input);
     // Removes const qualifier from pointer, be careful.
-    inline Slice<u8> to_byte_slice_unsafe() { return { (u8*)this->ptr, this->count }; }
+    Slice<u8> to_byte_slice_unsafe() { return { (u8*)this->ptr, this->count }; }
     // Removes const qualifier from pointer, be careful.
-    inline Slice<char> to_char_slice_unsafe() { return { (char*)this->ptr, this->count }; }
+    Slice<char> to_char_slice_unsafe() { return { (char*)this->ptr, this->count }; }
 };
 
 inline bool is_digit(char c) { return c >= '0'  && c <= '9'; }
@@ -46,9 +46,9 @@ struct Utf8CodepointIterator
 
     Utf8Codepoint next();
 private:
-    inline u8 get_byte_at(sz offset = 0);
-    inline void step(sz count = 1) { this->pos += count; }
-    inline bool is_at_end() { return this->pos >= this->view.count; }
+    u8 get_byte_at(sz offset = 0);
+    void step(sz count = 1) { this->pos += count; }
+    bool is_at_end() { return this->pos >= this->view.count; }
 };
 
 // DString - dynamic string type.
@@ -73,10 +73,10 @@ struct DString : DArray<char>
     u64 hash();
     CString cstr();
     // View is constant.
-    inline StrView view() { return StrView{ this->data, this->count }; }
+    StrView view() { return StrView{ this->data, this->count }; }
     // Slice is modifiable.
-    inline Slice<char> slice() { return Slice{ this->data, this->count }; }
-    inline bool is_null_term() { return this->count && this->last() == '\0'; }
+    Slice<char> slice() { return Slice{ this->data, this->count }; }
+    bool is_null_term() { return this->count && this->last() == '\0'; }
 };
 
 bool operator==(const DString& lhs, const DString& rhs);
@@ -112,10 +112,10 @@ struct FString : FArray<char, CAPACITY>
     u64 hash();
 
     // View is constant.
-    inline StrView view() { return StrView{ this->data, this->count }; }
+    StrView view() { return StrView{ this->data, this->count }; }
     // Slice is modifiable.
-    inline Slice<char> slice() { return Slice{ this->data, this->count }; }
-    inline bool is_null_term() { return this->count && this->last() == '\0'; }
+    Slice<char> slice() { return Slice{ this->data, this->count }; }
+    bool is_null_term() { return this->count && this->last() == '\0'; }
 };
 
 template<sz CAPACITY>

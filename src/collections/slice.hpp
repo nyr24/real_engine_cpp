@@ -1,7 +1,7 @@
 #ifndef _RG_SLICE_HPP_
 #define _RG_SLICE_HPP_
 
-#include "basic.hpp"
+#include "core/basic.hpp"
 
 // Slice.
 
@@ -44,22 +44,22 @@ struct Slice
     void replace(Type find, Type replace);
     u64 hash() const;
 
-    inline Type at(sz idx) const;
-    inline Type* at_ref(sz idx);
-    inline void set(Type val, sz idx);
-    inline Type operator[](sz idx) const;
-    inline Type* data() { return this->ptr; }
-    inline Type* begin() { return this->ptr; }
-    inline const Type* begin() const { return this->ptr; }
-    inline Type* end() { return this->ptr + this->count; }
-    inline const Type* end() const { return this->ptr + this->count; }
-    inline Type first() const { return *this->ptr; }
-    inline Type* first_ref() { return this->ptr; }
-    inline Type last() const { return *(this->ptr + this->count - 1); }
-    inline Type* last_ref() { return this->ptr + this->count - 1; }
-    inline bool is_initialized() const { return this->ptr && this->count; }
-    inline bool is_empty() const { return this->ptr == null && this->count == 0; }
-    inline sz byte_size() const { return sizeof(Type) * this->count; }
+    Type at(sz idx) const;
+    Type* at_ref(sz idx);
+    void set(Type val, sz idx);
+    Type operator[](sz idx) const;
+    Type* data() { return this->ptr; }
+    Type* begin() { return this->ptr; }
+    const Type* begin() const { return this->ptr; }
+    Type* end() { return this->ptr + this->count; }
+    const Type* end() const { return this->ptr + this->count; }
+    Type first() const { return *this->ptr; }
+    Type* first_ref() { return this->ptr; }
+    Type last() const { return *(this->ptr + this->count - 1); }
+    Type* last_ref() { return this->ptr + this->count - 1; }
+    bool is_initialized() const { return this->ptr && this->count; }
+    bool is_empty() const { return this->ptr == null && this->count == 0; }
+    sz byte_size() const { return sizeof(Type) * this->count; }
 };
 
 #define FMT_SLICE(slice) (s32)slice.count, slice.ptr
