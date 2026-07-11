@@ -1,6 +1,7 @@
 #include "core/basic.hpp"
 #include "core/allocators.hpp"
 #include "core/conversions.hpp"
+#include "collections/ringbuffer.hpp"
 
 using namespace rg;
 
@@ -45,20 +46,32 @@ s32 main()
     defer(vmem->destroy());
     // Arena* arena = Arena::create(mem, 1 << 14);
 
-// Pool allocator test.
-    PoolAllocator* pool = PoolAllocator::create(vmem, sizeof(Entity), alignof(Entity), 128);
-    defer(pool->destroy());
+    Ringbuffer<s32, 256> rb;
+    rb.push(1);
+    rb.push(2);
+    rb.push(3);
 
-    char temp_buf[20];
+    s32 out;
+    rb.pop(&out);
+    printfn("popped: %d", out);
+    rb.pop(&out);
+    printfn("popped: %d", out);
+    rb.pop(&out);
+    printfn("popped: %d", out);
+// Pool allocator test.
+    // PoolAllocator* pool = PoolAllocator::create(vmem, sizeof(Entity), alignof(Entity), 128);
+    // defer(pool->destroy());
+
+    // char temp_buf[20];
     
-    for (sz i = 0; i < 256; ++i)
-    {
-        populate_buff_ascii(temp_buf, 20);
-        auto* en = (Entity*)pool->allocate();
-        en->init({temp_buf, 20}, rand_in_range(10, 99));
-        en->dance();
-        pool->free(en);
-    }
+    // for (sz i = 0; i < 256; ++i)
+    // {
+    //     populate_buff_ascii(temp_buf, 20);
+    //     auto* en = (Entity*)pool->allocate();
+    //     en->init({temp_buf, 20}, rand_in_range(10, 99));
+    //     en->dance();
+    //     pool->free(en);
+    // }
 
 // Push test Test.
     // const sz COUNT = 100;

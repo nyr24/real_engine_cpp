@@ -26,7 +26,6 @@ struct FArray
     FArray& operator=(const FArray& rhs);
     FArray& operator=(FArray&& rhs);
 
-    void init_slice(Slice<Type> values);
     void push(const Type& value);
     void push(Slice<Type> values);
     void push_and_move_ownership(Type&& value);
@@ -125,13 +124,6 @@ FArray<Type, CAPACITY>& FArray<Type, CAPACITY>::operator=(FArray&& rhs)
     this->count = rhs.count;
     mem_copy(this->data, rhs.data, rhs.byte_size_allocated()); 
     return *this;
-}
-
-template<typename Type, sz CAPACITY>
-void FArray<Type, CAPACITY>::init_slice(Slice<Type> values)
-{
-    this->count = 0;
-    this->push(values);
 }
 
 template<typename Type, sz CAPACITY>

@@ -143,7 +143,6 @@ void DArray<Type>::init(Allocator* alloc, sz init_capacity)
     ASSERT_GREATER_EQ_ZERO(init_capacity);
     init_capacity = max(DARRAY_DEFAULT_CAPACITY, init_capacity);
     this->data = (Type*)allocator_allocate(alloc, init_capacity * sizeof(Type));
-    this->count = 0;
     this->capacity = init_capacity;
     this->alloc = alloc;
 }
@@ -154,7 +153,6 @@ void DArray<Type>::init_slice(Allocator* alloc, Slice<Type> values, sz additiona
     ASSERT_NON_EMPTY_VAL(values);
     sz init_cap = max(DARRAY_DEFAULT_CAPACITY, values.count + additional_capacity);
     this->data = (Type*)allocator_allocate(alloc, init_cap * sizeof(Type));
-    this->count = 0;
     this->capacity = init_cap;
     this->alloc = alloc;
     if (values.count)

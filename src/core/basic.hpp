@@ -91,6 +91,8 @@ namespace rg
 
 void assert_proc(bool expr);
 void assert_msg_proc(bool expr, CString fmt, ...);
+[[noreturn]] void panic(CString message = "", ...);
+[[noreturn]] void unreachable(CString message = "", ...);
 
 #ifdef RG_DEBUG
 	#define ASSERT(expr) assert_proc((expr))
@@ -276,6 +278,20 @@ constexpr bool is_power_of_two(Type val)
 #define ASSERT_POW_OF_TWO_STATIC(expr) static_assert(is_power_of_two(expr), "Must be a power of 2")
 
 template<typename Type>
+inline Type wrap_add_assume_pow_two(Type val, Type count, Type boundary)
+{
+	ASSERT_POW_OF_TWO(boundary);
+	return val + count & (boundary - 1);
+}
+
+template<typename Type>
+inline Type wrap_sub_assume_pow_two(Type val, Type count, Type boundary)
+{
+	ASSERT_POW_OF_TWO(boundary);
+	return val - count & (boundary - 1);
+}
+
+template<typename Type>
 constexpr Type next_power_of_2(Type x)
 {
 	if (x <= 1) return Type(1);
@@ -339,8 +355,14 @@ inline void _mem_copy(void* dest, void* src, sz byte_size)
 	memcpy(dest, src, byte_size);
 }
 
-
 #define mem_copy(a, b, size) _mem_copy((void*)a, (void*)b, size)
+
+inline void _mem_move(void* dest, void* src, sz byte_size)
+{
+	memmove(dest, src, byte_size);
+}
+
+#define mem_move(a, b, size) _mem_move((void*)a, (void*)b, size)
 
 inline bool mem_compare(void* a, void* b, sz byte_size)
 {
@@ -362,9 +384,6 @@ constexpr sz alignment_for_allocation(sz alignment)
 {
 	return max(alignment, DEFAULT_MEM_ALIGNMENT);
 }
-
-[[noreturn]] void panic(CString message = "", ...);
-[[noreturn]] void unreachable(CString message = "", ...);
 
 // Defer.
 

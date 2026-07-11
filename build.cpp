@@ -57,6 +57,7 @@ int main(int argc, char **argv)
     LocalArray<StrView> shared_flags;
     shared_flags.push("-march=native");
     shared_flags.push("-fno-rtti");
+    shared_flags.push("-fno-exceptions");
 
     LocalArray<StrView> debug_flags;
     debug_flags.push("-g");
