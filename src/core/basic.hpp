@@ -4,7 +4,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
-#include <cassert>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -12,16 +11,16 @@
 #ifdef _WIN32
 	#define RG_PLATFORM_WIN32
 	#include <windows.h>
-	#define FMT_STR_NULL "%S"
-	#define FMT_STR_LEN "%.*S"
+	#define FMT_PLACEHOLDER_NULL "%S"
+	#define FMT_PLACEHOLDER_LEN "%.*S"
 #else
 	#define RG_PLATFORM_POSIX
 	#include <fcntl.h>
 	#include <unistd.h>
 	#include <sys/stat.h>
 	#include <sys/mman.h>	
-	#define FMT_STR_NULL "%s"
-	#define FMT_STR_LEN "%.*s"
+	#define FMT_PLACEHOLDER_NULL "%s"
+	#define FMT_PLACEHOLDER_LEN "%.*s"
 #endif // _WIN32
 
 #ifdef PAGE_SIZE
@@ -56,12 +55,15 @@ typedef s32 FileHandle;
 typedef time_t FileTimeUnit;
 
 #define intern static
+#define persist static
 #define cast static_cast
 #define bitcast reinterpret_cast
 #define null nullptr
 #define alias using
 
-#if defined(_DEBUG)
+// Asserts.
+
+#if defined(RG_DEBUG)
     #if defined(_MSC_VER)
         extern void __cdecl __debugbreak(void);
         #define DEBUG_BREAK() __debugbreak()
@@ -84,40 +86,61 @@ typedef time_t FileTimeUnit;
     #define DEBUG_BREAK()
 #endif //_DEBUG
 
-#define ASSERT(expr) assert((expr))
-#define ASSERT_MSG(expr, msg) assert((expr) && (msg))
-#define ASSERT_EQ_ZERO(expr) assert((expr) == 0 && "Must be equal to 0")
-#define ASSERT_NON_ZERO(expr) assert((expr) != 0 && "Mustn't be equal to 0")
-#define ASSERT_GREATER_ZERO(expr) assert((expr) > 0 && "Must be greater than 0")
-#define ASSERT_GREATER_EQ_ZERO(expr) assert((expr) >= 0 && "Must be greater or equal to 0")
-#define ASSERT_BELOW_ZERO(expr) assert((expr) < 0 && "Must be smaller than 0")
-#define ASSERT_BELOW_EQ_ZERO(expr) assert((expr) <= 0 && "Must be smaller or equal to 0")
-#define ASSERT_IN_BOUNDS(expr) assert((expr) && "Must be in bounds")
-#define ASSERT_NON_NULL(expr) assert((expr) != null && "Mustn't be null")
-#define ASSERT_NON_EMPTY(expr) assert(!(expr)->is_empty() && "Must be non-empty");
-#define ASSERT_NON_EMPTY_VAL(expr) assert(!(expr).is_empty() && "Must be non-empty");
-#define ASSERT_INITIALIZED(expr) assert(expr->is_initialized() && "Must be initialized");
-#define ASSERT_INITIALIZED_VAL(expr) assert(expr.is_initialized() && "Must be initialized");
-#define ASSERT_NON_INITIALIZED(expr) assert(!expr->is_initialized() && "Not expected to be initialized");
-#define ASSERT_NON_INITIALIZED_VAL(expr) assert(!expr.is_initialized() && "Not expected to be initialized");
-#define TODO(msg) assert(false && (msg))
+namespace rg
+{
+
+void assert_proc(bool expr);
+void assert_msg_proc(bool expr, CString fmt, ...);
+
+#ifdef RG_DEBUG
+	#define ASSERT(expr) assert_proc((expr))
+	#define ASSERT_MSG(expr, msg, ...) assert_msg_proc((expr), (msg), ##__VA_ARGS__)
+	#define ASSERT_EQ_ZERO(expr) ASSERT_MSG((expr) == 0, "Must be equal to 0")
+	#define ASSERT_NON_ZERO(expr) ASSERT_MSG((expr) != 0, "Mustn't be equal to 0")
+	#define ASSERT_GREATER_ZERO(expr) ASSERT_MSG((expr) > 0, "Must be greater than 0")
+	#define ASSERT_GREATER_EQ_ZERO(expr) ASSERT_MSG((expr) >= 0, "Must be greater or equal to 0")
+	#define ASSERT_BELOW_ZERO(expr) ASSERT_MSG((expr) < 0, "Must be smaller than 0")
+	#define ASSERT_BELOW_EQ_ZERO(expr) ASSERT_MSG((expr) <= 0, "Must be smaller or equal to 0")
+	#define ASSERT_IN_BOUNDS(expr) ASSERT_MSG((expr), "Must be in bounds")
+	#define ASSERT_NON_NULL(expr) ASSERT_MSG((expr) != null, "Mustn't be null")
+	#define ASSERT_NON_EMPTY(expr) ASSERT_MSG(!(expr)->is_empty(), "Must be non-empty")
+	#define ASSERT_NON_EMPTY_VAL(expr) ASSERT_MSG(!(expr).is_empty(), "Must be non-empty")
+	#define ASSERT_INITIALIZED(expr) ASSERT_MSG(expr->is_initialized(), "Must be initialized")
+	#define ASSERT_INITIALIZED_VAL(expr) ASSERT_MSG(expr.is_initialized(), "Must be initialized")
+	#define ASSERT_NON_INITIALIZED(expr) ASSERT_MSG(!expr->is_initialized(), "Not expected to be initialized")
+	#define ASSERT_NON_INITIALIZED_VAL(expr) ASSERT_MSG(!expr.is_initialized(), "Not expected to be initialized")
+	#define TODO(msg) ASSERT_MSG(false, (msg))
+#else
+	#define ASSERT(expr)
+	#define ASSERT_MSG(expr, msg, ...)
+	#define ASSERT_EQ_ZERO(expr)
+	#define ASSERT_NON_ZERO(expr)
+	#define ASSERT_GREATER_ZERO(expr)
+	#define ASSERT_GREATER_EQ_ZERO(expr)
+	#define ASSERT_BELOW_ZERO(expr)
+	#define ASSERT_BELOW_EQ_ZERO(expr)
+	#define ASSERT_IN_BOUNDS(expr)
+	#define ASSERT_NON_NULL(expr)
+	#define ASSERT_NON_EMPTY(expr)
+	#define ASSERT_NON_EMPTY_VAL(expr)
+	#define ASSERT_INITIALIZED(expr)
+	#define ASSERT_INITIALIZED_VAL(expr)
+	#define ASSERT_NON_INITIALIZED(expr)
+	#define ASSERT_NON_INITIALIZED_VAL(expr)
+	#define TODO(msg)
+#endif
+
 #define CONCAT(a, b) a b
 
-#define GET_FMT_STR(str_p) str_p->count, str_p->data
-#define GET_FMT_STR_VAL(str) str.count, str.data
-#define GET_FMT_STR_VIEW(str_view) str_view.count, str_view.ptr
 // Statically determine cstring length without doing costly strlen().
 #define CSTR_SIZED(cstr) cstr, sizeof(cstr) - 1
 #define CSTR_SIZED_NULL(cstr) cstr, sizeof(cstr)
 #define CARRAY_LEN(carr) sizeof(carr) / sizeof(carr[0])
 #define CARRAY_SIZED(carr) carr, CARRAY_LEN(carr)
 #define printn(msg) fputs(msg, stdout)
-#define printfn(fmt, args...) fprintf(stdout, fmt "\n", args)
+#define printfn(fmt, ...) fprintf(stdout, fmt "\n", ##__VA_ARGS__)
 #define eprintn(msg) fputs(msg, stderr)
-#define eprintfn(fmt, args...) fprintf(stderr, fmt "\n", args)
-
-namespace rg
-{
+#define eprintfn(fmt, ...) fprintf(stderr, fmt "\n", ##__VA_ARGS__)
 
 #ifdef RG_PLATFORM_WIN32
 constexpr FileHandle FILE_HANDLE_INVALID = INVALID_HANDLE_VALUE;
@@ -145,24 +168,39 @@ enum struct LogLevel
 };
 
 void log_proc(LogLevel level, CString fmt, ...);
+void log_proc_scoped(CString fmt, ...);
+void start_log_scope(LogLevel level, CString fmt);
+void start_log_scope(LogLevel level);
+void end_log_scope();
 
 #ifdef RG_DEBUG
-    #define LOG_INFO(fmt, ...) log_proc(LogLevel::INFO, fmt, ##__VA_ARGS__);
-    #define LOG_TRACE(fmt, ...) log_proc(LogLevel::TRACE, fmt, ##__VA_ARGS__);
-    #define LOG_DEBUG(fmt, ...) log_proc(LogLevel::DEBUG, fmt, ##__VA_ARGS__);
-    #define LOG_TEST(fmt, ...) log_proc(LogLevel::TEST, fmt, ##__VA_ARGS__);
-    #define LOG_WARN(fmt, ...) log_proc(LogLevel::WARN, fmt, ##__VA_ARGS__);
-    #define LOG_ERROR(fmt, ...) log_proc(LogLevel::ERROR, fmt, ##__VA_ARGS__);
-    #define LOG_FATAL(fmt, ...) log_proc(LogLevel::FATAL, fmt, ##__VA_ARGS__);
+    #define LOG_INFO(fmt, ...) log_proc(LogLevel::INFO, fmt, ##__VA_ARGS__)
+    #define LOG_TRACE(fmt, ...) log_proc(LogLevel::TRACE, fmt, ##__VA_ARGS__)
+    #define LOG_DEBUG(fmt, ...) log_proc(LogLevel::DEBUG, fmt, ##__VA_ARGS__)
+    #define LOG_TEST(fmt, ...) log_proc(LogLevel::TEST, fmt, ##__VA_ARGS__)
+    #define LOG_WARN(fmt, ...) log_proc(LogLevel::WARN, fmt, ##__VA_ARGS__)
+    #define LOG_ERROR(fmt, ...) log_proc(LogLevel::ERROR, fmt, ##__VA_ARGS__)
+    #define LOG_FATAL(fmt, ...) log_proc(LogLevel::FATAL, fmt, ##__VA_ARGS__)
+    #define LOG_SCOPED(fmt, ...) log_proc_scoped(fmt, ##__VA_ARGS__)
+    #define LOG_SCOPED_PRESERVE_RELEASE(fmt, ...) log_proc_scoped(fmt, ##__VA_ARGS__)
 #else
-    #define LOG_INFO(fmt, ...);
-    #define LOG_TRACE(fmt, ...);
-    #define LOG_DEBUG(fmt, ...);
-    #define LOG_TEST(fmt, ...);
-    #define LOG_WARN(fmt, ...);
-    #define LOG_ERROR(fmt, ...) log_proc(LogLevel::ERROR, fmt, ##__VA_ARGS__);
-    #define LOG_FATAL(fmt, ...) log_proc(LogLevel::FATAL, fmt, ##__VA_ARGS__);
+    #define LOG_INFO(fmt, ...)
+    #define LOG_TRACE(fmt, ...)
+    #define LOG_DEBUG(fmt, ...)
+    #define LOG_TEST(fmt, ...)
+    #define LOG_WARN(fmt, ...)
+    #define LOG_ERROR(fmt, ...) log_proc(LogLevel::ERROR, fmt, ##__VA_ARGS__)
+    #define LOG_FATAL(fmt, ...) log_proc(LogLevel::FATAL, fmt, ##__VA_ARGS__)
+    #define LOG_SCOPED(fmt, ...)
+    #define LOG_SCOPED_PRESERVE_RELEASE(fmt, ...) log_proc_scoped(fmt, ##__VA_ARGS__)
 #endif
+
+struct ScopedLogger
+{
+	ScopedLogger(LogLevel level, CString msg) { start_log_scope(level, msg); }
+	ScopedLogger(LogLevel level) { start_log_scope(level); }
+	~ScopedLogger() { end_log_scope(); }
+};
 
 template<typename Type>
 constexpr Type max(Type a, Type b)
@@ -234,7 +272,7 @@ constexpr bool is_power_of_two(Type val)
 	return val != 0 && (val & (val - 1)) == 0;
 }
 
-#define ASSERT_POW_OF_TWO(expr) assert(is_power_of_two(expr) && "Must be a power of 2")
+#define ASSERT_POW_OF_TWO(expr) ASSERT_MSG(is_power_of_two(expr), "Must be a power of 2")
 #define ASSERT_POW_OF_TWO_STATIC(expr) static_assert(is_power_of_two(expr), "Must be a power of 2")
 
 template<typename Type>
@@ -260,14 +298,14 @@ constexpr Type next_power_of_2(Type x)
 template<typename Type>
 constexpr Type align(Type val, sz alignment)
 {
-	ASSERT(is_power_of_two(alignment));
+	ASSERT_POW_OF_TWO(alignment);
 	return (val + alignment - 1) & ~(alignment - 1);
 }
 
 template<typename Type>
 constexpr Type align_backward(Type val, sz alignment)
 {
-	ASSERT(is_power_of_two(alignment));
+	ASSERT_POW_OF_TWO(alignment);
 	return val - (val & alignment - 1);
 }
 
@@ -275,7 +313,7 @@ template<typename PtrType>
 constexpr PtrType align_ptr(PtrType ptr, sz alignment = 0)
 {
 	alignment = alignment ? alignment : alignof(PtrType);
-	ASSERT(is_power_of_two(alignment));
+	ASSERT_POW_OF_TWO(alignment);
 	return PtrType(align((uptr)ptr, alignment));
 }
 
@@ -283,14 +321,14 @@ template<typename PtrType>
 constexpr PtrType align_ptr_backward(PtrType ptr, sz alignment = 0)
 {
 	alignment = alignment ? alignment : alignof(PtrType);
-	ASSERT(is_power_of_two(alignment));
+	ASSERT_POW_OF_TWO(alignment);
 	return (uptr)ptr - ((uptr)ptr & alignment - 1);
 }
 
 template<typename PtrType>
 constexpr bool is_ptr_aligned(PtrType ptr, sz alignment)
 {
-	ASSERT(is_power_of_two(alignment));
+	ASSERT_POW_OF_TWO(alignment);
 	return (uptr(ptr) & alignment - 1) == 0;
 }
 
@@ -362,6 +400,7 @@ struct AllocatorVtable
 {
 	void* (*allocate)     (Allocator* alloc, sz size, sz alignment, bool zero_mem);
 	void* (*reallocate)   (Allocator* alloc, void* ptr, sz new_size, sz alignment);
+	bool  (*resize)       (Allocator* alloc, void* ptr, sz new_size, sz alignment);
 	void  (*free)         (Allocator* alloc, void* ptr);
 	void  (*display_info) (Allocator* alloc);
 };
@@ -369,6 +408,7 @@ struct AllocatorVtable
 // For convenient access.
 void* allocator_allocate(Allocator* alloc, sz size, sz alignment = 0, bool zero_mem = false);
 void* allocator_reallocate(Allocator* alloc, void* ptr, sz new_size, sz alignment = 0);
+bool  allocator_resize(Allocator* alloc, void* ptr, sz new_size, sz alignment = 0);
 void  allocator_free(Allocator* alloc, void* ptr);
 void  allocator_display_info(Allocator* alloc);
 
@@ -457,7 +497,35 @@ struct XorshiftRng
 constexpr u64 FNV_PRIME = 1099511628211ull;
 constexpr u64 FNV_OFFSET_BASIS = 14695981039346656037ull;
 
+u64 hash_fnv(char* bytes, sz count);
 bool is_space(char c);
+
+// Move
+
+template<typename Type>
+struct RemoveReference
+{
+	using type = Type;
+};
+
+template<typename Type>
+struct RemoveReference<Type&>
+{
+	using type = Type;
+};
+
+template<typename Type>
+struct RemoveReference<Type&&>
+{
+	using type = Type;
+};
+
+template<typename Type>
+[[__nodiscard__,__gnu__::__always_inline__]]
+auto move(Type&& type) noexcept
+{
+	return static_cast<typename RemoveReference<Type>::type&&>(type);
+}
 
 } // rg
 

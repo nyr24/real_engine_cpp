@@ -1,12 +1,6 @@
 #include "core/basic.hpp"
 #include "core/allocators.hpp"
 #include "core/conversions.hpp"
-#include "core/math.hpp"
-#include "core/io.hpp"
-#include "collections/string.hpp"
-#include "collections/darray.hpp"
-#include "collections/slice.hpp"
-#include "collections/hashmap.hpp"
 
 using namespace rg;
 
@@ -30,32 +24,97 @@ void print_buff_ascii(char* buff, sz capacity)
     printfn("%.*s", (s32)capacity, buff);
 }
 
-s32 main() {
+struct Entity
+{
+    FString<20> name;
+    u32 age;
+
+    void init(StrView name_, u32 age_)
+    {
+        this->name.init_view(name_);
+        this->age = age_;
+    }
+    void dance() { printfn("Entity named: " FMT_PLACEHOLDER_LEN " is dancing!", FMT_FSTRING_VAL(this->name)); }
+};
+
+s32 main()
+{
     // HeapAlloc mem;
     // mem.init();
-    VmemAllocator* mem = VmemAllocator::create(1 * GB);
-    defer(mem->destroy());
-    Arena* arena = Arena::create(mem, 1 << 14);
-    // defer (arena->destroy());
+    VmemAllocator* vmem = VmemAllocator::create(1 * GB);
+    defer(vmem->destroy());
+    // Arena* arena = Arena::create(mem, 1 << 14);
+
+// Pool allocator test.
+    PoolAllocator* pool = PoolAllocator::create(vmem, sizeof(Entity), alignof(Entity), 128);
+    defer(pool->destroy());
+
+    char temp_buf[20];
+    
+    for (sz i = 0; i < 256; ++i)
+    {
+        populate_buff_ascii(temp_buf, 20);
+        auto* en = (Entity*)pool->allocate();
+        en->init({temp_buf, 20}, rand_in_range(10, 99));
+        en->dance();
+        pool->free(en);
+    }
+
+// Push test Test.
+    // const sz COUNT = 100;
+    // const sz CHARS_IN_STR = 30;
+
+    // DArray<FString<CHARS_IN_STR>> write_arr;
+    // write_arr.init(mem, COUNT);
+    // DArray<FString<CHARS_IN_STR>> read_arr;
+    // read_arr.init(mem, COUNT);
+
+    // char temp_buff[CHARS_IN_STR];
+
+    // for (sz i = 0; i < COUNT; ++i)
+    // {
+    //     populate_buff_ascii(temp_buff, CHARS_IN_STR);
+    //     read_arr.push(StrView{temp_buff, CHARS_IN_STR});
+    // }
+
+    // s64 start = clock();
+
+    // for (sz i = 0; i < COUNT; ++i)
+    // {
+    //     write_arr.push(read_arr[i]);
+    // }
+
+    // s64 end = clock();
+    // printfn("spend time: %ld", end - start);
+// Vmem test.
+    // char* block_1024 = (char*)allocator_allocate(mem, 1024);
+    // char* block_512 = (char*)allocator_allocate(mem, 512);
+    // char* block_256 = (char*)allocator_allocate(mem, 256);
+    // char* block_256_2 = (char*)allocator_allocate(mem, 256);
+    // allocator_display_info(mem);
+    // allocator_free(mem, block_512);
+    // allocator_free(mem, block_256_2);
+    // allocator_display_info(mem);
+    // allocator_free(mem, block_256);
+    // allocator_free(mem, block_1024);
+    // allocator_display_info(mem);
 
 // TLSF.
-    void* memory = allocator_allocate(mem, 16384);
+    // void* memory = allocator_allocate(mem, 16384);
 
-    tlsf_t Tlsf = tlsf_create_with_pool(memory, 16384);
-    defer(tlsf_destroy(Tlsf));
+    // tlsf_t Tlsf = tlsf_create_with_pool(memory, 16384);
+    // defer(tlsf_destroy(Tlsf));
 
-    char* block_1024 = (char*)tlsf_malloc(Tlsf, 1024);
-    char* block_512 = (char*)tlsf_malloc(Tlsf, 512);
-    char* block_256 = (char*)tlsf_malloc(Tlsf, 256);
-    char* block_256_2 = (char*)tlsf_malloc(Tlsf, 256);
-
-    populate_buff_ascii(block_1024, 24);
-    populate_buff_ascii(block_512, 24);
-    printfn("first block: %.*s", 24, block_1024);
-    printfn("second block: %.*s", 24, block_512);
-    
-    void* tlsf_realloc(tlsf_t tlsf, void* ptr, size_t size);
-    void tlsf_free(tlsf_t tlsf, void* ptr);
+    // char* block_1024 = (char*)tlsf_malloc(Tlsf, 1024);
+    // char* block_512 = (char*)tlsf_malloc(Tlsf, 512);
+    // char* block_256 = (char*)tlsf_malloc(Tlsf, 256);
+    // char* block_256_2 = (char*)tlsf_malloc(Tlsf, 256);
+    // populate_buff_ascii(block_1024, 24);
+    // populate_buff_ascii(block_512, 24);
+    // printfn("first block: %.*s", 24, block_1024);
+    // printfn("second block: %.*s", 24, block_512);
+    // void* tlsf_realloc(tlsf_t tlsf, void* ptr, size_t size);
+    // void tlsf_free(tlsf_t tlsf, void* ptr);
 
 // Map benchmark.
 

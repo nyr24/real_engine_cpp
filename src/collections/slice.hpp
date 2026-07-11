@@ -62,6 +62,7 @@ struct Slice
     sz byte_size() const { return sizeof(Type) * this->count; }
 };
 
+// For printf formatting with length (%.*s).
 #define FMT_SLICE(slice) (s32)slice.count, slice.ptr
 #define FMT_SLICE_PTR(slice) (s32)slice->count, slice->ptr
 

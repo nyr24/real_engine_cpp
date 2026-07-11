@@ -27,35 +27,40 @@ struct FArray
     FArray& operator=(FArray&& rhs);
 
     void init_slice(Slice<Type> values);
-    void push(Type value);
+    void push(const Type& value);
     void push(Slice<Type> values);
-    Type pop();
+    void push_and_move_ownership(Type&& value);
+    void push_and_move_ownership(Slice<Type> value);
+    void pop(Type* out_val);
+    void pop(Slice<Type> out_vals);
+    void pop_and_move_ownership(Type* out_val);
+    void pop_and_move_ownership(Slice<Type> out_vals);
     Type remove_unordered_at(sz idx);
     Slice<Type> slice(sz start = 0, sz offset = -1) const;
     Slice<Type> slice_idx(sz start = 0, sz end = -1) const;
     Slice<Type> slice_start_n(sz count);
     Slice<Type> slice_sequence_start(Slice<Type> value_set);
-    Slice<Type> slice_from_start_to_first_occur(Type search, bool inclusive = false);
-    Slice<Type> slice_from_start_to_last_occur(Type search, bool inclusive = false);
+    Slice<Type> slice_from_start_to_first_occur(const Type& search, bool inclusive = false);
+    Slice<Type> slice_from_start_to_last_occur(const Type& search, bool inclusive = false);
     // Trims 'count' characters from end.
     void trim_end_n(sz count);
     // Trims sequentially values from the end of input. (input is considered sequential)
     bool trim_sequence_end(Slice<Type> seq);
-    void trim_from_end_to_first_occur(Type search, bool inclusive = false);
-    void trim_from_end_to_last_occur(Type search, bool inclusive = false);
+    void trim_from_end_to_first_occur(const Type& search, bool inclusive = false);
+    void trim_from_end_to_last_occur(const Type& search, bool inclusive = false);
     bool starts_with(Slice<Type> input) const;
     bool ends_with(Slice<Type> input) const;
-    sz index_of(Type val) const;
+    sz index_of(const Type& val) const;
     sz index_of(Slice<Type> slice) const;
-    sz last_index_of(Type val) const;
+    sz last_index_of(const Type& val) const;
     sz last_index_of(Slice<Type> slice) const;
-    bool has(Type val) const;
+    bool has(const Type& val) const;
     bool has(Slice<Type> val) const;
-    void replace(Type find, Type replace);
-    void foreach(void(*fn)(Type)) const;
+    void replace(const Type& find, const Type& replace);
+    void foreach(void(*fn)(const Type&)) const;
     void foreach_ref(void(*fn)(Type*));
-    SplitIterator<Type> get_split_iter(Type splitter);
-    void foreach_split(Type splitter, void(*fn)(Slice<Type>));
+    SplitIterator<Type> get_split_iter(const Type& splitter);
+    void foreach_split(const Type& splitter, void(*fn)(Slice<Type>));
 
     Type at(sz idx) const;
     Type* at_ref(sz idx);
@@ -130,11 +135,11 @@ void FArray<Type, CAPACITY>::init_slice(Slice<Type> values)
 }
 
 template<typename Type, sz CAPACITY>
-void FArray<Type, CAPACITY>::push(Type value)
+void FArray<Type, CAPACITY>::push(const Type& value)
 {
     ASSERT_MSG(this->remain() >= 1, "Must have space for a push");
     Type* data = this->data;
-    *(data + this->count) = value;
+    *this->end() = value;
     this->count++;
 }
 
@@ -149,12 +154,73 @@ void FArray<Type, CAPACITY>::push(Slice<Type> input)
 }
 
 template<typename Type, sz CAPACITY>
-Type FArray<Type, CAPACITY>::pop()
+void FArray<Type, CAPACITY>::push_and_move_ownership(Type&& value)
+{
+    ASSERT_MSG(this->remain() >= 1, "Must have space for a push");
+    Type* data = this->data;
+    *this->end() = rg::move(value);
+    this->count++;
+}
+
+template<typename Type, sz CAPACITY>
+void FArray<Type, CAPACITY>::push_and_move_ownership(Slice<Type> input)
+{
+    ASSERT_MSG(this->remain() >= input.count, "Must have space for a push_many");
+    for (Type&& curr : input)
+    {
+        this->data[this->count] = rg::move(curr);
+        this->count++;
+    }
+}
+
+template<typename Type, sz CAPACITY>
+void FArray<Type, CAPACITY>::pop(Type* out_val)
 {
     ASSERT_GREATER_ZERO(this->count);
-    Type val = this->last();
+    if (out_val) *out_val = this->last();
     this->count--;
-    return val;
+}
+
+template<typename Type, sz CAPACITY>
+void FArray<Type, CAPACITY>::pop(Slice<Type> out_vals)
+{
+    ASSERT_MSG(this->count >= out_vals.count, "Count must be greater or equal to pop count");
+    if (out_vals.ptr)
+    {
+        sz write_idx = 0;
+        while (write_idx < out_vals.count)
+        {
+            Type* pop_val = this->data + (this->count - 1) - write_idx;
+            out_vals.data[write_idx] = rg::move(*pop_val);
+            ++write_idx;
+        }
+    }
+    this->count -= out_vals.count;
+}
+
+template<typename Type, sz CAPACITY>
+void FArray<Type, CAPACITY>::pop_and_move_ownership(Type* out_val)
+{
+    ASSERT_GREATER_ZERO(this->count);
+    if (out_val) *out_val = rg::move(*this->last_ref());
+    this->count--;
+}
+
+template<typename Type, sz CAPACITY>
+void FArray<Type, CAPACITY>::pop_and_move_ownership(Slice<Type> out_vals)
+{
+    ASSERT_MSG(this->count >= out_vals.count, "Count must be greater or equal to pop count");
+    if (out_vals.ptr)
+    {
+        sz write_idx = 0;
+        while (write_idx < out_vals.count)
+        {
+            Type* pop_val = this->data + (this->count - 1) - write_idx;
+            out_vals.data[write_idx] = rg::move(*pop_val);
+            ++write_idx;
+        }
+    }
+    this->count -= out_vals.count;
 }
 
 template<typename Type, sz CAPACITY>
@@ -257,7 +323,7 @@ bool FArray<Type, CAPACITY>::trim_sequence_end(Slice<Type> trim_seq)
 }
 
 template<typename Type, sz CAPACITY>
-Slice<Type> FArray<Type, CAPACITY>::slice_from_start_to_first_occur(Type search, bool inclusive)
+Slice<Type> FArray<Type, CAPACITY>::slice_from_start_to_first_occur(const Type& search, bool inclusive)
 {
     Slice<Type> slice = this->slice();
     slice.trim_from_start_to_first_occur(search, inclusive);
@@ -265,7 +331,7 @@ Slice<Type> FArray<Type, CAPACITY>::slice_from_start_to_first_occur(Type search,
 }
 
 template<typename Type, sz CAPACITY>
-Slice<Type> FArray<Type, CAPACITY>::slice_from_start_to_last_occur(Type search, bool inclusive)
+Slice<Type> FArray<Type, CAPACITY>::slice_from_start_to_last_occur(const Type& search, bool inclusive)
 {
     Slice<Type> slice = this->slice();
     slice.slice_from_start_to_last_occur(search, inclusive);
@@ -273,19 +339,19 @@ Slice<Type> FArray<Type, CAPACITY>::slice_from_start_to_last_occur(Type search, 
 }
 
 template<typename Type, sz CAPACITY>
-void FArray<Type, CAPACITY>::trim_from_end_to_first_occur(Type search, bool inclusive)
+void FArray<Type, CAPACITY>::trim_from_end_to_first_occur(const Type& search, bool inclusive)
 {
     return common_trim_from_end_to_first_occur(&this->data, &this->count, search, inclusive);
 }
 
 template<typename Type, sz CAPACITY>
-void FArray<Type, CAPACITY>::trim_from_end_to_last_occur(Type search, bool inclusive)
+void FArray<Type, CAPACITY>::trim_from_end_to_last_occur(const Type& search, bool inclusive)
 {
     return common_trim_from_end_to_last_occur(&this->data, &this->count, search, inclusive);
 }
 
 template<typename Type, sz CAPACITY>
-sz FArray<Type, CAPACITY>::index_of(Type search) const
+sz FArray<Type, CAPACITY>::index_of(const Type& search) const
 {
     return common_index_of(&this->data, this->count, search);
 }
@@ -297,7 +363,7 @@ sz FArray<Type, CAPACITY>::index_of(Slice<Type> slice) const
 }
 
 template<typename Type, sz CAPACITY>
-sz FArray<Type, CAPACITY>::last_index_of(Type search) const
+sz FArray<Type, CAPACITY>::last_index_of(const Type& search) const
 {
     return common_last_index_of(&this->data, this->count, search);
 }
@@ -309,7 +375,7 @@ sz FArray<Type, CAPACITY>::last_index_of(Slice<Type> slice) const
 }
 
 template<typename Type, sz CAPACITY>
-bool FArray<Type, CAPACITY>::has(Type search) const
+bool FArray<Type, CAPACITY>::has(const Type& search) const
 {
     return common_has(&this->data, this->count, search);
 }
@@ -333,7 +399,7 @@ bool FArray<Type, CAPACITY>::ends_with(Slice<Type> input) const
 }
 
 template<typename Type, sz CAPACITY>
-void FArray<Type, CAPACITY>::replace(Type find, Type replace)
+void FArray<Type, CAPACITY>::replace(const Type& find, const Type& replace)
 {
     for (Type* val = this->begin(); val != this->end(); ++val)
     {
@@ -342,31 +408,31 @@ void FArray<Type, CAPACITY>::replace(Type find, Type replace)
 }
 
 template<typename Type, sz CAPACITY>
-void FArray<Type, CAPACITY>::foreach(void (*fn) (Type)) const
+void FArray<Type, CAPACITY>::foreach(void (*fn) (const Type&)) const
 {
-    for (Type* curr = this->begin(); curr != this->end(); ++curr)
-    {
-        fn(*curr);
-    }
-}
-
-template<typename Type, sz CAPACITY>
-void FArray<Type, CAPACITY>::foreach_ref(void (*fn) (Type*))
-{
-    for (Type* curr = this->begin(); curr != this->end(); ++curr)
+    for (const auto& curr : *this)
     {
         fn(curr);
     }
 }
 
 template<typename Type, sz CAPACITY>
-SplitIterator<Type> FArray<Type, CAPACITY>::get_split_iter(Type splitter)
+void FArray<Type, CAPACITY>::foreach_ref(void (*fn) (Type*))
+{
+    for (const auto& curr : *this)
+    {
+        fn(&curr);
+    }
+}
+
+template<typename Type, sz CAPACITY>
+SplitIterator<Type> FArray<Type, CAPACITY>::get_split_iter(const Type& splitter)
 {
     return { this->slice(), splitter };
 }
 
 template<typename Type, sz CAPACITY>
-void FArray<Type, CAPACITY>::foreach_split(Type splitter, void(*fn)(Slice<Type>))
+void FArray<Type, CAPACITY>::foreach_split(const Type& splitter, void(*fn)(Slice<Type>))
 {
     SplitIterator<Type> iter = this->get_split_iter(splitter);
     Slice<Type> seq;

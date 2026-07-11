@@ -32,6 +32,9 @@ void trim_space_start(const char** start, sz* count);
 void trim_space_end(const char* start, sz* count);
 void trim_space_both(const char** start, sz* count);
 
+#define FMT_STR_VIEW(str_view) (s32)str_view.count, str_view.ptr
+#define FMT_STR_VIEW_PTR(str_view) (s32)str_view->count, str_view->ptr
+
 // Utf8 CodepointIterator.
 
 typedef u32 Utf8Codepoint;
@@ -248,18 +251,7 @@ Utf8CodepointIterator FString<CAPACITY>::get_codepoint_iter()
 template<sz CAPACITY>
 u64 FString<CAPACITY>::hash()
 {
-    u64 hash = FNV_OFFSET_BASIS;
-    sz byte_count = this->count;
-    char* byte = this->data;
-    char* end = byte + byte_count;
-
-    for (; byte != end; ++byte)
-    {
-        hash ^= *byte;
-        hash *= FNV_PRIME;
-    }
-
-    return hash;
+    return rg::hash_fnv(this->data, this->count);
 }
 
 template<sz CAPACITY>
@@ -272,8 +264,8 @@ bool operator==(const FString<CAPACITY>& lhs, const FString<CAPACITY>& rhs)
 }
 
 // For printf formatting with length (%.*s).
-#define FMT_FSTRING(fstr) fstr->count, fstr->data
-#define FMT_FSTRING_VAL(fstr) fstr.count, fstr.data
+#define FMT_FSTRING(fstr) (s32)fstr->count, fstr->data
+#define FMT_FSTRING_VAL(fstr) (s32)fstr.count, fstr.data
 
 } // rg
 

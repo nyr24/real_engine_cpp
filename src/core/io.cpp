@@ -186,7 +186,7 @@ bool file_open(Path* path, FileHandle* out_handle, FileOpenBit flags)
 #endif
     if (*out_handle == FILE_HANDLE_INVALID)
     {
-        LOG_ERROR("Could not open file from path: " FMT_STR_LEN, GET_FMT_STR(path));
+        LOG_ERROR("Could not open file from path: " FMT_PLACEHOLDER_LEN, FMT_DSTRING(path));
         return false;
     }
     return true;
@@ -334,7 +334,7 @@ intern bool file_read_default(Path* path, DString* out_data, sz precomputed_file
         read_bytes_curr = ::read(handle, out_data->data + read_bytes_all, precomputed_file_size - read_bytes_all);
         if (read_bytes_curr < 0)
         {
-            LOG_ERROR("Failed to read from file: " FMT_STR_LEN, FMT_DSTRING(path));
+            LOG_ERROR("Failed to read from file: " FMT_PLACEHOLDER_LEN, FMT_DSTRING(path));
             return false;
         }
         if (read_bytes_curr == 0)
@@ -441,7 +441,7 @@ intern bool file_write_default(Path* path, Slice<u8> data, bool at_end)
         written_bytes_curr = ::write(handle, data.at_ref(written_bytes_all), data.count - written_bytes_all);
         if (written_bytes_curr < 0)
         {
-            LOG_ERROR("Failed to write to the file from path: " FMT_STR_LEN, FMT_DSTRING(path));
+            LOG_ERROR("Failed to write to the file from path: " FMT_PLACEHOLDER_LEN, FMT_DSTRING(path));
             return false;
         }
         if (written_bytes_curr == 0)

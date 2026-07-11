@@ -258,18 +258,7 @@ Utf8CodepointIterator DString::get_codepoint_iter()
 
 u64 DString::hash()
 {
-    u64 hash = FNV_OFFSET_BASIS;
-    sz byte_count = this->count;
-    char* byte = this->data;
-    char* end = byte + byte_count;
-
-    for (; byte != end; ++byte)
-    {
-        hash ^= *byte;
-        hash *= FNV_PRIME;
-    }
-
-    return hash;
+    return rg::hash_fnv(this->data, this->count);
 }
 
 bool operator==(const DString& lhs, const DString& rhs)

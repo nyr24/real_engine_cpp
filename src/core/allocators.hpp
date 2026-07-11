@@ -12,8 +12,10 @@ struct FallbackAllocation
     u64 size;
     FallbackAllocation* next;
 
-    u8* memory() { return (u8*)this + sizeof(*this); };
+    u8* mem_begin() { return (u8*)this + sizeof(*this); };
 };
+
+// Vmem Allocator.
 
 // Inserted on allocation for Vmem allocator.
 struct VmemAllocHeader
@@ -94,7 +96,6 @@ struct VmemAllocator final : Allocator
     static constexpr sz MIN_ALLOC_SIZE = sizeof(u64) + 16;
     static constexpr sz MIN_FALLBACK_ALLOC_SIZE = RG_PAGE_SIZE;
 
-    sz used;
     sz capacity;
     VmemFreeNode* free_root;
     VmemFallbackRegion* fallback_root;
@@ -114,15 +115,13 @@ struct VmemAllocator final : Allocator
     void fallback_free_all();
     sz calc_fallback_allocated();
     
-    VmemFreeNode* tail()
-    {
-        return (VmemFreeNode*)(this->memory() + this->capacity);
-    }
-    u8* memory() { return (u8*)this + sizeof(*this); };
+    u8* mem_begin() { return (u8*)this + sizeof(*this); };
+    VmemFreeNode* mem_end() { return (VmemFreeNode*)(this->mem_begin() + this->capacity); }
 };
 
 void* vmem_allocate(Allocator* self, sz size, sz alignment = 0, bool zero_mem = false);
 void* vmem_reallocate(Allocator* self, void* ptr, sz new_size, sz alignment = 0);
+bool vmem_resize(Allocator* self, void* ptr, sz new_size, sz alignment = 0);
 void vmem_free(Allocator* self, void* ptr);
 void vmem_display_info(Allocator* self);
 
@@ -136,6 +135,7 @@ struct HeapAlloc final : Allocator
 
 void* heap_allocate(Allocator* self, sz size, sz alignment = 0, bool zero_mem = false);
 void* heap_reallocate(Allocator* self, void* ptr, sz new_size, sz alignment = 0);
+[[noreturn]] bool heap_resize(Allocator* self, void* ptr, sz new_size, sz alignment = 0);
 void heap_free(Allocator* self, void* ptr);
 void heap_display_info(Allocator* self);
 
@@ -176,18 +176,20 @@ struct Arena final : Allocator
     void destroy();
     sz save_mark();
     void restore_mark(sz mark);
-    bool owns_ptr(void* ptr);
     bool is_last_alloc(sz cursor, void* ptr, sz alloc_size);
     void* fallback_allocate(sz size, sz alignment = 0, bool zero_mem = 0);
     void fallback_free_all();
 
-    u8* memory() { return (u8*)this + sizeof(Arena); }
+    u8* mem_begin() { return (u8*)this + sizeof(Arena); }
+    u8* mem_end() { return this->mem_begin() + this->capacity; }
     sz remain_mem() { return this->capacity - this->cursor; }
-    u8* cursor_ptr() { return this->memory() + this->cursor; }
+    u8* cursor_ptr() { return this->mem_begin() + this->cursor; }
+    bool owns_ptr(void* ptr) { return ptr >= this->mem_begin() && ptr <= this->cursor_ptr(); }
 };
 
 void* arena_allocate(Allocator* self, sz size, sz alignment = 0, bool zero_mem = false);
 void* arena_reallocate(Allocator* self, void* ptr, sz new_size, sz alignment = 0);
+bool arena_resize(Allocator* self, void* ptr, sz new_size, sz alignment = 0);
 void arena_free(Allocator* self, void* ptr);
 void arena_display_info(Allocator* self);
 
@@ -270,6 +272,53 @@ void tlsf_walk_pool(pool_t pool, tlsf_walker walker, void* user);
 /* Returns nonzero if any internal consistency check fails. */
 int tlsf_check(tlsf_t tlsf);
 int tlsf_check_pool(pool_t pool);
+
+/*
+ Pool allocator.
+ This one isn't connected to 'Allocator' interface, because its specific.
+ It can only allocate memory of a certain size or Type.
+*/
+
+// Node doesn't store its size, it would be wasteful.
+// Its stored instide pool allocator structure.
+struct PoolNode
+{
+    PoolNode* prev;
+    PoolNode* next;
+    // Data sits here.
+
+    PoolNode* prev_phys(sz node_size) { return (PoolNode*)((u8*)this - sizeof(PoolNode) - node_size); }
+    PoolNode* next_phys(sz node_size) { return (PoolNode*)(this->mem_begin() + node_size); }
+    u8* mem_begin() { return (u8*)this + sizeof(*this); }
+    static PoolNode* ptr_to_node(void* ptr) { return (PoolNode*)((u8*)ptr - sizeof(PoolNode)); }
+};
+
+struct PoolAllocator
+{
+    static constexpr sz DEFAULT_NODE_COUNT = 128;
+
+    sz node_size;
+    sz node_count;
+    Allocator* backing_alloc; 
+    // Freelist.
+    PoolNode* free_root;
+
+    static PoolAllocator* create(Allocator* backing_alloc, sz node_size, sz node_alignment, sz node_count = DEFAULT_NODE_COUNT);
+    void* allocate();
+    void free(void* ptr);
+    void reset();
+    void destroy();
+    void* fallback_allocate(sz size, sz alignment, bool zero_mem);
+
+    static sz calc_mem_req(sz node_size, sz node_count)
+    {
+        return (sizeof(PoolNode) + node_size) * node_count;
+    }
+    sz capacity() { return (this->node_size + sizeof(PoolNode)) * this->node_count; }
+    PoolNode* begin() { return (PoolNode*)((u8*)this + sizeof(*this)); }
+    PoolNode* end() { return (PoolNode*)(this->begin() + this->capacity()); }
+    bool owns_ptr(void* ptr) { return ptr >= this->begin() && ptr < this->end(); }
+};
 
 } // rg
 

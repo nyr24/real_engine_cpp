@@ -32,9 +32,12 @@ struct DArray
     void init_slice(Allocator* alloc, Slice<Type> values, sz additional_capacity = 0);
     void push(const Type& value);
     void push(Slice<Type> values);
-    Type* emplace();
-    Slice<Type> emplace(sz count);
-    Type pop();
+    void push_and_move_ownership(Type&& value);
+    void push_and_move_ownership(Slice<Type> values);
+    void pop(Type* out_val);
+    void pop(Slice<Type> out_vals);
+    void pop_and_move_ownership(Type* out_val);
+    void pop_and_move_ownership(Slice<Type> out_vals);
     Type remove_unordered_at(sz idx);
     void reserve(sz needed);
     void destroy();
@@ -70,7 +73,6 @@ struct DArray
     void set(const Type& val, sz idx);
     void swap(sz idx1, sz idx2);
     Type operator[](sz idx) const;
-
     sz len() const { return this->count; }
     Type* begin() { return this->data; }
     Type* end() { return this->data + this->count; }
@@ -182,33 +184,62 @@ void DArray<Type>::push(Slice<Type> input)
 }
 
 template<typename Type>
-Type* DArray<Type>::emplace()
+void DArray<Type>::push_and_move_ownership(Type&& value)
 {
     ASSERT_INITIALIZED(this);
     this->reserve(1);
-    Type* res = this->end();
+    *this->end() = rg::move(value);
     this->count++;
-    return res;
 }
 
 template<typename Type>
-Slice<Type> DArray<Type>::emplace(sz count)
-{
-    ASSERT_GREATER_ZERO(count);
-    ASSERT_INITIALIZED(this);
-    this->reserve(count);
-    Slice<Type> res = { this->end(), count };
-    this->count += count;
-    return res;
-}
-
-template<typename Type>
-Type DArray<Type>::pop()
+void DArray<Type>::pop(Type* out_val)
 {
     ASSERT_GREATER_ZERO(this->count);
-    Type val = this->last();
+    if (out_val) *out_val = this->last();
     this->count--;
-    return val;
+}
+
+template<typename Type>
+void DArray<Type>::pop(Slice<Type> out_vals)
+{
+    ASSERT_MSG(this->count >= out_vals.count, "Count must be greater or equal to pop count");
+    if (out_vals.ptr)
+    {
+        sz write_idx = 0;
+        while (write_idx < out_vals.count)
+        {
+            Type* pop_val = this->data + (this->count - 1) - write_idx;
+            out_vals.data[write_idx] = *pop_val;
+            ++write_idx;
+        }
+    }
+    this->count -= out_vals.count;
+}
+
+template<typename Type>
+void DArray<Type>::pop_and_move_ownership(Type* out_val)
+{
+    ASSERT_GREATER_ZERO(this->count);
+    if (out_val) *out_val = rg::move(*this->last_ref());
+    this->count--;
+}
+
+template<typename Type>
+void DArray<Type>::pop_and_move_ownership(Slice<Type> out_vals)
+{
+    ASSERT_MSG(this->count >= out_vals.count, "Count must be greater or equal to pop count");
+    if (out_vals.ptr)
+    {
+        sz write_idx = 0;
+        while (write_idx < out_vals.count)
+        {
+            Type* pop_val = this->data + (this->count - 1) - write_idx;
+            *(out_vals.data + write_idx) = rg::move(*pop_val);
+            ++write_idx;
+        }
+    }
+    this->count -= out_vals.count;
 }
 
 template<typename Type>
