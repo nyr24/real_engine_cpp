@@ -29,7 +29,7 @@ int main(int argc, char **argv)
     else log_info("Starting release build...\n");
 
     FlagsOptimization optimization = is_release ? FlagsOptimization::SPEED : FlagsOptimization::NONE;
-    FlagsSTD std = FlagsSTD::CPP20;
+    FlagsSTD std = FlagsSTD::NONE;
 
     rebuild_itself((ExecutableOptions{ .debug = !is_release, .optimize = optimization, .std = std }),
                     argc, argv, "deps/ezbuild/ezbuild.hpp");
@@ -58,6 +58,8 @@ int main(int argc, char **argv)
     shared_flags.push("-march=native");
     shared_flags.push("-fno-rtti");
     shared_flags.push("-fno-exceptions");
+    // shared_flags.push("-nostdlib++");
+    // shared_flags.push("-nostdinc++");
 
     LocalArray<StrView> debug_flags;
     debug_flags.push("-g");

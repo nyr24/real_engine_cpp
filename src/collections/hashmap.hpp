@@ -1,12 +1,10 @@
 #ifndef _RG_HASHMAP_HPP_
 #define _RG_HASHMAP_HPP_
 
-#include <emmintrin.h>
-#include <immintrin.h>
 #include "core/basic.hpp"
 #include "collections/slice.hpp"
 
-// Hashmap.
+// HashMap.
 // Enforces capacity of power of 2's for more efficient index calc.
 // Soa version.
 // Data layout: [hashes...keys...values].
@@ -14,34 +12,8 @@
 namespace rg
 {
 
-// Should only be used for wrappping primitive types.
-// Other types of keys should implement 'hash' method.
-template<typename Type>
-struct Hashable
-{
-    Type val;
-    u64 hash();
-};
-
-template<typename Type>
-u64 Hashable<Type>::hash()
-{
-    u64 hash = FNV_OFFSET_BASIS;
-    constexpr sz BYTE_COUNT = sizeof(Type);
-    char* byte = (char*)this;
-    char* end = byte + BYTE_COUNT;
-
-    for (; byte != end; ++byte)
-    {
-        hash ^= *byte;
-        hash *= FNV_PRIME;
-    }
-
-    return hash;
-}
-
 template<typename Key, typename Value>
-struct HashmapKVPair
+struct HashMapKVPair
 {
     Key key;
     Value val;
@@ -56,7 +28,7 @@ intern u64 calc_hash(Key key);
 intern inline sz get_idx_for_hash(u64 hash, sz capacity);
 
 template<typename Key, typename Value>
-struct Hashmap
+struct HashMap
 {
     static constexpr sz DEFAULT_CAPACITY = 16;
     static constexpr f32 DEFAULT_LOAD_FACTOR = 0.85;
@@ -67,8 +39,8 @@ struct Hashmap
         sz capacity;
         sz pos;
 
-        inline bool is_at_end() { return this->pos >= this->capacity; };
-        inline void reset() { this->pos = 0; }
+        bool is_at_end() { return this->pos >= this->capacity; };
+        void reset() { this->pos = 0; }
         Pair<Key*, Value*> next_pair();
         Key* next_key();
         Value* next_value();
@@ -80,14 +52,14 @@ struct Hashmap
     sz capacity;
     f32 load_factor;
 
-    Hashmap();
-    Hashmap(Hashmap&& rhs);
-    Hashmap& operator=(Hashmap&& rhs);
-    Hashmap(const Hashmap& rhs) = delete;
-    Hashmap& operator=(const Hashmap& rhs) = delete;
+    HashMap();
+    HashMap(HashMap&& rhs);
+    HashMap& operator=(HashMap&& rhs);
+    HashMap(const HashMap& rhs) = delete;
+    HashMap& operator=(const HashMap& rhs) = delete;
 
     void init(Allocator* alloc, sz init_capacity = DEFAULT_CAPACITY, f32 load_factor = DEFAULT_LOAD_FACTOR);
-    void init_with_key_values(Allocator* alloc, Slice<HashmapKVPair<Key, Value>> pairs, sz add_capacity = 0, f32 load_factor = DEFAULT_LOAD_FACTOR);
+    void init_with_key_values(Allocator* alloc, Slice<HashMapKVPair<Key, Value>> pairs, sz add_capacity = 0, f32 load_factor = DEFAULT_LOAD_FACTOR);
     void put(const Key& key, const Value& val);
     bool has(const Key& key);
     Value* get(const Key& key);
@@ -100,13 +72,13 @@ struct Hashmap
     void foreach_key_mut(void(*fn)(Key*));
     void foreach_value(void(*fn)(const Value&));
     void foreach_value_mut(void(*fn)(Value*));
-    Hashmap<Key, Value> clone();
+    HashMap<Key, Value> clone();
 
-    inline sz len() { return this->count; }
-    inline bool is_empty() { return this->count == 0; }
-    inline bool is_initialized() { return this->data != null && this->alloc != null; }
-    inline sz byte_size_used() { return this->count * (sizeof(u64) + sizeof(Key) + sizeof(Value)); }
-    inline sz byte_size_allocated() { return this->capacity * (sizeof(u64) + sizeof(Key) + sizeof(Value)); }
+    sz len() { return this->count; }
+    bool is_empty() { return this->count == 0; }
+    bool is_initialized() { return this->data != null && this->alloc != null; }
+    sz byte_size_used() { return this->count * (sizeof(u64) + sizeof(Key) + sizeof(Value)); }
+    sz byte_size_allocated() { return this->capacity * (sizeof(u64) + sizeof(Key) + sizeof(Value)); }
 private:
     void clear(Slice<u64> hashes);
     sz find_idx(const Key& key, Key* keys, Value* values);
@@ -118,12 +90,12 @@ private:
 };
 
 template<typename Key, typename Value>
-Hashmap<Key, Value>::Hashmap()
+HashMap<Key, Value>::HashMap()
     : data{null}, alloc{null}, count{0}, capacity{0}, load_factor{0}
 {}
 
 template<typename Key, typename Value>
-Hashmap<Key, Value>::Hashmap(Hashmap&& rhs)
+HashMap<Key, Value>::HashMap(HashMap&& rhs)
     : data{rhs.data}, alloc{rhs.alloc}, count{rhs.count}, capacity{rhs.capacity}, load_factor{rhs.load_factor}
 {
     rhs.data = null;
@@ -134,7 +106,7 @@ Hashmap<Key, Value>::Hashmap(Hashmap&& rhs)
 }
 
 template<typename Key, typename Value>
-Hashmap<Key, Value>& Hashmap<Key, Value>::operator=(Hashmap&& rhs)
+HashMap<Key, Value>& HashMap<Key, Value>::operator=(HashMap&& rhs)
 {
     if (this == &rhs) return *this;
 
@@ -153,7 +125,7 @@ Hashmap<Key, Value>& Hashmap<Key, Value>::operator=(Hashmap&& rhs)
 }
 
 template<typename Key, typename Value>
-void Hashmap<Key, Value>::init(Allocator* alloc, sz capacity, f32 load_factor)
+void HashMap<Key, Value>::init(Allocator* alloc, sz capacity, f32 load_factor)
 {
     capacity = next_power_of_2(max(DEFAULT_CAPACITY, capacity));
     sz mem_req = calc_mem_req(capacity); 
@@ -166,7 +138,7 @@ void Hashmap<Key, Value>::init(Allocator* alloc, sz capacity, f32 load_factor)
 }
 
 template<typename Key, typename Value>
-void Hashmap<Key, Value>::init_with_key_values(Allocator* alloc, Slice<HashmapKVPair<Key, Value>> pairs, sz add_capacity, f32 load_factor)
+void HashMap<Key, Value>::init_with_key_values(Allocator* alloc, Slice<HashMapKVPair<Key, Value>> pairs, sz add_capacity, f32 load_factor)
 {
     sz capacity = next_power_of_2(max(DEFAULT_CAPACITY, pairs.count + add_capacity));
     sz mem_req = calc_mem_req(capacity); 
@@ -184,7 +156,7 @@ void Hashmap<Key, Value>::init_with_key_values(Allocator* alloc, Slice<HashmapKV
 }
 
 template<typename Key, typename Value>
-void Hashmap<Key, Value>::clear(Slice<u64> hashes)
+void HashMap<Key, Value>::clear(Slice<u64> hashes)
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized");
     u64* curr = hashes.ptr;
@@ -196,7 +168,7 @@ void Hashmap<Key, Value>::clear(Slice<u64> hashes)
 }
 
 template<typename Key, typename Value>
-void Hashmap<Key, Value>::put(const Key& key, const Value& val)
+void HashMap<Key, Value>::put(const Key& key, const Value& val)
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized first");
     if (this->crossed_threshold()) this->grow();
@@ -205,7 +177,7 @@ void Hashmap<Key, Value>::put(const Key& key, const Value& val)
 }
 
 template<typename Key, typename Value>
-void Hashmap<Key, Value>::put_inner(u64* data, sz capacity, sz* count, u64 hash, const Key& key, const Value& val)
+void HashMap<Key, Value>::put_inner(u64* data, sz capacity, sz* count, u64 hash, const Key& key, const Value& val)
 {
     sz idx = get_idx_for_hash(hash, capacity);
     sz curr_hash_idx = idx;
@@ -242,7 +214,7 @@ void Hashmap<Key, Value>::put_inner(u64* data, sz capacity, sz* count, u64 hash,
 }
 
 template<typename Key, typename Value>
-Value* Hashmap<Key, Value>::get(const Key& key)
+Value* HashMap<Key, Value>::get(const Key& key)
 {
     u64 search_hash = calc_hash(key);
     sz idx = get_idx_for_hash(search_hash, this->capacity);
@@ -270,14 +242,14 @@ Value* Hashmap<Key, Value>::get(const Key& key)
 }
 
 template<typename Key, typename Value>
-bool Hashmap<Key, Value>::has(const Key& key)
+bool HashMap<Key, Value>::has(const Key& key)
 {
     Value* val = this->get(key);
     return val != null;
 }
 
 template<typename Key, typename Value>
-bool Hashmap<Key, Value>::remove(const Key& key)
+bool HashMap<Key, Value>::remove(const Key& key)
 {
     u64 search_hash = calc_hash(key);
     sz idx = get_idx_for_hash(search_hash, this->capacity);
@@ -316,7 +288,7 @@ bool Hashmap<Key, Value>::remove(const Key& key)
 
 
 template<typename Key, typename Value>
-void Hashmap<Key, Value>::grow()
+void HashMap<Key, Value>::grow()
 {
     u64* old_data = this->data;
     sz old_capacity = this->capacity;
@@ -344,11 +316,11 @@ void Hashmap<Key, Value>::grow()
 }
 
 template<typename Key, typename Value>
-Hashmap<Key, Value> Hashmap<Key, Value>::clone()
+HashMap<Key, Value> HashMap<Key, Value>::clone()
 {
     ASSERT_INITIALIZED(this);
 
-    Hashmap<Key, Value> res;
+    HashMap<Key, Value> res;
     sz mem_req = calc_mem_req(this->capacity);
     res.data = (u64*)allocator_allocate(this->alloc, mem_req);
     mem_copy(res.data, this->data, mem_req);
@@ -359,7 +331,7 @@ Hashmap<Key, Value> Hashmap<Key, Value>::clone()
 }
 
 template<typename Key, typename Value>
-void Hashmap<Key, Value>::destroy()
+void HashMap<Key, Value>::destroy()
 {
     if (this->data)
     {
@@ -371,20 +343,20 @@ void Hashmap<Key, Value>::destroy()
 }
 
 template<typename Key, typename Value>
-bool Hashmap<Key, Value>::crossed_threshold()
+bool HashMap<Key, Value>::crossed_threshold()
 {
     f32 ratio = this->count / f32(this->capacity);
     return ratio > this->load_factor;
 }
 
 template<typename Key, typename Value>
-inline sz Hashmap<Key, Value>::calc_mem_req(sz want_items)
+inline sz HashMap<Key, Value>::calc_mem_req(sz want_items)
 {
     return sizeof(u64) * want_items + sizeof(Key) * want_items + sizeof(Value) * want_items + alignof(Key) + alignof(Value);
 }
 
 template<typename Key, typename Value>
-inline Pair<Key*, Value*> Hashmap<Key, Value>::keys_values_begin(u64* data, sz capacity)
+inline Pair<Key*, Value*> HashMap<Key, Value>::keys_values_begin(u64* data, sz capacity)
 {
     Pair<Key*, Value*> res;
     res.first = align_ptr((Key*)(data + capacity));
@@ -393,9 +365,9 @@ inline Pair<Key*, Value*> Hashmap<Key, Value>::keys_values_begin(u64* data, sz c
 }
 
 template<typename Key, typename Value>
-inline Hashmap<Key, Value>::Iter Hashmap<Key, Value>::get_iter()
+inline HashMap<Key, Value>::Iter HashMap<Key, Value>::get_iter()
 {
-    Hashmap<Key, Value>::Iter res;
+    HashMap<Key, Value>::Iter res;
     res.data = this->data;
     res.capacity = this->capacity;
     res.pos = 0;
@@ -403,7 +375,7 @@ inline Hashmap<Key, Value>::Iter Hashmap<Key, Value>::get_iter()
 }
 
 template<typename Key, typename Value>
-void Hashmap<Key, Value>::foreach_pair(void(*fn)(const Pair<Key*, Value*>&))
+void HashMap<Key, Value>::foreach_pair(void(*fn)(const Pair<Key*, Value*>&))
 {
     auto iter = this->get_iter();
     Pair<Key*, Value*> pair_ref;
@@ -417,7 +389,7 @@ void Hashmap<Key, Value>::foreach_pair(void(*fn)(const Pair<Key*, Value*>&))
 }
 
 template<typename Key, typename Value>
-void Hashmap<Key, Value>::foreach_pair_mut(void(*fn)(Pair<Key*, Value*>))
+void HashMap<Key, Value>::foreach_pair_mut(void(*fn)(Pair<Key*, Value*>))
 {
     auto iter = this->get_iter();
     Pair<Key*, Value*> pair_ref;
@@ -431,7 +403,7 @@ void Hashmap<Key, Value>::foreach_pair_mut(void(*fn)(Pair<Key*, Value*>))
 }
 
 template<typename Key, typename Value>
-void Hashmap<Key, Value>::foreach_key(void(*fn)(const Key&))
+void HashMap<Key, Value>::foreach_key(void(*fn)(const Key&))
 {
     auto iter = this->get_iter();
     Key* key_ref;
@@ -445,7 +417,7 @@ void Hashmap<Key, Value>::foreach_key(void(*fn)(const Key&))
 }
 
 template<typename Key, typename Value>
-void Hashmap<Key, Value>::foreach_key_mut(void(*fn)(Key*))
+void HashMap<Key, Value>::foreach_key_mut(void(*fn)(Key*))
 {
     auto iter = this->get_iter();
     Key* key_ref;
@@ -459,7 +431,7 @@ void Hashmap<Key, Value>::foreach_key_mut(void(*fn)(Key*))
 }
 
 template<typename Key, typename Value>
-void Hashmap<Key, Value>::foreach_value(void(*fn)(const Value&))
+void HashMap<Key, Value>::foreach_value(void(*fn)(const Value&))
 {
     auto iter = this->get_iter();
     Value* value_ref;
@@ -473,7 +445,7 @@ void Hashmap<Key, Value>::foreach_value(void(*fn)(const Value&))
 }
 
 template<typename Key, typename Value>
-void Hashmap<Key, Value>::foreach_value_mut(void(*fn)(Value*))
+void HashMap<Key, Value>::foreach_value_mut(void(*fn)(Value*))
 {
     auto iter = this->get_iter();
     Value* value_ref;
@@ -489,7 +461,7 @@ void Hashmap<Key, Value>::foreach_value_mut(void(*fn)(Value*))
 // Iterator.
 
 template<typename Key, typename Value>
-Pair<Key*, Value*> Hashmap<Key, Value>::Iter::next_pair()
+Pair<Key*, Value*> HashMap<Key, Value>::Iter::next_pair()
 {
     if (this->is_at_end()) return { null, null };
     auto [keys, values] = keys_values_begin(this->data, this->capacity);
@@ -497,7 +469,7 @@ Pair<Key*, Value*> Hashmap<Key, Value>::Iter::next_pair()
 }
 
 template<typename Key, typename Value>
-Key* Hashmap<Key, Value>::Iter::next_key()
+Key* HashMap<Key, Value>::Iter::next_key()
 {
     if (this->is_at_end()) return null;
     auto [keys, _] = keys_values_begin(this->data, this->capacity);
@@ -505,7 +477,7 @@ Key* Hashmap<Key, Value>::Iter::next_key()
 }
 
 template<typename Key, typename Value>
-Value* Hashmap<Key, Value>::Iter::next_value()
+Value* HashMap<Key, Value>::Iter::next_value()
 {
     if (this->is_at_end()) return null;
     auto [_, values] = keys_values_begin(this->data, this->capacity);

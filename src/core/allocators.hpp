@@ -232,8 +232,6 @@ void arena_display_info(Allocator* self);
 ** SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <cstddef>
-
 /* tlsf_t: a TLSF structure. Can contain 1 to N pools. */
 /* pool_t: a block of memory that TLSF can manage. */
 typedef void* tlsf_t;

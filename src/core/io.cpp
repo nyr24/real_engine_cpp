@@ -184,7 +184,7 @@ bool file_open(Path* path, FileHandle* out_handle, FileOpenBit flags)
     }
     *out_handle = ::open(path->cstr(), (s32)unix_flags);
 #endif
-    if (*out_handle == FILE_HANDLE_INVALID)
+    if (*out_handle == HANDLE_INVALID)
     {
         LOG_ERROR("Could not open file from path: " FMT_PLACEHOLDER_LEN, FMT_DSTRING(path));
         return false;
@@ -194,7 +194,7 @@ bool file_open(Path* path, FileHandle* out_handle, FileOpenBit flags)
 
 bool file_close(FileHandle handle)
 {
-    if (handle == FILE_HANDLE_INVALID)
+    if (handle == HANDLE_INVALID)
     {
         LOG_WARN("Trying to close the file that maybe already closed or wasn't opened");
         return false;
@@ -205,13 +205,13 @@ bool file_close(FileHandle handle)
         if (handle <= 2) return false;  // Don't close stdin(0), stdout(1), stderr(2)
         if (::close(handle) != 0) return false;
     #endif // RG_PLATFORM_WIN32
-    handle = FILE_HANDLE_INVALID;
+    handle = HANDLE_INVALID;
     return true;
 }
 
 sz file_get_size(FileHandle handle)
 {
-    ASSERT_MSG(handle != FILE_HANDLE_INVALID, "Must be valid file handle");
+    ASSERT_MSG(handle != HANDLE_INVALID, "Must be valid file handle");
 #ifdef RG_PLATFORM_WIN32
     LARGE_INTEGER file_size;
     ASSERT_NON_ZERO(::GetFileSizeEx(handle, &file_size));
@@ -363,7 +363,7 @@ intern bool file_read_mmap(Path* path, DString* out_data, sz precomputed_file_si
 
 bool file_set_cursor(FileHandle handle, FileSeekPos pos, sz offset)
 {
-    ASSERT_MSG(handle != FILE_HANDLE_INVALID, "Must be valid file handle");
+    ASSERT_MSG(handle != HANDLE_INVALID, "Must be valid file handle");
 
 #ifdef RG_PLATFORM_WIN32
     if (!::SetFilePointerEx(handle, offset, null, s32(pos)))
@@ -472,7 +472,7 @@ void FileMapEntry::unmap()
     if (this->mapped_mem == null) return;
     ::UnmapViewOfFile(entry->mapped_mem);
     ::CloseHandle(entry->file_mapping);
-    if (entry->file_handle != FILE_HANDLE_INVALID) ::CloseHandle(entry->file_handle);    
+    if (entry->file_handle != HANDLE_INVALID) ::CloseHandle(entry->file_handle);    
 #else
     if (this->mapped_mem == null) return;
     ::munmap(this->mapped_mem, this->size);

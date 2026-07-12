@@ -6,7 +6,7 @@
 #include "collections/slice.hpp"
 #include "collections/split_iterator.hpp"
 
-// Farray - fixed array type.
+// Farray - fixed-capacity array type.
 
 namespace rg
 {
@@ -437,12 +437,70 @@ void FArray<Type, CAPACITY>::foreach_split(const Type& splitter, void(*fn)(Slice
     }
 }
 
+/*
+ Array - just a wrapper over C-style array with capacity.
+ There's no concept of used space for this structure,
+ its assumed that you will always use all available slots.
+*/
+template<typename Type, sz CAPACITY = FARRAY_DEFAULT_CAPACITY>
+struct Array
+{
+    Type data[CAPACITY];
+
+    constexpr Array() = default;
+    constexpr Array(std::initializer_list<Type> init_list);
+    Array(const Array<Type, CAPACITY>& rhs);
+    Array& operator=(const Array<Type, CAPACITY>& rhs);
+
+    constexpr sz len() const { return CAPACITY; }
+    constexpr sz capacity() const { return CAPACITY; }
+    Type operator[](sz idx)
+    {
+        ASSERT_IN_BOUNDS(idx >= 0 && idx < CAPACITY);
+        return this->data[idx];
+    }
+    const Type& operator[](sz idx) const
+    {
+        ASSERT_IN_BOUNDS(idx >= 0 && idx < CAPACITY);
+        return this->data[idx];
+    }
+    Type* begin() { return this->data; }
+    Type* end() { return this->data + CAPACITY; }
+    const Type* begin() const { return this->data; }
+    const Type* end() const { return this->data + CAPACITY; }
+};
+
+template<typename Type, sz CAPACITY>
+constexpr Array<Type, CAPACITY>::Array(std::initializer_list<Type> init_list)
+{
+    sz i = 0;
+    const Type* curr = init_list.begin();
+    for (; i < CAPACITY; ++i)
+    {
+        this->data[i] = curr[i];
+    }
+}
+
+template<typename Type, sz CAPACITY>
+Array<Type, CAPACITY>::Array(const Array<Type, CAPACITY>& rhs)
+{
+    mem_copy(this->data, rhs.data, sizeof(Type) * CAPACITY);
+}
+
+template<typename Type, sz CAPACITY>
+Array<Type, CAPACITY>& Array<Type, CAPACITY>::operator=(const Array<Type, CAPACITY>& rhs)
+{
+    ASSERT_MSG(this != &rhs, "You mustn't be an idiot");
+    mem_copy(this->data, rhs.data, CAPACITY * sizeof(Type));
+    return *this;
+}
+
 // EnumArray.
 
 template<typename Type, typename EnumType>
-struct EnumArray : FArray<Type, (sz)EnumType::EnumSize>
+struct EnumArray : Array<Type, (sz)EnumType::EnumSize>
 {
-    using FArray<Type, (sz)EnumType::EnumSize>::FArray;
+    using Array<Type, (sz)EnumType::EnumSize>::Array;
     inline Type operator[](EnumType idx) const;
 };
 

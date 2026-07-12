@@ -1,4 +1,5 @@
-#include <cstdarg>
+#include <stdarg.h>
+#include <pthread.h>
 #include "core/basic.hpp"
 #include "collections/farray.hpp"
 

@@ -112,8 +112,7 @@ DArray<Type>::DArray(const DArray& rhs)
 template<typename Type>
 DArray<Type>& DArray<Type>::operator=(DArray&& rhs)
 {
-    if (this == &rhs) return *this;
-
+    ASSERT_MSG(this != &rhs, "You mustn't be an idiot");
     this->data = rhs.data;
     this->alloc = rhs.alloc;
     this->count = rhs.count;
@@ -129,7 +128,7 @@ DArray<Type>& DArray<Type>::operator=(DArray&& rhs)
 template<typename Type>
 DArray<Type>& DArray<Type>::operator=(const DArray& rhs)
 {
-    if (this == &rhs) return *this;
+    ASSERT_MSG(this != &rhs, "You mustn't be an idiot");
     this->data = rhs.data;
     this->alloc = rhs.alloc;
     this->count = rhs.count;

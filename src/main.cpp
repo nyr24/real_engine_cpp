@@ -1,7 +1,7 @@
 #include "core/basic.hpp"
 #include "core/allocators.hpp"
 #include "core/conversions.hpp"
-#include "collections/ringbuffer.hpp"
+#include "core/atomic.hpp"
 
 using namespace rg;
 
@@ -45,19 +45,26 @@ s32 main()
     VmemAllocator* vmem = VmemAllocator::create(1 * GB);
     defer(vmem->destroy());
     // Arena* arena = Arena::create(mem, 1 << 14);
+// Atomic
+    Atomic<s32> atom = {200};
+    atom.add(228);
+    atom.sub(404);
+    atom.bit_and(0b00001111);
+    printfn("val: %d", atom.val);
+    
+// RingBuffer
+    // RingBuffer<s32, 256> rb;
+    // rb.push(1);
+    // rb.push(2);
+    // rb.push(3);
 
-    Ringbuffer<s32, 256> rb;
-    rb.push(1);
-    rb.push(2);
-    rb.push(3);
-
-    s32 out;
-    rb.pop(&out);
-    printfn("popped: %d", out);
-    rb.pop(&out);
-    printfn("popped: %d", out);
-    rb.pop(&out);
-    printfn("popped: %d", out);
+    // s32 out;
+    // rb.pop(&out);
+    // printfn("popped: %d", out);
+    // rb.pop(&out);
+    // printfn("popped: %d", out);
+    // rb.pop(&out);
+    // printfn("popped: %d", out);
 // Pool allocator test.
     // PoolAllocator* pool = PoolAllocator::create(vmem, sizeof(Entity), alignof(Entity), 128);
     // defer(pool->destroy());

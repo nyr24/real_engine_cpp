@@ -1,12 +1,12 @@
 #ifndef _RG_BASIC_HPP_
 #define _RG_BASIC_HPP_
 
-#include <cstddef>
-#include <cstdint>
-#include <cstdlib>
-#include <cstdio>
-#include <cstring>
-#include <ctime>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
 
 #ifdef _WIN32
 	#define RG_PLATFORM_WIN32
@@ -24,15 +24,15 @@
 #endif // _WIN32
 
 #ifdef PAGE_SIZE
-#define RG_PAGE_SIZE PAGE_SIZE; 
+#define RG_PAGE_SIZE PAGE_SIZE
 #else
-#define RG_PAGE_SIZE 4096; 
+#define RG_PAGE_SIZE 4096
 #endif
 
 #ifdef THREAD_COUNT
-#define RG_THREAD_COUNT THREAD_COUNT; 
+#define RG_THREAD_COUNT THREAD_COUNT
 #else
-#define RG_THREAD_COUNT 4096; 
+#define RG_THREAD_COUNT 4
 #endif
 
 // Types and keywords.
@@ -145,9 +145,11 @@ void assert_msg_proc(bool expr, CString fmt, ...);
 #define eprintfn(fmt, ...) fprintf(stderr, fmt "\n", ##__VA_ARGS__)
 
 #ifdef RG_PLATFORM_WIN32
-constexpr FileHandle FILE_HANDLE_INVALID = INVALID_HANDLE_VALUE;
+alias Handle = HANDLE;
+constexpr Handle HANDLE_INVALID = INVALID_HANDLE_VALUE;
 #else
-constexpr FileHandle FILE_HANDLE_INVALID = -1;
+alias Handle = s32;
+constexpr Handle HANDLE_INVALID = -1;
 #endif
 constexpr sz INDEX_INVALID = -1;
 constexpr sz KB = 1024;
@@ -518,6 +520,32 @@ constexpr u64 FNV_OFFSET_BASIS = 14695981039346656037ull;
 
 u64 hash_fnv(char* bytes, sz count);
 bool is_space(char c);
+
+// Should only be used for wrappping primitive types.
+// Other types of keys should implement 'hash' method.
+template<typename Type>
+struct Hashable
+{
+    Type val;
+    u64 hash();
+};
+
+template<typename Type>
+u64 Hashable<Type>::hash()
+{
+    u64 hash = FNV_OFFSET_BASIS;
+    constexpr sz BYTE_COUNT = sizeof(Type);
+    char* byte = (char*)this;
+    char* end = byte + BYTE_COUNT;
+
+    for (; byte != end; ++byte)
+    {
+        hash ^= *byte;
+        hash *= FNV_PRIME;
+    }
+
+    return hash;
+}
 
 // Move
 

@@ -1,5 +1,5 @@
-#include <cmath>
-#include <cstdio>
+#include <math.h>
+#include <stdio.h>
 #include "collections/slice.hpp"
 #include "collections/string.hpp"
 
