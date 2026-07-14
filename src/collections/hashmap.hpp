@@ -76,7 +76,7 @@ struct HashMap
 
     sz len() { return this->count; }
     bool is_empty() { return this->count == 0; }
-    bool is_initialized() { return this->data != null && this->alloc != null; }
+    bool is_initialized() { return this->alloc != null; }
     sz byte_size_used() { return this->count * (sizeof(u64) + sizeof(Key) + sizeof(Value)); }
     sz byte_size_allocated() { return this->capacity * (sizeof(u64) + sizeof(Key) + sizeof(Value)); }
 private:

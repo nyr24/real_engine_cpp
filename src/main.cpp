@@ -1,56 +1,102 @@
 #include "core/basic.hpp"
 #include "core/allocators.hpp"
 #include "core/conversions.hpp"
-#include "core/atomic.hpp"
+#include "collections/thread_pool.hpp"
+#include "core/io.hpp"
+#include "core/context.hpp"
 
 using namespace rg;
 
-s32 rand_in_range(s32 start, s32 end)
-{
-    return (rand() % (end - start)) + start;
-}
+AppContext app_ctx;
 
-void populate_buff_ascii(char* buff, sz capacity)
+HeapAlloc mem;
+VmemAllocator* vmem = VmemAllocator::create(1 * GB);
+
+s32 thread_read_file(void* arg)
 {
-    char* curr = buff;
-    char* end = buff + capacity;
-    for (; curr != end; ++curr)
+    Path* file_path = (Path*)arg;
+    auto [res, is_ok] = file_read(&mem, file_path);
+
+    if (!is_ok)
     {
-        *curr = rand_in_range('a', 'z');
+        LOG_ERROR("Failed to read data from file: ", FMT_PLACEHOLDER_LEN, FMT_DSTRING_VAL(res));
+        return 1;
     }
+
+    LOG_SCOPED("First bytes!: " FMT_PLACEHOLDER_LEN "\n", FMT_SLICE(res.slice(0, 256)));
+
+    return 0;
 }
-
-void print_buff_ascii(char* buff, sz capacity)
-{
-    printfn("%.*s", (s32)capacity, buff);
-}
-
-struct Entity
-{
-    FString<20> name;
-    u32 age;
-
-    void init(StrView name_, u32 age_)
-    {
-        this->name.init_view(name_);
-        this->age = age_;
-    }
-    void dance() { printfn("Entity named: " FMT_PLACEHOLDER_LEN " is dancing!", FMT_FSTRING_VAL(this->name)); }
-};
 
 s32 main()
 {
-    // HeapAlloc mem;
-    // mem.init();
-    VmemAllocator* vmem = VmemAllocator::create(1 * GB);
-    defer(vmem->destroy());
-    // Arena* arena = Arena::create(mem, 1 << 14);
+    app_ctx.init();
+    mem.init();
+    defer({
+        app_ctx.destroy();
+        vmem->destroy();
+    });
+    set_log_scope(LogLevel::INFO);
+    // defer(reset_log_scope());
+
+    Arena* arena = Arena::create(&mem, 1 << 14);
+
+// Threadpool and Io.
+    ThreadPool<4, 16> tpool;
+    tpool.init();
+    defer(tpool.destroy());
+
+    Array<Path, 16> file_paths;
+    file_paths[0].init(arena, StrView{ CSTR_SIZED("assets/temp1.txt") });
+    file_paths[1].init(arena, StrView{ CSTR_SIZED("assets/temp2.txt") });
+    file_paths[2].init(arena, StrView{ CSTR_SIZED("assets/temp3.txt") });
+    file_paths[3].init(arena, StrView{ CSTR_SIZED("assets/temp4.txt") });
+    file_paths[4].init(arena, StrView{ CSTR_SIZED("assets/temp5.txt") });
+    file_paths[5].init(arena, StrView{ CSTR_SIZED("assets/temp6.txt") });
+    file_paths[6].init(arena, StrView{ CSTR_SIZED("assets/temp7.txt") });
+    file_paths[7].init(arena, StrView{ CSTR_SIZED("assets/temp8.txt") });
+    file_paths[8].init(arena, StrView{ CSTR_SIZED("assets/temp9.txt") });
+    file_paths[9].init(arena, StrView{ CSTR_SIZED("assets/temp10.txt") });
+    file_paths[10].init(arena, StrView{ CSTR_SIZED("assets/temp11.txt") });
+    file_paths[11].init(arena, StrView{ CSTR_SIZED("assets/temp12.txt") });
+    file_paths[12].init(arena, StrView{ CSTR_SIZED("assets/temp13.txt") });
+    file_paths[13].init(arena, StrView{ CSTR_SIZED("assets/temp14.txt") });
+    file_paths[14].init(arena, StrView{ CSTR_SIZED("assets/temp15.txt") });
+
+    tpool.submit_task({ thread_read_file, &file_paths[0] }); 
+    tpool.submit_task({ thread_read_file, &file_paths[1] }); 
+    tpool.submit_task({ thread_read_file, &file_paths[2] }); 
+    tpool.submit_task({ thread_read_file, &file_paths[3] }); 
+    tpool.submit_task({ thread_read_file, &file_paths[4] }); 
+    tpool.submit_task({ thread_read_file, &file_paths[5] }); 
+    tpool.submit_task({ thread_read_file, &file_paths[6] }); 
+    tpool.submit_task({ thread_read_file, &file_paths[7] }); 
+    tpool.submit_task({ thread_read_file, &file_paths[8] }); 
+    tpool.submit_task({ thread_read_file, &file_paths[9] }); 
+    tpool.submit_task({ thread_read_file, &file_paths[10] }); 
+    tpool.submit_task({ thread_read_file, &file_paths[11] }); 
+    tpool.submit_task({ thread_read_file, &file_paths[12] }); 
+    tpool.submit_task({ thread_read_file, &file_paths[13] }); 
+    tpool.submit_task({ thread_read_file, &file_paths[14] }); 
+
+    // ThreadTask tasks[3] = {
+    //     { thread_read_file, &file_paths[0] },
+    //     { thread_read_file, &file_paths[0] },
+    //     { thread_read_file, &file_paths[0] },
+    // };
+
+    // tpool.submit_task_many({ tasks, 3 });
+
+    tpool.await();
+
+    LOG_DEBUG("MAIN THREAD: await is over");
+
 // Atomic
-    Atomic<s32> atom = {200};
-    atom.add(228);
-    atom.sub(404);
-    atom.bit_and(0b00001111);
-    printfn("val: %d", atom.val);
+    // Atomic<s32> atom = {200};
+    // atom.add(228);
+    // atom.sub(404);
+    // atom.bit_and(0b00001111);
+    // printfn("val: %d", atom.val);
     
 // RingBuffer
     // RingBuffer<s32, 256> rb;

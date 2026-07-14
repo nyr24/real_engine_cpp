@@ -3,6 +3,7 @@
 
 #include "core/basic.hpp"
 #include "core/atomic.hpp"
+#include "collections/slice.hpp"
 
 namespace rg
 {
@@ -26,9 +27,14 @@ struct RingBuffer
     RingBuffer& operator=(const RingBuffer& rhs);
 
     // Add item to the end.
-    bool push(const Type& val);
+    void push(const Type& val);
+    // TODO:
+    void push(Slice<Type> vals);
     // Remove item from the start.
-    bool pop(Type* out_val);
+    // Doesn't check if queue is empty, its assumed you checked it before call.
+    Type pop();
+    // Checks if queue is empty, returns empty result if it is.
+    Maybe<Type> pop_safe();
 
     sz count() const;
     void clear()
@@ -68,11 +74,9 @@ RingBuffer<Type, CAPACITY>& RingBuffer<Type, CAPACITY>::operator=(const RingBuff
 }
 
 template<typename Type, sz CAPACITY>
-bool RingBuffer<Type, CAPACITY>::push(const Type& val)
+void RingBuffer<Type, CAPACITY>::push(const Type& val)
 {
-    if (this->is_full()) return false;
-
-    AtomicOrder ord = AtomicOrder::ACQ_REL;
+    AtomicOrder ord = AtomicOrder::SEQ_CST;
     sz expected = this->write_idx.load(ord);
     sz curr_write;
     sz new_write;
@@ -91,16 +95,14 @@ bool RingBuffer<Type, CAPACITY>::push(const Type& val)
         curr_read = rg::wrap_add_assume_pow_two(curr_read, sz(1), CAPACITY);
         this->read_idx.store(curr_read);
     }
-
-    return true;
 }
 
 template<typename Type, sz CAPACITY>
-bool RingBuffer<Type, CAPACITY>::pop(Type* out_val)
+Type RingBuffer<Type, CAPACITY>::pop()
 {
-    if (this->is_empty()) return false;
+    ASSERT_NON_EMPTY(this);
 
-    AtomicOrder ord = AtomicOrder::RELAXED;
+    AtomicOrder ord = AtomicOrder::SEQ_CST;
     sz expected = this->read_idx.load(ord);
     sz curr_read;
     sz new_read;
@@ -111,14 +113,34 @@ bool RingBuffer<Type, CAPACITY>::pop(Type* out_val)
         new_read = rg::wrap_add_assume_pow_two(expected, sz(1), CAPACITY); 
     } while(!this->read_idx.compare_exchange_weak(&expected, new_read, ord));
 
-    *out_val = this->data[curr_read];
-    return true;
+    return this->data[curr_read];
+}
+
+template<typename Type, sz CAPACITY>
+Maybe<Type> RingBuffer<Type, CAPACITY>::pop_safe()
+{
+    Maybe<Type> res;
+    if (this->is_empty()) return res;
+
+    AtomicOrder ord = AtomicOrder::SEQ_CST;
+    sz expected = this->read_idx.load(ord);
+    sz curr_read;
+    sz new_read;
+
+    do
+    {
+        curr_read = expected;
+        new_read = rg::wrap_add_assume_pow_two(expected, sz(1), CAPACITY); 
+    } while(!this->read_idx.compare_exchange_weak(&expected, new_read, ord));
+
+    res.set_val(this->data[curr_read]);
+    return res;
 }
 
 template<typename Type, sz CAPACITY>
 sz RingBuffer<Type, CAPACITY>::count() const
 {
-    AtomicOrder ord = AtomicOrder::ACQ_REL;
+    AtomicOrder ord = AtomicOrder::SEQ_CST;
     sz write = this->write_idx.load(ord);
     sz read = this->read_idx.load(ord);
     if (write < read)

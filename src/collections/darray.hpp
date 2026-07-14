@@ -10,11 +10,12 @@
 namespace rg
 {
 
-constexpr sz DARRAY_DEFAULT_CAPACITY = 16;
 
 template<typename Type>
 struct DArray
 {
+    static constexpr sz DEFAULT_CAPACITY = 16;
+
     Type* data;
     Allocator* alloc;
     sz count;
@@ -28,7 +29,8 @@ struct DArray
     // Performs shallow copy (use clone() for deep).
     DArray& operator=(const DArray& rhs);
 
-    void init(Allocator* alloc, sz init_capacity = DARRAY_DEFAULT_CAPACITY);
+    void init(Allocator* alloc);
+    void init_capacity(Allocator* alloc, sz init_capacity = DEFAULT_CAPACITY);
     void init_slice(Allocator* alloc, Slice<Type> values, sz additional_capacity = 0);
     void push(const Type& value);
     void push(Slice<Type> values);
@@ -72,7 +74,8 @@ struct DArray
     Type* at_ref(sz idx);
     void set(const Type& val, sz idx);
     void swap(sz idx1, sz idx2);
-    Type operator[](sz idx) const;
+    Type& operator[](sz idx);
+    const Type& operator[](sz idx) const;
     sz len() const { return this->count; }
     Type* begin() { return this->data; }
     Type* end() { return this->data + this->count; }
@@ -81,7 +84,7 @@ struct DArray
     const Type& last() const { return *(this->data + this->count - 1); }
     Type* last_ref() { return this->data + this->count - 1; }
     bool is_empty() const { return this->count == 0; }
-    bool is_initialized() const { return this->data != null && this->alloc != null; }
+    bool is_initialized() const { return this->alloc != null; }
     void clear() { this->count = 0; }
     sz byte_size_used() const { return this->count * sizeof(Type); }
     sz byte_size_allocated() const { return this->capacity * sizeof(Type); }
@@ -110,6 +113,17 @@ DArray<Type>::DArray(const DArray& rhs)
 }
 
 template<typename Type>
+DArray<Type>& DArray<Type>::operator=(const DArray& rhs)
+{
+    ASSERT_MSG(this != &rhs, "You mustn't be an idiot");
+    this->data = rhs.data;
+    this->alloc = rhs.alloc;
+    this->count = rhs.count;
+    this->capacity = rhs.capacity;
+    return *this;
+}
+
+template<typename Type>
 DArray<Type>& DArray<Type>::operator=(DArray&& rhs)
 {
     ASSERT_MSG(this != &rhs, "You mustn't be an idiot");
@@ -126,21 +140,16 @@ DArray<Type>& DArray<Type>::operator=(DArray&& rhs)
 }
 
 template<typename Type>
-DArray<Type>& DArray<Type>::operator=(const DArray& rhs)
+void DArray<Type>::init(Allocator* alloc)
 {
-    ASSERT_MSG(this != &rhs, "You mustn't be an idiot");
-    this->data = rhs.data;
-    this->alloc = rhs.alloc;
-    this->count = rhs.count;
-    this->capacity = rhs.capacity;
-    return *this;
+    this->alloc = alloc;
 }
 
 template<typename Type>
-void DArray<Type>::init(Allocator* alloc, sz init_capacity)
+void DArray<Type>::init_capacity(Allocator* alloc, sz init_capacity)
 {
     ASSERT_GREATER_EQ_ZERO(init_capacity);
-    init_capacity = max(DARRAY_DEFAULT_CAPACITY, init_capacity);
+    init_capacity = rg::max(DEFAULT_CAPACITY, init_capacity);
     this->data = (Type*)allocator_allocate(alloc, init_capacity * sizeof(Type));
     this->capacity = init_capacity;
     this->alloc = alloc;
@@ -150,7 +159,7 @@ template<typename Type>
 void DArray<Type>::init_slice(Allocator* alloc, Slice<Type> values, sz additional_capacity)
 {
     ASSERT_NON_EMPTY_VAL(values);
-    sz init_cap = max(DARRAY_DEFAULT_CAPACITY, values.count + additional_capacity);
+    sz init_cap = rg::max(DEFAULT_CAPACITY, values.count + additional_capacity);
     this->data = (Type*)allocator_allocate(alloc, init_cap * sizeof(Type));
     this->capacity = init_cap;
     this->alloc = alloc;
@@ -286,7 +295,13 @@ inline void DArray<Type>::swap(sz idx1, sz idx2)
 }
 
 template<typename Type>
-inline Type DArray<Type>::operator[](sz idx) const
+inline const Type& DArray<Type>::operator[](sz idx) const
+{
+    return this->at(idx);
+}
+
+template<typename Type>
+inline Type& DArray<Type>::operator[](sz idx)
 {
     return this->at(idx);
 }
@@ -301,13 +316,15 @@ void DArray<Type>::reserve(sz needed)
     sz min_required = old_capacity + needed;
     sz new_capacity = old_capacity;
 
-    if (new_capacity == 0) new_capacity = DARRAY_DEFAULT_CAPACITY;
+    if (new_capacity == 0) new_capacity = DEFAULT_CAPACITY;
     while (new_capacity < min_required)
     {
         new_capacity *= 2;
     }
     
-    this->data = (Type*)allocator_reallocate(this->alloc, this->data, sizeof(Type) * new_capacity);
+    if (this->data) this->data = (Type*)allocator_reallocate(this->alloc, this->data, sizeof(Type) * new_capacity);
+    else this->data = (Type*)allocator_allocate(this->alloc, sizeof(Type) * new_capacity);
+
     this->capacity = new_capacity;
 }
 
@@ -316,17 +333,18 @@ Slice<Type> DArray<Type>::slice(sz start, sz offset) const
 {
     if (offset == -1) offset = this->count;
     ASSERT_GREATER_ZERO(offset);
-    return Slice{ this->data + start, offset };
+    ASSERT_MSG(start + offset <= this->count, "Mustn't exceed count");
+    return { this->data + start, offset };
 }
 
 template<typename Type>
 Slice<Type> DArray<Type>::slice_idx(sz start, sz end) const
 {
-    if (end == -1) end = this->count;
-    sz dist = end - start;
+    if (end == -1) end = this->count - 1;
+    sz dist = (end - start) + 1;
     ASSERT_GREATER_ZERO(dist);
-    Type* data = this->data;
-    return Slice{ data + start, dist };
+    ASSERT_MSG(start + dist <= this->count, "Mustn't exceed count");
+    return { this->data + start, dist };
 }
 
 template<typename Type>

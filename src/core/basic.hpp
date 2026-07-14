@@ -23,14 +23,14 @@
 	#define FMT_PLACEHOLDER_LEN "%.*s"
 #endif // _WIN32
 
-#ifdef PAGE_SIZE
-#define RG_PAGE_SIZE PAGE_SIZE
+#ifdef __PAGE_SIZE
+#define RG_PAGE_SIZE __PAGE_SIZE
 #else
 #define RG_PAGE_SIZE 4096
 #endif
 
-#ifdef THREAD_COUNT
-#define RG_THREAD_COUNT THREAD_COUNT
+#ifdef __THREAD_COUNT
+#define RG_THREAD_COUNT __THREAD_COUNT
 #else
 #define RG_THREAD_COUNT 4
 #endif
@@ -86,17 +86,29 @@ typedef time_t FileTimeUnit;
     #define DEBUG_BREAK()
 #endif //_DEBUG
 
+// Restrict (to avoid aliasing problems when accepting 2 identical pointer types).
+
+#if defined(__clang__) || defined(__GNUC__)
+    // Clang or GCC
+    #define RESTRICT __restrict__
+#elif defined(_MSC_VER)
+    // Microsoft Visual Studio
+    #define RESTRICT __restrict
+#else
+    #define RESTRICT
+#endif
+
 namespace rg
 {
 
-void assert_proc(bool expr);
-void assert_msg_proc(bool expr, CString fmt, ...);
+void assert_proc(bool expr, CString file, s32 line);
+void assert_msg_proc(bool expr, CString file, s32 line, CString fmt, ...);
 [[noreturn]] void panic(CString message = "", ...);
 [[noreturn]] void unreachable(CString message = "", ...);
 
 #ifdef RG_DEBUG
-	#define ASSERT(expr) assert_proc((expr))
-	#define ASSERT_MSG(expr, msg, ...) assert_msg_proc((expr), (msg), ##__VA_ARGS__)
+	#define ASSERT(expr) assert_proc((expr), __FILE__, __LINE__)
+	#define ASSERT_MSG(expr, msg, ...) assert_msg_proc((expr), __FILE__, __LINE__, (msg), ##__VA_ARGS__)
 	#define ASSERT_EQ_ZERO(expr) ASSERT_MSG((expr) == 0, "Must be equal to 0")
 	#define ASSERT_NON_ZERO(expr) ASSERT_MSG((expr) != 0, "Mustn't be equal to 0")
 	#define ASSERT_GREATER_ZERO(expr) ASSERT_MSG((expr) > 0, "Must be greater than 0")
@@ -173,9 +185,9 @@ enum struct LogLevel
 
 void log_proc(LogLevel level, CString fmt, ...);
 void log_proc_scoped(CString fmt, ...);
-void start_log_scope(LogLevel level, CString fmt);
-void start_log_scope(LogLevel level);
-void end_log_scope();
+void set_log_scope(LogLevel level, CString fmt);
+void set_log_scope(LogLevel level);
+void reset_log_scope();
 
 #ifdef RG_DEBUG
     #define LOG_INFO(fmt, ...) log_proc(LogLevel::INFO, fmt, ##__VA_ARGS__)
@@ -201,9 +213,9 @@ void end_log_scope();
 
 struct ScopedLogger
 {
-	ScopedLogger(LogLevel level, CString msg) { start_log_scope(level, msg); }
-	ScopedLogger(LogLevel level) { start_log_scope(level); }
-	~ScopedLogger() { end_log_scope(); }
+	ScopedLogger(LogLevel level, CString msg) { set_log_scope(level, msg); }
+	ScopedLogger(LogLevel level) { set_log_scope(level); }
+	~ScopedLogger() { reset_log_scope(); }
 };
 
 template<typename Type>
@@ -441,9 +453,16 @@ struct Maybe
     Type val;
     bool is_ok;
 
-    Maybe(): is_ok{false} {}
-    Maybe(bool want_ok): is_ok{want_ok} {}
-    Maybe(Type new_val, bool want_ok): val{new_val}, is_ok{want_ok} {}
+    explicit Maybe(): is_ok{false} {}
+    explicit Maybe(Type new_val): val{new_val}, is_ok{true} {}
+    Maybe(const Maybe& rhs): val{rhs.val}, is_ok{rhs.is_ok} {}
+    Maybe& operator=(const Maybe& rhs)
+    {
+    	ASSERT(this != &rhs);
+    	this->val = rhs.val;
+    	this->is_ok = rhs.is_ok;
+    	return *this;
+    }
 
 	void set_val(Type val);
 	void set_empty();

@@ -26,6 +26,11 @@ struct StrView : Slice<const char>
     Slice<char> to_char_slice_unsafe() { return { (char*)this->ptr, this->count }; }
 };
 
+inline StrView slice_to_str_view(Slice<char> slice)
+{
+    return { slice.ptr, slice.count };
+}
+
 inline bool is_digit(char c) { return c >= '0'  && c <= '9'; }
 bool contains_non_ascii(const char* start, const char* end);
 void trim_space_start(const char** start, sz* count);
@@ -39,7 +44,6 @@ void trim_space_both(const char** start, sz* count);
 
 typedef u32 Utf8Codepoint;
 
-constexpr sz DSTRING_DEFAULT_CAPACITY = 16;
 constexpr u32 UTF8_CODEPOINT_INVALID = u32(-1);
 
 struct Utf8CodepointIterator
@@ -58,9 +62,11 @@ private:
 
 struct DString : DArray<char>
 {
+    static constexpr sz DEFAULT_CAPACITY = 16;
     using DArray<char>::DArray;
-    void init(Allocator* alloc, sz init_capacity = DSTRING_DEFAULT_CAPACITY);
-    void init_slice(Allocator* alloc, Slice<char> slice, sz additional_capacity = 0);
+    using DArray<char>::init;
+    using DArray<char>::init_capacity;
+    using DArray<char>::init_slice;
     void init_view(Allocator* alloc, StrView str_view, sz additional_capacity = 0);
     void init_cstr(Allocator* alloc, CString cstr, bool preserve_null_term = true);
     void push(char c);
@@ -75,10 +81,8 @@ struct DString : DArray<char>
     void foreach_codepoint(void(*fn)(Utf8Codepoint&));
     u64 hash();
     CString cstr();
-    // View is constant.
-    StrView view() { return StrView{ this->data, this->count }; }
-    // Slice is modifiable.
-    Slice<char> slice() { return Slice{ this->data, this->count }; }
+    StrView view(sz start = 0, sz offset = -1);
+    StrView view_idx(sz start = 0, sz end = -1);
     bool is_null_term() { return this->count && this->last() == '\0'; }
 };
 
@@ -95,6 +99,7 @@ constexpr sz FSTRING_DEFAULT_CAPACITY = 16;
 template<sz CAPACITY = FSTRING_DEFAULT_CAPACITY>
 struct FString : FArray<char, CAPACITY>
 {
+    using FArray<char, CAPACITY>::FArray;
     FString() = default;
     FString(CString cstr);
     FString(CString cstr, sz size);
@@ -113,11 +118,8 @@ struct FString : FArray<char, CAPACITY>
     Utf8CodepointIterator get_codepoint_iter();
     void foreach_codepoint(void(*fn)(Utf8Codepoint));
     u64 hash();
-
-    // View is constant.
-    StrView view() { return StrView{ this->data, this->count }; }
-    // Slice is modifiable.
-    Slice<char> slice() { return Slice{ this->data, this->count }; }
+    StrView view(sz start = 0, sz offset = -1);
+    StrView view_idx(sz start = 0, sz end = -1);
     bool is_null_term() { return this->count && this->last() == '\0'; }
 };
 
@@ -221,6 +223,24 @@ void FString<CAPACITY>::ensure_no_null_term()
     if (this->is_empty()) return;
     if (!this->is_null_term()) return;
     this->count--;
+}
+
+template<sz CAPACITY>
+StrView FString<CAPACITY>::view(sz start, sz offset)
+{
+    if (offset == -1) offset = this->count;
+    ASSERT_MSG(start + offset <= this->count, "Mustn't exceed count");
+    return { this->data + start, offset };
+}
+
+template<sz CAPACITY>
+StrView FString<CAPACITY>::view_idx(sz start, sz end)
+{
+    if (end == -1) end = this->count - 1;
+    sz dist = (end - start) + 1;
+    ASSERT_GREATER_ZERO(dist);
+    ASSERT_MSG(start + dist <= this->count, "Mustn't exceed count");
+    return { this->data + start, dist };
 }
 
 template<sz CAPACITY>

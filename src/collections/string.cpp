@@ -103,18 +103,10 @@ void trim_space_both(const char** start, sz* count)
 
 // DString.
 
-void DString::init(Allocator* alloc, sz init_capacity)
-{
-    this->data = (char*)allocator_allocate(alloc, init_capacity * sizeof(char));
-    this->count = 0;
-    this->capacity = init_capacity;
-    this->alloc = alloc;
-}
-
 void DString::init_cstr(Allocator* alloc, CString cstr, bool preserve_null_term)
 {
     sz len = strlen(cstr);
-    sz init_cap = max(DSTRING_DEFAULT_CAPACITY, len + 1);
+    sz init_cap = rg::max(DEFAULT_CAPACITY, len + 1);
     this->data = (char*)allocator_allocate(alloc, init_cap * sizeof(char));
     if (preserve_null_term) len += 1;
     this->count = len;
@@ -123,22 +115,9 @@ void DString::init_cstr(Allocator* alloc, CString cstr, bool preserve_null_term)
     mem_copy(this->data, (void*)cstr, len);
 }
 
-void DString::init_slice(Allocator* alloc, Slice<char> slice, sz additional_capacity)
-{
-    sz init_cap = max(DSTRING_DEFAULT_CAPACITY, slice.count + additional_capacity);
-    this->data = (char*)allocator_allocate(alloc, init_cap * sizeof(char));
-    this->count = 0;
-    this->capacity = init_cap;
-    this->alloc = alloc;
-    if (slice.count)
-    {
-        this->push(slice);
-    }
-}
-
 void DString::init_view(Allocator* alloc, StrView str_view, sz additional_capacity)
 {
-    sz init_cap = max(DSTRING_DEFAULT_CAPACITY, str_view.count + additional_capacity);
+    sz init_cap = rg::max(DEFAULT_CAPACITY, str_view.count + additional_capacity);
     this->data = (char*)allocator_allocate(alloc, init_cap * sizeof(char));
     this->count = 0;
     this->capacity = init_cap;
@@ -231,6 +210,22 @@ void DString::ensure_no_null_term()
 {
     if (this->is_empty() || !this->is_null_term()) return;
     this->count--;
+}
+
+StrView DString::view(sz start, sz offset)
+{
+    if (offset == -1) offset = this->count;
+    ASSERT_MSG(start + offset <= this->count, "Mustn't exceed count");
+    return { this->data + start, offset };
+}
+
+StrView DString::view_idx(sz start, sz end)
+{
+    if (end == -1) end = this->count - 1;
+    sz dist = (end - start) + 1;
+    ASSERT_GREATER_ZERO(dist);
+    ASSERT_MSG(start + dist <= this->count, "Mustn't exceed count");
+    return { this->data + start, dist };
 }
 
 void DString::foreach_codepoint(void(*fn)(Utf8Codepoint&))

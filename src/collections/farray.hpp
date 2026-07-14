@@ -65,7 +65,8 @@ struct FArray
     Type* at_ref(sz idx);
     void set(Type val, sz idx);
     void swap(sz idx1, sz idx2);
-    Type operator[](sz idx) const;
+    Type& operator[](sz idx);
+    const Type& operator[](sz idx) const;
     sz len() const { return this->count; }
     constexpr sz capacity() const { return CAPACITY; }
     Type* begin() { return this->data; }
@@ -261,7 +262,13 @@ inline void FArray<Type, CAPACITY>::swap(sz idx1, sz idx2)
 }
 
 template<typename Type, sz CAPACITY>
-inline Type FArray<Type, CAPACITY>::operator[](sz idx) const
+inline const Type& FArray<Type, CAPACITY>::operator[](sz idx) const
+{
+    return this->at(idx);
+}
+
+template<typename Type, sz CAPACITY>
+inline Type& FArray<Type, CAPACITY>::operator[](sz idx)
 {
     return this->at(idx);
 }
@@ -454,7 +461,7 @@ struct Array
 
     constexpr sz len() const { return CAPACITY; }
     constexpr sz capacity() const { return CAPACITY; }
-    Type operator[](sz idx)
+    Type& operator[](sz idx)
     {
         ASSERT_IN_BOUNDS(idx >= 0 && idx < CAPACITY);
         return this->data[idx];
@@ -501,11 +508,20 @@ template<typename Type, typename EnumType>
 struct EnumArray : Array<Type, (sz)EnumType::EnumSize>
 {
     using Array<Type, (sz)EnumType::EnumSize>::Array;
-    inline Type operator[](EnumType idx) const;
+    inline Type& operator[](EnumType idx);
+    inline const Type& operator[](EnumType idx) const;
 };
 
 template<typename Type, typename EnumType>
-Type EnumArray<Type, EnumType>::operator[](EnumType e_idx) const
+Type& EnumArray<Type, EnumType>::operator[](EnumType e_idx)
+{
+    sz idx = sz(e_idx);
+    ASSERT_IN_BOUNDS(idx >= 0 && idx < (sz)EnumType::EnumSize);
+    return this->data[idx];
+}
+
+template<typename Type, typename EnumType>
+const Type& EnumArray<Type, EnumType>::operator[](EnumType e_idx) const
 {
     sz idx = sz(e_idx);
     ASSERT_IN_BOUNDS(idx >= 0 && idx < (sz)EnumType::EnumSize);

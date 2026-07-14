@@ -29,6 +29,8 @@ struct Atomic
     void store(Type new_val, AtomicOrder order = AtomicOrder::SEQ_CST);
     void add(Type rhs, AtomicOrder order = AtomicOrder::SEQ_CST);
     void sub(Type rhs, AtomicOrder order = AtomicOrder::SEQ_CST);
+    void inc(AtomicOrder order = AtomicOrder::SEQ_CST);
+    void dec(AtomicOrder order = AtomicOrder::SEQ_CST);
     void mul(Type rhs, AtomicOrder order = AtomicOrder::SEQ_CST);
     void div(Type rhs, AtomicOrder order = AtomicOrder::SEQ_CST);
     void bit_and(Type rhs, AtomicOrder order = AtomicOrder::SEQ_CST);
@@ -126,6 +128,20 @@ void Atomic<Type>::sub(Type rhs, AtomicOrder order)
 {
     using Ops = detail::Interlocked<sizeof(Type)>;
     Ops::fetch_add((volatile typename Ops::Type*)&this->val, (typename Ops::Type)(-(typename Ops::Type)rhs)); 
+}
+
+template<typename Type>
+void Atomic<Type>::inc(Type rhs, AtomicOrder order)
+{
+    using Ops = detail::Interlocked<sizeof(Type)>;
+    Ops::fetch_add((volatile typename Ops::Type*)&this->val, (typename Ops::Type)1); 
+}
+
+template<typename Type>
+void Atomic<Type>::dec(Type rhs, AtomicOrder order)
+{
+    using Ops = detail::Interlocked<sizeof(Type)>;
+    Ops::fetch_add((volatile typename Ops::Type*)&this->val, (typename Ops::Type)(-(typename Ops::Type)1)); 
 }
 
 template<typename Type>
@@ -233,6 +249,18 @@ void Atomic<Type>::sub(Type rhs, AtomicOrder order)
 }
 
 template<typename Type>
+void Atomic<Type>::inc(AtomicOrder order)
+{
+    __atomic_fetch_add(&this->val, 1, (s32)order); 
+}
+
+template<typename Type>
+void Atomic<Type>::dec(AtomicOrder order)
+{
+    __atomic_fetch_sub(&this->val, 1, (s32)order); 
+}
+
+template<typename Type>
 void Atomic<Type>::mul(Type rhs, AtomicOrder order)
 {
     __atomic_fetch_mul(&this->val, rhs, (s32)order); 
@@ -271,13 +299,13 @@ Type Atomic<Type>::exchange(Type rhs, AtomicOrder order)
 template<typename Type>
 bool Atomic<Type>::compare_exchange_weak(Type* expected_val, Type new_val, AtomicOrder success_order, AtomicOrder fail_order)
 {
-    return __atomic_compare_exchange_n(&this->val, expected_val, true, new_val, (s32)success_order, (s32)fail_order);
+    return __atomic_compare_exchange_n(&this->val, expected_val, new_val, true, (s32)success_order, (s32)fail_order);
 }
 
 template<typename Type>
 bool Atomic<Type>::compare_exchange_strong(Type* expected_val, Type new_val, AtomicOrder success_order, AtomicOrder fail_order)
 {
-    return __atomic_compare_exchange_n(&this->val, expected_val, false, new_val, (s32)success_order, (s32)fail_order);
+    return __atomic_compare_exchange_n(&this->val, expected_val, new_val, false, (s32)success_order, (s32)fail_order);
 }
 
 #endif

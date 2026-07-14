@@ -232,8 +232,8 @@ void vmem_display_info(Allocator *self)
     auto* vmem = (VmemAllocator*)self;
     sz fallback_allocated = vmem->calc_fallback_allocated();
 
-    start_log_scope(LogLevel::DEBUG, "Vmem allocator info:");
-    defer(end_log_scope());
+    set_log_scope(LogLevel::DEBUG, "Vmem allocator info:");
+    defer(reset_log_scope());
 
     // Display blocks.
     auto* block = (VmemAllocHeader*)vmem->mem_begin();

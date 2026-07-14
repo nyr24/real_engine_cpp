@@ -1,3 +1,4 @@
+#include "collections/string.hpp"
 #include "core/basic.hpp"
 #include "core/io.hpp"
 #include "collections/slice.hpp"
@@ -8,23 +9,29 @@ namespace rg
 // Path.
 
 intern void platform_process_cwd(Path* path, Allocator* alloc, sz add_cap = 0);
-intern sz get_steps_back_from_cwd_and_trim(Slice<char>* path);
+intern sz get_steps_back_from_cwd_and_trim(StrView path);
 
-void Path::init(Allocator* alloc, Slice<char> path, bool null_term)
+void Path::init(Allocator* alloc, Slice<char> init_path, bool null_term)
 {
-    path.replace(PATH_SEPARATOR_INVALID, PATH_SEPARATOR);
+    init_path.replace(PATH_SEPARATOR_INVALID, PATH_SEPARATOR);
+    StrView sv_path = slice_to_str_view(init_path);
+    this->init(alloc, sv_path, null_term);
+}
+
+void Path::init(Allocator* alloc, StrView init_path, bool null_term)
+{
     this->alloc = alloc;
 
-    if (path_is_absolute(path))
+    if (path_is_absolute(init_path))
     {
-        this->init(alloc, path.count);
-        this->push(path);
+        this->init_capacity(alloc, init_path.count);
+        this->push(init_path);
         if (null_term) this->ensure_null_term();
     }
     else
     {
-        sz steps_back_from_cwd = get_steps_back_from_cwd_and_trim(&path);
-        sz add_cap = path.count;
+        sz steps_back_from_cwd = get_steps_back_from_cwd_and_trim(init_path);
+        sz add_cap = init_path.count;
         platform_process_cwd(this, alloc, add_cap);
         // Do back steps.
         for (; steps_back_from_cwd > 0; --steps_back_from_cwd)
@@ -35,7 +42,7 @@ void Path::init(Allocator* alloc, Slice<char> path, bool null_term)
         this->push(PATH_SEPARATOR);
         ASSERT_MSG(this->last() == PATH_SEPARATOR, "Must be separated at end");
         this->ensure_no_null_term();
-        this->push(path);
+        this->push(init_path);
         if (null_term) this->ensure_null_term();
     }
 }
@@ -83,29 +90,29 @@ intern void platform_process_cwd(Path* path, Allocator* alloc, sz add_cap)
 // Returns a number of steps it needs to take from the cwd.
 // . == 0, ./ == 0, ../ == 1, ../../ == 2, etc.
 // if it doesn't start with a dot - returns 0
-intern sz get_steps_back_from_cwd_and_trim(Slice<char>* input_path)
+intern sz get_steps_back_from_cwd_and_trim(StrView input_path)
 {
-    if (path_is_absolute(*input_path)) return 0;
-    if (input_path->first() != '.') return 0;
+    if (path_is_absolute(input_path)) return 0;
+    if (input_path.first() != '.') return 0;
 
-    if (common_starts_with(input_path->ptr, input_path->count, RELATIVE_DIR_SELF.to_char_slice_unsafe()))
+    if (common_starts_with(input_path.ptr, input_path.count, RELATIVE_DIR_SELF))
     {
-        input_path->trim_start_n(2);
+        input_path.trim_start_n(2);
         return 0;
     }
 
     sz steps = 0;
-    if (common_starts_with(input_path->ptr, input_path->count, RELATIVE_DIR_PARENT.to_char_slice_unsafe()))
+    if (common_starts_with(input_path.ptr, input_path.count, RELATIVE_DIR_PARENT))
     {
-        input_path->trim_start_n(3);
+        input_path.trim_start_n(3);
         ++steps;
     }
 
-    ASSERT_MSG(input_path->first() != PATH_SEPARATOR, "Path separators should be trimmed");
+    ASSERT_MSG(input_path.first() != PATH_SEPARATOR, "Path separators should be trimmed");
     return steps;
 }
 
-inline bool path_is_absolute(Slice<char> path)
+inline bool path_is_absolute(StrView path)
 {
     return path.first() == PATH_SEPARATOR;
 }
@@ -139,15 +146,17 @@ void Path::convert_to_utf16()
 
 // Files.
 
-intern bool file_read_default(Path* path, DString* out_data, sz precomputed_file_size = 0);
-intern bool file_read_mmap(Path* path, DString* out_data, sz precomputed_file_size = 0);
+intern Maybe<DString> file_read_default(Allocator* alloc, Path* path, sz precomputed_file_size = 0);
+intern Maybe<DString> file_read_mmap(Allocator* alloc, Path* path, sz precomputed_file_size = 0);
 intern bool file_write_default(Path* path, Slice<u8> data, bool at_end = true);
 intern bool file_write_mmap(Path* path, Slice<u8> data, bool at_end = true);
 
-bool file_open(Path* path, FileHandle* out_handle, FileOpenBit flags)
+Maybe<FileHandle> file_open(Path* path, FileOpenBit flags)
 {
     ASSERT_INITIALIZED(path);
     path->ensure_null_term();
+
+    Maybe<FileHandle> res;
 
 #ifdef RG_PLATFORM_WIN32
     DWORD windows_flags = 0;
@@ -157,7 +166,7 @@ bool file_open(Path* path, FileHandle* out_handle, FileOpenBit flags)
     if (contains_non_ascii(path->data, path->end()))
     {
         path->convert_to_utf16();
-        *out_handle = ::CreateFileW(path->data,
+        res.val = ::CreateFileW(path->data,
             windows_flags,
             GENERIC_READ | GENERIC_WRITE,
             null,
@@ -167,7 +176,7 @@ bool file_open(Path* path, FileHandle* out_handle, FileOpenBit flags)
     }
     else
     {
-        *out_handle = ::CreateFileA(file_path,
+        res.val = ::CreateFileA(file_path,
             windows_flags,
             GENERIC_READ | GENERIC_WRITE,
             null,
@@ -182,14 +191,15 @@ bool file_open(Path* path, FileHandle* out_handle, FileOpenBit flags)
         if (u32(flags & FileOpenBit::READ)) unix_flags = O_RDWR;
         else unix_flags = O_WRONLY;
     }
-    *out_handle = ::open(path->cstr(), (s32)unix_flags);
+    res.val = ::open(path->cstr(), (s32)unix_flags);
 #endif
-    if (*out_handle == HANDLE_INVALID)
+    if (res.val == HANDLE_INVALID)
     {
         LOG_ERROR("Could not open file from path: " FMT_PLACEHOLDER_LEN, FMT_DSTRING(path));
-        return false;
+        return res;
     }
-    return true;
+    res.is_ok = true;
+    return res;
 }
 
 bool file_close(FileHandle handle)
@@ -243,7 +253,9 @@ bool file_memory_map(Path* path, FileMapEntry* out_entry, sz file_size)
 #ifdef RG_PLATFORM_WIN32
     path->ensure_utf16();
 
-    if (!file_open(path, &out_entry->file_handle, FileOpenBit::READ_WRITE)) return false;
+    auto [handle, is_open] = file_open(path, FileOpenBit::READ_WRITE);
+    if (!is_open) return false;
+    defer(file_close(handle));
 
     if (file_size == 0) file_size = file_get_size(out_entry->file_handle);
     out_entry->size = file_size;
@@ -265,100 +277,102 @@ bool file_memory_map(Path* path, FileMapEntry* out_entry, sz file_size)
 
     return true;
 #else
-    FileHandle fhandle;
-    if (!file_open(path, &fhandle, FileOpenBit::READ_WRITE)) return false;
-    defer(file_close(fhandle));
+    auto [handle, is_open] = file_open(path, FileOpenBit::READ_WRITE);
+    if (!is_open) return false;
+    defer(file_close(handle));
 
-    if (file_size == 0) file_size = file_get_size(fhandle);
+    if (file_size == 0) file_size = file_get_size(handle);
     out_entry->size = file_size;
-    out_entry->mapped_mem = (u8*)::mmap(null, out_entry->size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fhandle, 0);
+    out_entry->mapped_mem = (u8*)::mmap(null, out_entry->size, PROT_READ | PROT_WRITE, MAP_PRIVATE, handle, 0);
     ASSERT_MSG(out_entry->mapped_mem != MAP_FAILED, "Failed to map memory");
     return true;
 #endif
 }
 
-bool file_read(Allocator* alloc, Path* path, DString* out_res)
+Maybe<DString> file_read(Allocator* alloc, Path* path)
 {
-    ASSERT_NON_NULL(out_res);
     path->ensure_null_term();
 
     sz size = file_get_size_from_path(path);
-    if (!out_res->is_initialized()) out_res->init(alloc, size);
+    Maybe<DString> res;
     
     // Decide if we want to memory map it (large files).
     if (size <= FILE_MEMORY_MAP_BOUNDARY)
     {
-        if (!file_read_default(path, out_res, size)) return false;
+        res = file_read_default(alloc, path, size);
     }
     else
     {
-        if (!file_read_mmap(path, out_res, size)) return false;
+        res = file_read_mmap(alloc, path, size);
     }
-
-    ASSERT_MSG(out_res->byte_size_used() >= size, "Must've read equal to file size");
-    return true;
+    return res;
 }
 
-intern bool file_read_default(Path* path, DString* out_data, sz precomputed_file_size)
+intern Maybe<DString> file_read_default(Allocator* alloc, Path* path, sz precomputed_file_size)
 {
     ASSERT_NON_NULL(path);
-    ASSERT_INITIALIZED(out_data);
 
-    FileHandle handle;
-    if (!file_open(path, &handle, FileOpenBit::READ)) return false;
+    Maybe<DString> res;
+    auto [handle, is_opened] = file_open(path, FileOpenBit::READ);
+    if (!is_opened) return res;
     defer(file_close(handle));
 
     if (precomputed_file_size == 0) precomputed_file_size = file_get_size(handle);
-    out_data->reserve(precomputed_file_size);
+    res.val.init_capacity(alloc, precomputed_file_size);
 
     sz read_bytes_all = 0;
     sz read_bytes_curr = 0;
+    defer(res.val.count = read_bytes_all);
+
 #ifdef RG_PLATFORM_WIN32
     do
     {
         if (!::ReadFile(handle, out_data->data + read_bytes_all, file_size, &read_bytes_curr))
         {
             LOG_ERROR("Failed to read file data from path: " FMT_STR_LEN, FMT_DSTRING(path));
-            return false;
+            return res;
         }
         if (read_bytes_curr == 0)
         {
             ASSERT_MSG(read_bytes_all == precomputed_file_size, "Must be fully read");
-            return true;
+            res.is_ok = true;
+            return res;
         }
         read_bytes_all += read_bytes_curr; 
     } while (read_bytes_all < file_size);
 #else
     do
     {
-        read_bytes_curr = ::read(handle, out_data->data + read_bytes_all, precomputed_file_size - read_bytes_all);
+        read_bytes_curr = ::read(handle, res.val.data + read_bytes_all, precomputed_file_size - read_bytes_all);
         if (read_bytes_curr < 0)
         {
             LOG_ERROR("Failed to read from file: " FMT_PLACEHOLDER_LEN, FMT_DSTRING(path));
-            return false;
+            return res;
         }
         if (read_bytes_curr == 0)
         {
             ASSERT_MSG(read_bytes_all == precomputed_file_size, "Must be fully read");
-            return true;
+            res.is_ok = true;
+            return res;
         }
         read_bytes_all += read_bytes_curr; 
     } while (read_bytes_all < precomputed_file_size);
 #endif
-    return true;
+    res.is_ok = true;
+    return res;
 }
 
-intern bool file_read_mmap(Path* path, DString* out_data, sz precomputed_file_size)
+intern Maybe<DString> file_read_mmap(Allocator* alloc, Path* path, sz precomputed_file_size)
 {
-    ASSERT_INITIALIZED(out_data);
-
+    Maybe<DString> res;
     FileMapEntry mmap_entry;
-    if (!file_memory_map(path, &mmap_entry, precomputed_file_size)) return false;
+    if (!file_memory_map(path, &mmap_entry, precomputed_file_size)) return res;
     defer(mmap_entry.unmap());
 
-    out_data->reserve(mmap_entry.size);
-    out_data->push(mmap_entry.slice());
-    return true;
+    res.val.init_capacity(alloc, mmap_entry.size);
+    res.val.push(mmap_entry.slice());
+    res.is_ok = true;
+    return res;
 }
 
 bool file_set_cursor(FileHandle handle, FileSeekPos pos, sz offset)
@@ -412,8 +426,8 @@ intern bool file_write_default(Path* path, Slice<u8> data, bool at_end)
     ASSERT_INITIALIZED(path);
     ASSERT_GREATER_ZERO(data.count);
 
-    FileHandle handle;
-    if (!file_open(path, &handle, FileOpenBit::WRITE)) return false;
+    auto [handle, is_open] = file_open(path, FileOpenBit::WRITE);
+    if (!is_open) return false;
     defer(file_close(handle));
 
     if (at_end) file_set_cursor(handle, FileSeekPos::END);

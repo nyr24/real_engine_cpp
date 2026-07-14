@@ -27,6 +27,7 @@ namespace rg
         using DString::DString;
         using DString::init;
         void init(Allocator* alloc, Slice<char> input_path, bool null_term = true);
+        void init(Allocator* alloc, StrView input_path, bool null_term = true);
 
     #ifdef RG_PLATFORM_WIN32
     public:
@@ -38,7 +39,7 @@ namespace rg
     };
 
     Path get_cwd(Allocator* alloc);
-    inline bool path_is_absolute(Slice<char> path);
+    inline bool path_is_absolute(StrView path);
 
     struct FileMapEntry
     {
@@ -84,7 +85,7 @@ namespace rg
     bool file_close(FileHandle handle);
     sz file_get_size(FileHandle handle);
     sz file_get_size_from_path(Path* path);
-    bool file_read(Allocator* alloc, Path* path, DString* out_data);
+    Maybe<DString> file_read(Allocator* alloc, Path* path);
     bool file_write(Path* path, Slice<u8> data, bool at_end = true);
     bool file_memory_map(Path* path, FileMapEntry* out_entry, sz file_size = 0);
     bool file_set_cursor(FileHandle handle, FileSeekPos mode, sz offset = 0);

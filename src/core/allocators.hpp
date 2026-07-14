@@ -21,17 +21,17 @@ struct FallbackAllocation
 struct VmemAllocHeader
 {
     // msb[56=size..8=is_free]lsb
-    Bits<u64> bits;
+    BitInt<u64> bits;
     VmemAllocHeader* prev_phys;
 
-    sz size() { return (sz)this->bits.get(BIT_MASK_64_U56_HIGH); }
-    bool is_free() { return (bool)this->bits.get(BIT_MASK_64_U8_LOW); }
+    sz size() { return (sz)this->bits.get_mask(BIT_MASK_64_U56_HIGH); }
+    bool is_free() { return (bool)this->bits.get_mask(BIT_MASK_64_U8_LOW); }
     Pair<sz, bool> size_and_is_free()
     {
         return { this->size(), this->is_free() };
     }
-    void set_size(sz new_size) { this->bits.set(u64(new_size), BIT_MASK_64_U56_HIGH); }
-    void set_is_free(bool new_free) { this->bits.set(new_free, BIT_MASK_64_U8_LOW); } 
+    void set_size(sz new_size) { this->bits.set_mask(u64(new_size), BIT_MASK_64_U56_HIGH); }
+    void set_is_free(bool new_free) { this->bits.set_mask(new_free, BIT_MASK_64_U8_LOW); } 
     void set_size_and_is_free(sz new_size, bool new_free)
     {
         this->set_size(new_size);
@@ -146,14 +146,14 @@ void heap_display_info(Allocator* self);
 struct ArenaAllocHeader
 {
 private:
-    Bits<u64, BitMask64> bits;
+    BitInt<u64, BitMask64> bits;
 public:
-    u64 size() { return this->bits.get(BIT_MASK_64_U56_HIGH); }
-    u8 padding() { return (u8)this->bits.get(BIT_MASK_64_U16_LOW); };
+    u64 size() { return this->bits.get_mask(BIT_MASK_64_U56_HIGH); }
+    u8 padding() { return (u8)this->bits.get_mask(BIT_MASK_64_U16_LOW); };
     Pair<u64, u8> size_and_padding() { return { this->size(), this->padding() }; }
 
-    void set_size(u64 new_size) { this->bits.set(new_size, BIT_MASK_64_U56_HIGH); }
-    void set_padding(u8 new_padding) { this->bits.set(u64(new_padding), BIT_MASK_64_U16_LOW); };
+    void set_size(u64 new_size) { this->bits.set_mask(new_size, BIT_MASK_64_U56_HIGH); }
+    void set_padding(u8 new_padding) { this->bits.set_mask(u64(new_padding), BIT_MASK_64_U16_LOW); };
     void set_size_and_padding(u64 size, u8 padding)
     {
         this->set_size(size);

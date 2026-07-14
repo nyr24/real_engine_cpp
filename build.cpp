@@ -8,8 +8,8 @@ const char* DEBUG_EXE = "debug/real_engine";
 const char* RELEASE_EXE = "release/real_engine";
 const char* DEBUG_OUTPUT_DIR = "debug/output";
 const char* RELEASE_OUTPUT_DIR = "release/output";
-const char* THREAD_COUNT_DEF_FMT = "THREAD_COUNT=%d";
-const char* PAGE_SIZE_DEF_FMT = "PAGE_SIZE=%d";
+const char* THREAD_COUNT_DEF_FMT = "__THREAD_COUNT=%d";
+const char* PAGE_SIZE_DEF_FMT = "__PAGE_SIZE=%d";
 
 int main(int argc, char **argv)
 {
@@ -29,7 +29,7 @@ int main(int argc, char **argv)
     else log_info("Starting release build...\n");
 
     FlagsOptimization optimization = is_release ? FlagsOptimization::SPEED : FlagsOptimization::NONE;
-    FlagsSTD std = FlagsSTD::NONE;
+    FlagsSTD std = FlagsSTD::CPP20;
 
     rebuild_itself((ExecutableOptions{ .debug = !is_release, .optimize = optimization, .std = std }),
                     argc, argv, "deps/ezbuild/ezbuild.hpp");
