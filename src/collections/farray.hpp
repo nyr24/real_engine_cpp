@@ -34,7 +34,7 @@ struct FArray
     void pop(Slice<Type> out_vals);
     void pop_and_move_ownership(Type* out_val);
     void pop_and_move_ownership(Slice<Type> out_vals);
-    Type remove_unordered_at(sz idx);
+    void remove_unordered_at(sz idx);
     Slice<Type> slice(sz start = 0, sz offset = -1) const;
     Slice<Type> slice_idx(sz start = 0, sz end = -1) const;
     Slice<Type> slice_start_n(sz count);
@@ -81,7 +81,7 @@ struct FArray
     void clear() { this->count = 0; }
     sz remain() const { return CAPACITY - this->count; }
     sz byte_size_used() const { return this->count * sizeof(Type); }
-    constexpr sz byte_size_allocated() const { return sizeof(Type) * CAPACITY; }
+    constexpr sz byte_size_allocated() const { return CAPACITY * sizeof(Type); }
     constexpr sz byte_size_all() const { return sizeof(FArray<Type>); }
 };
 
@@ -101,29 +101,31 @@ template<typename Type, sz CAPACITY>
 FArray<Type, CAPACITY>::FArray(const FArray& rhs)
     : count{rhs.count}
 {
-    mem_copy(this->data, rhs.data, rhs.byte_size_allocated()); 
+    mem_copy(this->data, rhs.data, rhs.byte_size_used()); 
 }
 
 template<typename Type, sz CAPACITY>
 FArray<Type, CAPACITY>::FArray(FArray&& rhs)
     : count{rhs.count}
 {
-    mem_copy(this->data, rhs.data, rhs.byte_size_allocated()); 
+    mem_copy(this->data, rhs.data, rhs.byte_size_used()); 
 }
 
 template<typename Type, sz CAPACITY>
 FArray<Type, CAPACITY>& FArray<Type, CAPACITY>::operator=(const FArray& rhs)
 {
+    ASSERT(this != &rhs);
     this->count = rhs.count;
-    mem_copy(this->data, rhs.data, rhs.byte_size_allocated()); 
+    mem_copy(this->data, rhs.data, rhs.byte_size_used()); 
     return *this;
 }
 
 template<typename Type, sz CAPACITY>
 FArray<Type, CAPACITY>& FArray<Type, CAPACITY>::operator=(FArray&& rhs)
 {
+    ASSERT(this != &rhs);
     this->count = rhs.count;
-    mem_copy(this->data, rhs.data, rhs.byte_size_allocated()); 
+    mem_copy(this->data, rhs.data, rhs.byte_size_used()); 
     return *this;
 }
 
@@ -184,7 +186,7 @@ void FArray<Type, CAPACITY>::pop(Slice<Type> out_vals)
         while (write_idx < out_vals.count)
         {
             Type* pop_val = this->data + (this->count - 1) - write_idx;
-            out_vals.data[write_idx] = rg::move(*pop_val);
+            out_vals.ptr[write_idx] = rg::move(*pop_val);
             ++write_idx;
         }
     }
@@ -209,7 +211,7 @@ void FArray<Type, CAPACITY>::pop_and_move_ownership(Slice<Type> out_vals)
         while (write_idx < out_vals.count)
         {
             Type* pop_val = this->data + (this->count - 1) - write_idx;
-            out_vals.data[write_idx] = rg::move(*pop_val);
+            out_vals.ptr[write_idx] = rg::move(*pop_val);
             ++write_idx;
         }
     }
@@ -217,19 +219,17 @@ void FArray<Type, CAPACITY>::pop_and_move_ownership(Slice<Type> out_vals)
 }
 
 template<typename Type, sz CAPACITY>
-Type FArray<Type, CAPACITY>::remove_unordered_at(sz idx)
+void FArray<Type, CAPACITY>::remove_unordered_at(sz idx)
 {
     ASSERT_IN_BOUNDS(idx >= 0 && idx < this->count);
 
     if (idx == this->count - 1)
     {
-        return this->pop();
+        this->count--;
+        return;
     }
-
     this->swap(idx, this->count - 1);
-    Type val = this->last();
     this->count--;
-    return val;
 }
 
 template<typename Type, sz CAPACITY>
@@ -284,11 +284,10 @@ Slice<Type> FArray<Type, CAPACITY>::slice(sz start, sz offset) const
 template<typename Type, sz CAPACITY>
 Slice<Type> FArray<Type, CAPACITY>::slice_idx(sz start, sz end) const
 {
-    if (end == -1) end = this->count;
-    sz dist = end - start;
+    if (end == -1) end = this->count - 1;
+    sz dist = (end - start) + 1;
     ASSERT_GREATER_ZERO(dist);
-    Type* data = this->data;
-    return Slice{ data + start, dist };
+    return { this->data + start, dist };
 }
 
 template<typename Type, sz CAPACITY>
@@ -304,7 +303,7 @@ template<typename Type, sz CAPACITY>
 void FArray<Type, CAPACITY>::trim_end_n(sz trim_count)
 {
     ASSERT_MSG(trim_count < this->count, "Shouldn't exceed inner count");
-    common_trim_end_n(&this->data, this->count, trim_count);
+    common_trim_end_n(&this->data, &this->count, trim_count);
 }
 
 template<typename Type, sz CAPACITY>
@@ -418,7 +417,7 @@ void FArray<Type, CAPACITY>::foreach(void (*fn) (const Type&)) const
 template<typename Type, sz CAPACITY>
 void FArray<Type, CAPACITY>::foreach_ref(void (*fn) (Type*))
 {
-    for (const auto& curr : *this)
+    for (auto& curr : *this)
     {
         fn(&curr);
     }

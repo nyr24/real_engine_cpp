@@ -3,7 +3,7 @@
 
 namespace rg
 {
-    
+ 
 void* allocator_allocate(Allocator* alloc, sz size, sz alignment, bool zero_mem)
 {
     ASSERT_MSG(alloc->vtable != null, "Vtable should exist");
@@ -230,7 +230,6 @@ void* vmem_reallocate(Allocator* self, void* ptr, sz new_size, sz alignment)
 void vmem_display_info(Allocator *self)
 {
     auto* vmem = (VmemAllocator*)self;
-    sz fallback_allocated = vmem->calc_fallback_allocated();
 
     set_log_scope(LogLevel::DEBUG, "Vmem allocator info:");
     defer(reset_log_scope());
@@ -243,7 +242,7 @@ void vmem_display_info(Allocator *self)
     
     while (block && block->size() && block < vmem->mem_end())
     {
-        sz block_size = block->size(); 
+        block_size = block->size(); 
         LOG_SCOPED("[%ldB] / [%0.2fKb] / [%0.2fMb] - %s\n",
             block_size, f32(block_size) / KB, f32(block_size) / MB,
             block->is_free() ? FREE_STR : USED_STR);

@@ -1,5 +1,4 @@
 #include <stdarg.h>
-#include <pthread.h>
 #include "core/basic.hpp"
 #include "collections/farray.hpp"
 #include "core/bits.hpp"
@@ -8,17 +7,82 @@
 namespace rg
 {
 
-// AppContext.
+// Context.
 
-void AppContext::init()
+intern Context context;
+thread_local Arena* temp_alloc;
+
+void context_init(Allocator* allocator)
 {
-    this->logger_mutex.init();
+    context.allocator = allocator;
+    context.rng.init();
+    context.logger_mutex.init();
 }
 
-void AppContext::destroy()
+void context_destroy()
 {
-    this->logger_mutex.destroy();
+    context.logger_mutex.destroy();
 }
+
+Context& get_context()
+{
+    return context;
+}
+
+void init_temp_allocator(Allocator* backing_alloc, sz capacity)
+{
+    temp_alloc = Arena::create(backing_alloc, capacity);
+}
+
+Arena* get_temp_allocator()
+{
+    ASSERT_NON_NULL(temp_alloc);
+    return temp_alloc;
+}
+
+// Xorshift rng.
+
+void XorshiftRng::init(u64 seed)
+{
+    if (seed == 0)
+    {
+        state = u64(::time(null));
+    }
+    else
+    {
+        state = seed;
+    }
+};
+
+u64 XorshiftRng::next_int()
+{
+    u64 x = this->state;
+    x ^= x << 12;
+    x ^= x >> 25;
+    x ^= x << 27;
+    this->state = x;
+    return x;
+}
+
+f32 XorshiftRng::next_float()
+{
+    return (f32)next_int() * 0x1.0p-32f;
+}
+
+u64 XorshiftRng::next_int_in_range(u64 min, u64 max)
+{
+    if (min >= max) return min;
+    u64 range = max - min + 1;
+    return min + (this->next_int() % range);
+}
+
+f32 XorshiftRng::next_float_in_range(f32 min, f32 max)
+{
+    if (min >= max) return min;
+    return min + (this->next_float() * (max - min));
+}
+
+// Panic / unreachable.
 
 // TODO: panic should execute have a destruction queue before exit for safety.
 [[noreturn]] void panic(CString message, ...)
@@ -68,12 +132,12 @@ void log_proc(LogLevel level, CString fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
-    auto& app_ctx = AppContext::get();
-    app_ctx.logger_mutex.lock();
+    auto& context = get_context();
+    context.logger_mutex.lock();
     printn(LOG_INTROS[level]);
     vfprintf(stdout, fmt, args);
     printn(LOG_COLOR_RESET);
-    app_ctx.logger_mutex.unlock();
+    context.logger_mutex.unlock();
     va_end(args);
 }
 
@@ -81,10 +145,10 @@ void log_proc_scoped(CString fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
-    auto& app_ctx = AppContext::get();
-    app_ctx.logger_mutex.lock();
+    auto& context = get_context();
+    context.logger_mutex.lock();
     vfprintf(stdout, fmt, args);
-    app_ctx.logger_mutex.unlock();
+    context.logger_mutex.unlock();
     va_end(args);
 }
 

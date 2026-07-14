@@ -66,8 +66,8 @@ struct HashSet
     sz len() { return this->count; }
     bool is_empty() { return this->count == 0; }
     bool is_initialized() { return this->alloc != null; }
-    sz byte_size_used() { return this->count * (sizeof(u64) + sizeof(Type) + sizeof(Type)); }
-    sz byte_size_allocated() { return this->capacity * (sizeof(u64) + sizeof(Type) + sizeof(Type)); }
+    sz byte_size_used() { return this->count * (sizeof(u64) + sizeof(Type)); }
+    sz byte_size_allocated() { return this->capacity * (sizeof(u64) + sizeof(Type)); }
 private:
     void clear(Slice<u64> hashes);
     sz find_idx(const Type& key, Type* keys, Type* values);
@@ -127,9 +127,9 @@ void HashSet<Type>::init(Allocator* alloc, sz capacity, f32 load_factor)
 }
 
 template<typename Type>
-void HashSet<Type>::init_with_values(Allocator* alloc, Slice<Type> pairs, sz add_capacity, f32 load_factor)
+void HashSet<Type>::init_with_values(Allocator* alloc, Slice<Type> values, sz add_capacity, f32 load_factor)
 {
-    sz capacity = next_power_of_2(max(DEFAULT_CAPACITY, pairs.count + add_capacity));
+    sz capacity = next_power_of_2(max(DEFAULT_CAPACITY, values.count + add_capacity));
     sz mem_req = calc_mem_req(capacity); 
     this->data = (u64*)allocator_allocate(alloc, mem_req);
     this->alloc = alloc;
@@ -138,9 +138,9 @@ void HashSet<Type>::init_with_values(Allocator* alloc, Slice<Type> pairs, sz add
     this->count = 0;
     this->clear({ this->data, this->capacity });
 
-    for (auto* curr = pairs.begin(); curr != pairs.end(); ++curr)
+    for (const Type& val : values)
     {
-        this->put(curr->key, curr->val);
+        this->put(val);
     }
 }
 
@@ -259,7 +259,7 @@ bool HashSet<Type>::remove(const Type& val)
 
     curr_idx = 0;
 
-    for (; curr_idx < this->capacity; ++curr_idx)
+    for (; curr_idx < idx; ++curr_idx)
     {
         if (this->data[curr_idx] == HASH_EMPTY) return false;
         if (this->data[curr_idx] == search_hash && values[curr_idx] == val)
@@ -368,7 +368,7 @@ void HashSet<Type>::foreach_value(void(*fn)(const Type&))
     {
         value_ref = iter.next_value();
         if (!value_ref) return;
-        fn(value_ref);
+        fn(*value_ref);
     }
 }
 
@@ -393,7 +393,9 @@ Type* HashSet<Type>::Iter::next_value()
 {
     if (this->is_at_end()) return null;
     auto values = values_begin(this->data, this->capacity);
-    return values + this->pos;
+    Type* res = values + this->pos;
+    this->pos++;
+    return res;
 }
 
 // Shared.

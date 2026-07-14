@@ -94,7 +94,7 @@ public:
     }
     void set_all()
     {
-        this->storage &= ~Type(0);
+        this->storage |= ~Type(0);
     }
     void unset_all()
     {
@@ -154,7 +154,7 @@ public:
     }
     void set_all()
     {
-        storage.bit_and(~Type(0));
+        storage.bit_or(~Type(0));
     }
     void unset_all()
     {
@@ -184,14 +184,12 @@ public:
     void set(sz idx)
     {
         auto [bucket_idx, bit_idx] = this->calc_indices(idx);
-        BucketType bucket = this->bit_buckets[bucket_idx];
-        bucket |= BucketType(1) << bit_idx;
+        this->bit_buckets[bucket_idx] |= BucketType(1) << bit_idx;
     }
     void unset(sz idx)
     {
         auto [bucket_idx, bit_idx] = this->calc_indices(idx);
-        BucketType bucket = this->bit_buckets[bucket_idx];
-        bucket &= ~(BucketType(1) << bit_idx);
+        this->bit_buckets[bucket_idx] &= ~(BucketType(1) << bit_idx);
     }
     void set_all()
     {

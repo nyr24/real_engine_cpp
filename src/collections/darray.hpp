@@ -40,7 +40,7 @@ struct DArray
     void pop(Slice<Type> out_vals);
     void pop_and_move_ownership(Type* out_val);
     void pop_and_move_ownership(Slice<Type> out_vals);
-    Type remove_unordered_at(sz idx);
+    void remove_unordered_at(sz idx);
     void reserve(sz needed);
     void destroy();
     DArray<Type> clone();
@@ -216,7 +216,7 @@ void DArray<Type>::pop(Slice<Type> out_vals)
         while (write_idx < out_vals.count)
         {
             Type* pop_val = this->data + (this->count - 1) - write_idx;
-            out_vals.data[write_idx] = *pop_val;
+            out_vals.ptr[write_idx] = *pop_val;
             ++write_idx;
         }
     }
@@ -241,7 +241,7 @@ void DArray<Type>::pop_and_move_ownership(Slice<Type> out_vals)
         while (write_idx < out_vals.count)
         {
             Type* pop_val = this->data + (this->count - 1) - write_idx;
-            *(out_vals.data + write_idx) = rg::move(*pop_val);
+            *(out_vals.ptr + write_idx) = rg::move(*pop_val);
             ++write_idx;
         }
     }
@@ -249,19 +249,17 @@ void DArray<Type>::pop_and_move_ownership(Slice<Type> out_vals)
 }
 
 template<typename Type>
-Type DArray<Type>::remove_unordered_at(sz idx)
+void DArray<Type>::remove_unordered_at(sz idx)
 {
     ASSERT_IN_BOUNDS(idx >= 0 && idx < this->count);
 
     if (idx == this->count - 1)
     {
-        return this->pop();
+        this->count--;
+        return;
     }
-
     this->swap(idx, this->count - 1);
-    Type val = this->last();
     this->count--;
-    return val;
 }
 
 template<typename Type>
@@ -360,7 +358,7 @@ template<typename Type>
 void DArray<Type>::trim_end_n(sz trim_count)
 {
     ASSERT_MSG(trim_count < this->count, "Shouldn't exceed inner count");
-    common_trim_end_n(&this->data, this->count, trim_count);
+    common_trim_end_n(&this->data, &this->count, trim_count);
 }
 
 template<typename Type>

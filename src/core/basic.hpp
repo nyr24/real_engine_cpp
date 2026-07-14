@@ -514,22 +514,11 @@ struct XorshiftRng
 {
     u64 state;
 
-    XorshiftRng(u64 seed)
-	{
-	    if (seed == 0)
-	    {
-	        state = u64(time(null));
-	    }
-	    else
-	    {
-	        state = seed;
-	    }
-	};
-
-    template<typename Type>
-    Type next();
-    template<typename Type>
-    Type next_in_range(Type min, Type max);
+    void init(u64 seed = 0);
+    u64 next_int();
+    f32 next_float();
+    u64 next_int_in_range(u64 min, u64 max);
+    f32 next_float_in_range(f32 min, f32 max);
 };
 
 // Hash (fnv1a).

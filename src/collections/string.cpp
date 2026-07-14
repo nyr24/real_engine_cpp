@@ -1,4 +1,5 @@
 #include <cstdarg>
+#include "core/context.hpp"
 #include "collections/string.hpp"
 
 namespace rg
@@ -110,7 +111,7 @@ void DString::init_cstr(Allocator* alloc, CString cstr, bool preserve_null_term)
     this->data = (char*)allocator_allocate(alloc, init_cap * sizeof(char));
     if (preserve_null_term) len += 1;
     this->count = len;
-    this->capacity = capacity;
+    this->capacity = init_cap;
     this->alloc = alloc;
     mem_copy(this->data, (void*)cstr, len);
 }
@@ -185,8 +186,11 @@ void DString::push_fmt(CString fmt, ...)
     s32 size = vsnprintf(null, 0, fmt, args);
     if (size > 0)
     {
-        char* res = (char*)allocator_allocate(this->alloc, size);
+        auto* talloc = get_temp_allocator();
+        TEMP_ALLOC_SCOPE(talloc);
+        char* res = (char*)allocator_allocate(talloc, size + 1);
         vsnprintf(res, size, fmt, args);
+        va_start(args, fmt);
         StrView str_view{ res, size };
         this->push(str_view);
     }

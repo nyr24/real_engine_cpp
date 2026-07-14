@@ -339,13 +339,15 @@ bool common_trim_sequence_start(Type** ptr, sz* count, Slice<Type> trim_seq)
     if (!common_starts_with(*ptr, count, trim_seq)) return false;
     *ptr += trim_seq.count;
     *count -= trim_seq.count;
+    return true;
 }
 
 template<typename Type>
 bool common_trim_sequence_end(Type** ptr, sz* count, Slice<Type> trim_seq)
 {
     if (!common_ends_with(*ptr, count, trim_seq)) return false;
-    count -= trim_seq.count;
+    *count -= trim_seq.count;
+    return true;
 }
 
 template<typename Type>
@@ -380,7 +382,7 @@ void common_trim_from_end_to_first_occur(Type** start, sz* count, Type search, b
 template<typename Type>
 void common_trim_from_end_to_last_occur(Type** start, sz* count, Type search, bool inclusive)
 {
-    sz idx = common_index_of(*start, *count, search);
+    sz idx = common_last_index_of(*start, *count, search);
     if (idx == INDEX_INVALID || idx == 0) return;
     if (inclusive) idx++;
     *count = idx;
@@ -399,7 +401,7 @@ sz common_index_of(Type* start, sz count, Type search)
 template<typename Type>
 sz common_index_of(Type* start, sz count, Slice<Type> slice)
 {
-    if (slice.count == 1) return common_index_of(slice[0]);
+    if (slice.count == 1) return common_index_of(start, count, slice[0]);
 
     Type* curr;
     Type* inp_curr = slice.at_ref(1);

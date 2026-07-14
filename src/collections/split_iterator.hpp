@@ -45,8 +45,8 @@ Slice<Type> SplitIterator<Type>::next()
     sz dist = curr - start;
     ASSERT_MSG(dist > 0, "Distance can't be zero");
 
-    Slice<Type> res{ this->view + start, dist };
-    this->pos += dist;
+    Slice<Type> res{ this->view.ptr + start, dist };
+    this->pos += dist + 1;
     return res;
 }
 

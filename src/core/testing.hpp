@@ -10,7 +10,10 @@ namespace rg
 s32 rand_in_range(s32 start, s32 end);
 void populate_buff_ascii(char* buff, sz capacity);
 void print_buff_ascii(char* buff, sz capacity);
+bool is_prime(s32 x);
+s32 next_prime(s32 x);
 
+// Arbitrary structure for testing.
 struct Entity
 {
     FString<20> name;

@@ -11,12 +11,24 @@ const char* RELEASE_OUTPUT_DIR = "release/output";
 const char* THREAD_COUNT_DEF_FMT = "__THREAD_COUNT=%d";
 const char* PAGE_SIZE_DEF_FMT = "__PAGE_SIZE=%d";
 
+const char* RELEASE_INPUT_OPT = "release";
+const char* WARNING_INPUT_OPT = "warn";
+
 int main(int argc, char **argv)
 {
     bool is_release = false;
+    bool include_warnings = false;
+
     if (argc > 1)
     {
-        is_release = memcmp(argv[1], "release", 5) == 0;
+        for (s32 i = 0; i < argc; ++i)
+        {
+            char* arg = argv[i];
+            if (memcmp(arg, RELEASE_INPUT_OPT, 7) == 0)
+                is_release = true;
+            else if (memcmp(arg, WARNING_INPUT_OPT, 4) == 0)
+                include_warnings = true;
+        }
     }
 
     SystemInfo sys_info = get_system_info();
@@ -58,6 +70,13 @@ int main(int argc, char **argv)
     shared_flags.push("-march=native");
     shared_flags.push("-fno-rtti");
     shared_flags.push("-fno-exceptions");
+
+    if (include_warnings)
+    {
+        shared_flags.push("-Wconversion");
+        shared_flags.push("-Wsign-conversion");
+        shared_flags.push("-Wfloat-conversion");
+    }
     // shared_flags.push("-nostdlib++");
     // shared_flags.push("-nostdinc++");
 

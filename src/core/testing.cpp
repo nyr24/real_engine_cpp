@@ -23,4 +23,24 @@ void print_buff_ascii(char* buff, sz capacity)
     printfn("%.*s", (s32)capacity, buff);
 }
 
+bool is_prime(int x)
+{
+    if (x < 2) return false;
+    for (s32 i = 2; i < x; ++i)
+    {
+        if (x % i == 0)
+		{
+            return false;
+		}
+    }
+    return true;
+}
+
+s32 next_prime(s32 x)
+{
+    for (; !is_prime(x); ++x)
+	{}
+    return x;
+}
+
 } // rg

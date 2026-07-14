@@ -272,7 +272,7 @@ bool HashMap<Key, Value>::remove(const Key& key)
 
     curr_idx = 0;
 
-    for (; curr_idx < this->capacity; ++curr_idx)
+    for (; curr_idx < idx; ++curr_idx)
     {
         if (this->data[curr_idx] == HASH_EMPTY) return false;
         if (this->data[curr_idx] == search_hash && keys[curr_idx] == key)
@@ -440,7 +440,7 @@ void HashMap<Key, Value>::foreach_value(void(*fn)(const Value&))
     {
         value_ref = iter.next_value();
         if (!value_ref) return;
-        fn(value_ref);
+        fn(*value_ref);
     }
 }
 
@@ -465,7 +465,9 @@ Pair<Key*, Value*> HashMap<Key, Value>::Iter::next_pair()
 {
     if (this->is_at_end()) return { null, null };
     auto [keys, values] = keys_values_begin(this->data, this->capacity);
-    return { keys + this->pos, values + this->pos };
+    Pair<Key*, Value*> res = { keys + this->pos, values + this->pos };
+    this->pos++;
+    return res;
 }
 
 template<typename Key, typename Value>
@@ -473,7 +475,9 @@ Key* HashMap<Key, Value>::Iter::next_key()
 {
     if (this->is_at_end()) return null;
     auto [keys, _] = keys_values_begin(this->data, this->capacity);
-    return keys + this->pos;
+    Key* res = keys + this->pos;
+    this->pos++;
+    return res;
 }
 
 template<typename Key, typename Value>
@@ -481,7 +485,9 @@ Value* HashMap<Key, Value>::Iter::next_value()
 {
     if (this->is_at_end()) return null;
     auto [_, values] = keys_values_begin(this->data, this->capacity);
-    return values + this->pos;
+    Value* res = values + this->pos;
+    this->pos++;
+    return res;
 }
 
 // Shared.
