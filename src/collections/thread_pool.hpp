@@ -35,7 +35,7 @@ struct ThreadPool
 {
     static constexpr u32 INIT_BIT = 1 << 0;
     static constexpr u32 STOP_BIT = 1 << 1;
- 
+
     Array<Thread, THREAD_COUNT> threads;
     Mutex mutex;
     ConditionVariable work_acquired;
@@ -112,7 +112,6 @@ intern s32 worker(void* arg)
 template<sz THREAD_COUNT, sz MAX_TASKS>
 void ThreadPool<THREAD_COUNT, MAX_TASKS>::init()
 {
-    this->active_threads.set_all();
     this->mutex.init();
     this->work_acquired.init();
     this->work_finished.init();
@@ -121,6 +120,7 @@ void ThreadPool<THREAD_COUNT, MAX_TASKS>::init()
  
     for (sz i = 0; i < this->threads.len(); ++i)
     {
+        this->active_threads.set(i);
         this->worker_inputs[i] = {
             .tpool = this,
             .idx = i,
@@ -168,10 +168,10 @@ void ThreadPool<THREAD_COUNT, MAX_TASKS>::destroy()
     defer(this->mutex.unlock());
     // TODO: Context->thread_id
     this->set_stop();
-    this->work_acquired.broadcast();
 
     while (this->active_threads.set_bit_count() != 0)
     {
+        this->work_acquired.broadcast();
         this->thread_died.wait(&this->mutex);
     }
 
@@ -264,7 +264,6 @@ intern s32 worker(void* arg)
 template<sz THREAD_COUNT, sz MAX_TASKS>
 void ThreadPool<THREAD_COUNT, MAX_TASKS>::init()
 {
-    this->active_threads.set_all();
     this->work_acquired_sem.init(0, MAX_TASKS);
     this->work_finished_sem.init(0, MAX_TASKS);
     this->thread_died_sem.init(0, THREAD_COUNT);
@@ -272,6 +271,7 @@ void ThreadPool<THREAD_COUNT, MAX_TASKS>::init()
 
     for (sz i = 0; i < this->threads.len(); ++i)
     {
+        this->active_threads.set(i);
         this->worker_inputs[i] = {
             .tpool = this,
             .idx = i,
