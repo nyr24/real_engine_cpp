@@ -10,7 +10,6 @@
 namespace rg
 {
 
-
 template<typename Type>
 struct DArray
 {
@@ -42,6 +41,7 @@ struct DArray
     void pop_and_move_ownership(Slice<Type> out_vals);
     void remove_unordered_at(sz idx);
     void reserve(sz needed);
+    void resize(sz new_size);
     void destroy();
     DArray<Type> clone();
     Slice<Type> slice(sz start = 0, sz offset = -1) const;
@@ -324,6 +324,13 @@ void DArray<Type>::reserve(sz needed)
     else this->data = (Type*)allocator_allocate(this->alloc, sizeof(Type) * new_capacity);
 
     this->capacity = new_capacity;
+}
+
+template<typename Type>
+void DArray<Type>::resize(sz new_size)
+{
+    if (new_size > this->capacity) this->reserve(new_size - this->count);
+    this->count = new_size;
 }
 
 template<typename Type>

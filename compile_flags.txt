@@ -1,2 +1,4 @@
+-Ideps
 -Isrc
 -std=c++20
+-DRG_DEBUG

@@ -2,11 +2,11 @@
 #define _RG_THREAD_POOL_HPP_
 
 #include "core/basic.hpp"
-#include "core/context.hpp"
 #include "core/thread.hpp"
 #include "core/bits.hpp"
 #include "collections/farray.hpp"
 #include "collections/ringbuffer.hpp"
+#include "engine/entry.hpp"
 
 namespace rg
 {
@@ -79,8 +79,8 @@ intern s32 worker(void* arg)
     sz thread_idx = worker_input->idx;
 
     tpool->mutex.lock();
-    Context& ctx = get_context();
-    init_temp_allocator(ctx.allocator);
+    Context* ctx = get_context();
+    init_temp_allocator(ctx->allocator);
 
     for (;;)
     {

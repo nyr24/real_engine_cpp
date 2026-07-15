@@ -3,13 +3,10 @@
 #include "core/conversions.hpp"
 #include "collections/thread_pool.hpp"
 #include "core/io.hpp"
-#include "core/context.hpp"
 #include "core/testing.hpp"
+#include "engine/entry.hpp"
 
 using namespace rg;
-
-HeapAlloc mem;
-VmemAllocator* vmem = VmemAllocator::create(1 * GB);
 
 s32 thread_read_file(void* arg)
 {
@@ -42,11 +39,9 @@ s32 thread_read_file(void* arg)
 
 s32 main()
 {
-    context_init(vmem);
-    init_temp_allocator(vmem);
-    mem.init();
-    defer(context_destroy());
-    defer(vmem->destroy(););
+    application_init();
+    defer(application_destroy());
+
     set_log_scope(LogLevel::INFO);
     // defer(reset_log_scope());
 

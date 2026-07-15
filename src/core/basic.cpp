@@ -1,44 +1,10 @@
 #include <stdarg.h>
 #include "core/basic.hpp"
-#include "collections/farray.hpp"
 #include "core/bits.hpp"
-#include "core/context.hpp"
+#include "core/clock.hpp"
 
 namespace rg
 {
-
-// Context.
-
-intern Context context;
-thread_local Arena* temp_alloc;
-
-void context_init(Allocator* allocator)
-{
-    context.allocator = allocator;
-    context.rng.init();
-    context.logger_mutex.init();
-}
-
-void context_destroy()
-{
-    context.logger_mutex.destroy();
-}
-
-Context& get_context()
-{
-    return context;
-}
-
-void init_temp_allocator(Allocator* backing_alloc, sz capacity)
-{
-    temp_alloc = Arena::create(backing_alloc, capacity);
-}
-
-Arena* get_temp_allocator()
-{
-    ASSERT_NON_NULL(temp_alloc);
-    return temp_alloc;
-}
 
 // Xorshift rng.
 
@@ -102,69 +68,6 @@ f32 XorshiftRng::next_float_in_range(f32 min, f32 max)
 #else // GCC, Clang
     __builtin_unreachable();
 #endif
-}
-
-// Logging
-
-constexpr EnumArray<CString, LogLevel> LOG_COLORS = {
-    "\x1b[1;32m",
-    "\x1b[1;34m",
-    "\x1b[1;34m",
-    "\x1b[45;37m",
-    "\x1b[1;33m",
-    "\x1b[1;31m",
-    "\x1b[0;41m",
-};
-
-constexpr EnumArray<CString, LogLevel> LOG_INTROS = {
-    "\x1b[1;32m[INFO]: ",
-    "\x1b[1;34m[TRACE]: ",
-    "\x1b[1;34m[DEBUG]: ",
-    "\x1b[45;37m[TEST]: ",
-    "\x1b[1;33m[WARN]: ",
-    "\x1b[1;31m[ERROR]: ",
-    "\x1b[0;41m[FATAL]: ",
-};
-
-const CString LOG_COLOR_RESET = "\x1b[0m\n";
-
-void log_proc(LogLevel level, CString fmt, ...)
-{
-    va_list args;
-    va_start(args, fmt);
-    auto& context = get_context();
-    context.logger_mutex.lock();
-    printn(LOG_INTROS[level]);
-    vfprintf(stdout, fmt, args);
-    printn(LOG_COLOR_RESET);
-    context.logger_mutex.unlock();
-    va_end(args);
-}
-
-void log_proc_scoped(CString fmt, ...)
-{
-    va_list args;
-    va_start(args, fmt);
-    auto& context = get_context();
-    context.logger_mutex.lock();
-    vfprintf(stdout, fmt, args);
-    context.logger_mutex.unlock();
-    va_end(args);
-}
-
-void set_log_scope(LogLevel level, CString msg)
-{
-    printfn("%s %s", LOG_INTROS[level], msg);
-}
-
-void set_log_scope(LogLevel level)
-{
-    printn(LOG_COLORS[level]);
-}
-
-void reset_log_scope()
-{
-    printn(LOG_COLOR_RESET);
 }
 
 void assert_proc(bool expr, CString file, s32 line)
@@ -257,5 +160,49 @@ sz bit_popcount(u8 storage)
     return software_popcount(storage); 
 #endif
 }
+
+// Time.
+
+Nanoseconds get_current_time()
+{
+#ifdef RG_PLATFORM_WIN32
+    LARGE_INTEGER ticks;
+    ASSERT(::QueryPerformanceCounter(&ticks));
+    return ticks.QuadPart;
+#else
+    struct timespec ts;
+    s32 res = ::clock_gettime(CLOCK_MONOTONIC, &ts);
+    ASSERT_NON_ZERO(res);
+    return ts.tv_nsec;
+#endif
+}
+
+// Clock.
+
+void Clock::start()
+{
+    this->start_time = get_current_time();
+    this->progress = 0;
+}
+
+Nanoseconds Clock::update_and_get_delta()
+{
+    Nanoseconds curr_progress_from_start = get_current_time() - this->start_time;
+    Nanoseconds delta = curr_progress_from_start - this->progress;
+	this->progress = curr_progress_from_start;
+	return delta;
+}
+
+void Clock::update()
+{
+    this->progress = get_current_time() - this->progress;
+}
+
+void Clock::stop()
+{
+    this->start_time = 0;
+    this->progress = 0;
+}
+
 
 } // rg

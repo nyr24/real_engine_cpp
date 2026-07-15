@@ -35,6 +35,7 @@ struct FArray
     void pop_and_move_ownership(Type* out_val);
     void pop_and_move_ownership(Slice<Type> out_vals);
     void remove_unordered_at(sz idx);
+    void resize(sz new_size);
     Slice<Type> slice(sz start = 0, sz offset = -1) const;
     Slice<Type> slice_idx(sz start = 0, sz end = -1) const;
     Slice<Type> slice_start_n(sz count);
@@ -230,6 +231,13 @@ void FArray<Type, CAPACITY>::remove_unordered_at(sz idx)
     }
     this->swap(idx, this->count - 1);
     this->count--;
+}
+
+template<typename Type, sz CAPACITY>
+void FArray<Type, CAPACITY>::resize(sz new_size)
+{
+    ASSERT_MSG(new_size <= CAPACITY, "Mustn't exceed the capacity");
+    this->count = new_size;
 }
 
 template<typename Type, sz CAPACITY>

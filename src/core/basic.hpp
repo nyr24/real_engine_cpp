@@ -56,10 +56,10 @@ typedef time_t FileTimeUnit;
 
 #define intern static
 #define persist static
-#define cast static_cast
-#define bitcast reinterpret_cast
 #define null nullptr
 #define alias using
+// Application uses signed sizes.
+#define sizeof(expr) (sz)sizeof(expr)
 
 // Asserts.
 
@@ -383,6 +383,11 @@ inline bool mem_compare(void* a, void* b, sz byte_size)
 	return memcmp(a, b, byte_size) == 0;
 }
 
+inline bool mem_compare_nullterm(CString a, CString b)
+{
+	return strcmp(a, b) == 0;
+}
+
 template<typename Type>
 inline void mem_set(void* ptr, sz byte_size, Type val)
 {
@@ -581,6 +586,30 @@ auto move(Type&& type) noexcept
 {
 	return static_cast<typename RemoveReference<Type>::type&&>(type);
 }
+
+template<typename Output, typename Input>
+constexpr Output bitcast(const Input& input)
+{
+	return __builtin_bit_cast(Output, input);
+}
+
+// Time.
+
+static sz constexpr MILLI_SEC = 1000;
+static sz constexpr MICRO_SEC = MILLI_SEC * 1000;
+static sz constexpr NANO_SEC  = MICRO_SEC * 1000;
+alias Nanoseconds = sz;
+alias Microseconds = sz;
+alias Milliseconds = sz;
+alias Seconds = sz;
+
+Nanoseconds get_current_time();
+constexpr Microseconds ns_to_micro(Nanoseconds ns) { return ns / 1'000; }
+constexpr Milliseconds ns_to_milli(Nanoseconds ns) { return ns / 1'000'000; }
+constexpr Microseconds ns_to_sec(Nanoseconds ns) { return ns / 1'000'000'000; }
+constexpr Milliseconds sec_to_milli(Seconds sec) { return sec * 1'000; }
+constexpr Microseconds sec_to_micro(Seconds sec) { return sec * 1'000'000; }
+constexpr Nanoseconds sec_to_ns(Seconds sec) { return sec * 1'000'000'000; }
 
 } // rg
 
