@@ -1,11 +1,12 @@
 #include <stdarg.h>
+#include "core/context.hpp"
 #include "engine/entry.hpp"
 
 namespace rg
 {
 
 intern Context context;
-intern thread_local Arena* temp_alloc;
+intern thread_local Arena* temp_allocator;
 intern EngineContext engine_context;
 intern VmemAllocator* persistent_allocator;
 
@@ -13,25 +14,6 @@ intern void context_init(Allocator* allocator);
 intern void context_destroy();
 intern void engine_context_init();
 intern void engine_context_destroy();
-
-void application_init()
-{
-    persistent_allocator = VmemAllocator::create(1 * GB);
-    context_init(persistent_allocator);
-    init_temp_allocator(context.allocator);
-    engine_context_init();
-}
-
-void application_run()
-{
-    ;
-}
-
-void application_destroy()
-{
-    context_destroy();
-    persistent_allocator->destroy();
-}
 
 // Context.
 
@@ -54,13 +36,37 @@ Context* get_context()
 
 void init_temp_allocator(Allocator* backing_alloc, sz capacity)
 {
-    temp_alloc = Arena::create(backing_alloc, capacity);
+    temp_allocator = Arena::create(backing_alloc, capacity);
 }
 
 Arena* get_temp_allocator()
 {
-    ASSERT_NON_NULL(temp_alloc);
-    return temp_alloc;
+    ASSERT_NON_NULL(temp_allocator);
+    return temp_allocator;
+}
+
+Allocator* get_persist_allocator()
+{
+    return context.allocator;
+}
+
+void application_init()
+{
+    persistent_allocator = VmemAllocator::create(1 * GB);
+    context_init(persistent_allocator);
+    init_temp_allocator(context.allocator);
+    engine_context_init();
+}
+
+void application_run()
+{
+    ;
+}
+
+void application_destroy()
+{
+    context_destroy();
+    persistent_allocator->destroy();
 }
 
 // Engine context.
@@ -69,6 +75,7 @@ void engine_context_init()
 {
     engine_context.event_sys.init();
     engine_context.input_sys.init();
+    ASSERT_MSG(engine_context.vk_ctx.init(), "Failed to initialize vulkan context");
 }
 
 void engine_context_destroy()

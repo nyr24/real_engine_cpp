@@ -47,7 +47,8 @@ struct Slice
     Type at(sz idx) const;
     Type* at_ref(sz idx);
     void set(Type val, sz idx);
-    Type operator[](sz idx) const;
+    const Type& operator[](sz idx) const { return this->at(idx); };
+    Type& operator[](sz idx) { return this->at(idx); };
     Type* data() { return this->ptr; }
     Type* begin() { return this->ptr; }
     const Type* begin() const { return this->ptr; }
@@ -262,12 +263,6 @@ inline void Slice<Type>::set(Type val, sz idx)
 {
     Type* target = this->at_ref(idx);
     *target = val;
-}
-
-template<typename Type>
-inline Type Slice<Type>::operator[](sz idx) const
-{
-    return this->at(idx);
 }
 
 template<typename Type>

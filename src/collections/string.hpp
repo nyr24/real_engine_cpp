@@ -16,7 +16,7 @@ struct StrView : Slice<const char>
     StrView() = default;
     StrView(CString cstr);
     StrView(CString cstr, sz count);
-    void init(CString cstr, bool preserve_null_term = true);
+    void init(CString cstr, bool preserve_null_term = false);
     void trim_until_null(bool inclusive = true);
     bool starts_with(StrView input);
     bool starts_with(CString input);
@@ -67,8 +67,11 @@ struct DString : DArray<char>
     using DArray<char>::init;
     using DArray<char>::init_capacity;
     using DArray<char>::init_slice;
+    using DArray<char>::tinit;
+    using DArray<char>::tinit_capacity;
+    using DArray<char>::tinit_slice;
     void init_view(Allocator* alloc, StrView str_view, sz additional_capacity = 0);
-    void init_cstr(Allocator* alloc, CString cstr, bool preserve_null_term = true);
+    void init_cstr(Allocator* alloc, CString cstr, bool preserve_null_term = false);
     void push(char c);
     void push(StrView str_view);
     void push(Slice<char> slice);
@@ -84,6 +87,19 @@ struct DString : DArray<char>
     StrView view(sz start = 0, sz offset = -1);
     StrView view_idx(sz start = 0, sz end = -1);
     bool is_null_term() { return this->count && this->last() == '\0'; }
+    bool starts_with(Slice<char> input) const;
+    bool ends_with(Slice<char> input) const;
+    void replace(const char& find, const char& replace);
+    Slice<char> slice_start_n(sz count);
+    Slice<char> slice_sequence_start(Slice<char> value_set);
+    Slice<char> slice_from_start_to_first_occur(const char& search, bool inclusive = false);
+    Slice<char> slice_from_start_to_last_occur(const char& search, bool inclusive = false);
+    // Trims 'count' items from end.
+    void trim_end_n(sz count);
+    // Trims items sequentially from the end. (input is considered sequential)
+    bool trim_sequence_end(Slice<char> seq);
+    void trim_from_end_to_first_occur(const char& search, bool inclusive = false);
+    void trim_from_end_to_last_occur(const char& search, bool inclusive = false);
 };
 
 bool operator==(const DString& lhs, const DString& rhs);
@@ -121,6 +137,19 @@ struct FString : FArray<char, CAPACITY>
     StrView view(sz start = 0, sz offset = -1);
     StrView view_idx(sz start = 0, sz end = -1);
     bool is_null_term() { return this->count && this->last() == '\0'; }
+    Slice<char> slice_start_n(sz count);
+    Slice<char> slice_sequence_start(Slice<char> value_set);
+    Slice<char> slice_from_start_to_first_occur(const char& search, bool inclusive = false);
+    Slice<char> slice_from_start_to_last_occur(const char& search, bool inclusive = false);
+    // Trims 'count' characters from end.
+    void trim_end_n(sz count);
+    // Trims sequentially values from the end of input. (input is considered sequential)
+    bool trim_sequence_end(Slice<char> seq);
+    void trim_from_end_to_first_occur(const char& search, bool inclusive = false);
+    void trim_from_end_to_last_occur(const char& search, bool inclusive = false);
+    bool starts_with(Slice<char> input) const;
+    bool ends_with(Slice<char> input) const;
+    void replace(const char& find, const char& replace);
 };
 
 template<sz CAPACITY>
@@ -241,6 +270,85 @@ StrView FString<CAPACITY>::view_idx(sz start, sz end)
     ASSERT_GREATER_ZERO(dist);
     ASSERT_MSG(start + dist <= this->count, "Mustn't exceed count");
     return { this->data + start, dist };
+}
+
+template<sz CAPACITY>
+Slice<char> FString<CAPACITY>::slice_start_n(sz trim_count)
+{
+    ASSERT_MSG(trim_count < this->count, "Shouldn't exceed inner count");
+    Slice<char> slice = this->slice();
+    slice.trim_start_n(trim_count);
+    return slice;
+}
+
+template<sz CAPACITY>
+void FString<CAPACITY>::trim_end_n(sz trim_count)
+{
+    ASSERT_MSG(trim_count < this->count, "Shouldn't exceed inner count");
+    common_trim_end_n(&this->data, &this->count, trim_count);
+}
+
+template<sz CAPACITY>
+Slice<char> FString<CAPACITY>::slice_sequence_start(Slice<char> trim_seq)
+{
+    Slice<char> slice = this->slice();
+    slice.trim_sequence_start(trim_seq);
+    return slice;
+}
+
+template<sz CAPACITY>
+bool FString<CAPACITY>::trim_sequence_end(Slice<char> trim_seq)
+{
+    return common_trim_sequence_end(&this->data, &this->count, trim_seq);
+}
+
+template<sz CAPACITY>
+Slice<char> FString<CAPACITY>::slice_from_start_to_first_occur(const char& search, bool inclusive)
+{
+    Slice<char> slice = this->slice();
+    slice.trim_from_start_to_first_occur(search, inclusive);
+    return slice;
+}
+
+template<sz CAPACITY>
+Slice<char> FString<CAPACITY>::slice_from_start_to_last_occur(const char& search, bool inclusive)
+{
+    Slice<char> slice = this->slice();
+    slice.trim_from_start_to_last_occur(search, inclusive);
+    return slice;
+}
+
+template<sz CAPACITY>
+void FString<CAPACITY>::trim_from_end_to_first_occur(const char& search, bool inclusive)
+{
+    return common_trim_from_end_to_first_occur(&this->data, &this->count, search, inclusive);
+}
+
+template<sz CAPACITY>
+void FString<CAPACITY>::trim_from_end_to_last_occur(const char& search, bool inclusive)
+{
+    return common_trim_from_end_to_last_occur(&this->data, &this->count, search, inclusive);
+}
+
+template<sz CAPACITY>
+bool FString<CAPACITY>::starts_with(Slice<char> input) const
+{
+    return common_starts_with(&this->data, this->count, input);
+}
+
+template<sz CAPACITY>
+bool FString<CAPACITY>::ends_with(Slice<char> input) const
+{
+    return common_ends_with(&this->data, this->count, input);
+}
+
+template<sz CAPACITY>
+void FString<CAPACITY>::replace(const char& find, const char& replace)
+{
+    for (char* val = this->begin(); val != this->end(); ++val)
+    {
+        if (*val == find) *val = replace;
+    }
 }
 
 template<sz CAPACITY>

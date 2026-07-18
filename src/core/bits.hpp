@@ -11,32 +11,52 @@ namespace rg
 
 // Common masks.
 
-enum BitMask64 : u64
+enum BitMask8 : u8
 {
-    BIT_MASK_64_U1_LOW   = 0x0000000000000001,
-    BIT_MASK_64_U1_HIGH  = 0x1000000000000000,
-    BIT_MASK_64_U8_LOW   = 0x00000000000000FF,
-    BIT_MASK_64_U8_HIGH  = 0xFF00000000000000,
-    BIT_MASK_64_U16_LOW  = 0x000000000000FFFF,
-    BIT_MASK_64_U16_HIGH = 0xFFFF000000000000,
-    BIT_MASK_64_U32_LOW  = 0x00000000FFFFFFFF,
-    BIT_MASK_64_U32_HIGH = 0xFFFFFFFF00000000,
-    BIT_MASK_64_U56_LOW  = 0x00FFFFFFFFFFFFFF,
-    BIT_MASK_64_U56_HIGH = 0xFFFFFFFFFFFFFF00,
-    BIT_MASK_64_U64      = 0xFFFFFFFFFFFFFFFF,
+    BIT_MASK_8_LOW_1   = 0x01,
+    BIT_MASK_8_HIGH_1  = 0x10,
+    BIT_MASK_8_EMPTY   = 0x00,
+    BIT_MASK_8_FULL    = 0xFF,
 };
 
-enum struct BitMask32 : u32
+enum BitMask16 : u16
 {
-    BIT_MAKS_32_U1_LOW   = 0x00000001,
-    BIT_MAKS_32_U1_HIGH  = 0x10000000,
-    BIT_MAKS_32_U8_LOW   = 0x000000FF,
-    BIT_MAKS_32_U8_HIGH  = 0xFF000000,
-    BIT_MAKS_32_U16_LOW  = 0x0000FFFF,
-    BIT_MAKS_32_U16_HIGH = 0xFFFF0000,
-    BIT_MAKS_32_U24_LOW  = 0x00FFFFFF,
-    BIT_MAKS_32_U24_HIGH = 0xFFFFFF00,
-    BIT_MASK_32_U32      = 0xFFFFFFFF,
+    BIT_MASK_16_LOW_1   = 0x0001,
+    BIT_MASK_16_HIGH_1  = 0x1000,
+    BIT_MASK_16_LOW_8   = 0x00FF,
+    BIT_MASK_16_HIGH_8  = 0xFF00,
+    BIT_MASK_16_EMPTY   = 0x0000,
+    BIT_MASK_16_FULL    = 0xFFFF,
+};
+
+enum BitMask32 : u32
+{
+    BIT_MASK_32_LOW_1   = 0x00000001,
+    BIT_MASK_32_HIGH_1  = 0x10000000,
+    BIT_MASK_32_LOW_8   = 0x000000FF,
+    BIT_MASK_32_HIGH_8  = 0xFF000000,
+    BIT_MASK_32_LOW_16  = 0x0000FFFF,
+    BIT_MASK_32_HIGH_16 = 0xFFFF0000,
+    BIT_MASK_32_LOW_24  = 0x00FFFFFF,
+    BIT_MASK_32_HIGH_24 = 0xFFFFFF00,
+    BIT_MASK_32_EMPTY   = 0xFFFFFFFF,
+    BIT_MASK_32_FULL    = 0xFFFFFFFF,
+};
+
+enum BitMask64 : u64
+{
+    BIT_MASK_64_LOW_1   = 0x0000000000000001,
+    BIT_MASK_64_HIGH_1  = 0x1000000000000000,
+    BIT_MASK_64_LOW_8   = 0x00000000000000FF,
+    BIT_MASK_64_HIGH_8  = 0xFF00000000000000,
+    BIT_MASK_64_LOW_16  = 0x000000000000FFFF,
+    BIT_MASK_64_HIGH_16 = 0xFFFF000000000000,
+    BIT_MASK_64_LOW_32  = 0x00000000FFFFFFFF,
+    BIT_MASK_64_HIGH_32 = 0xFFFFFFFF00000000,
+    BIT_MASK_64_LOW_56  = 0x00FFFFFFFFFFFFFF,
+    BIT_MASK_64_HIGH_56 = 0xFFFFFFFFFFFFFF00,
+    BIT_MASK_64_EMPTY   = 0x0000000000000000,
+    BIT_MASK_64_FULL    = 0xFFFFFFFFFFFFFFFF,
 };
 
 // Popcount builtins.
@@ -68,7 +88,7 @@ sz bit_popcount(u8 storage);
 // Use integer type as bit representation.
 // Maximum bit count here is 64, if need more - use BitSet.
 
-template <typename Type = u64, typename Mask = BitMask64>
+template <typename Type = u64>
 struct BitInt
 {
     static_assert(sizeof(Type) <= 8, "Mustn't exceed 64 bit for this type");
@@ -76,8 +96,8 @@ private:
     Type storage;
 public:
     BitInt(): storage{0} {}
-    Type get_mask(Mask mask) { return storage & mask; }
-    void set_mask(Type value, Mask mask)
+    Type get_mask(Type mask) { return storage & mask; }
+    void set_mask(Type value, Type mask)
     {
         storage &= ~mask; 
         storage |= mask & value;
@@ -110,7 +130,7 @@ public:
     sz set_bit_count() { return rg::bit_popcount(this->storage); }
 };
 
-template <typename Type = u64, typename Mask = BitMask64>
+template <typename Type = u64>
 struct AtomicBitInt
 {
     static_assert(sizeof(Type) <= 8, "Mustn't exceed 64 bit for this type");
@@ -118,8 +138,8 @@ private:
     Atomic<Type> storage;
 public:
     AtomicBitInt(): storage{0} {}
-    Type get_mask(Mask mask) { return storage.bit_and(mask); }
-    void set_mask(Type value, Mask mask)
+    Type get_mask(Type mask) { return storage.bit_and(mask); }
+    void set_mask(Type value, Type mask)
     {
         Type old_val = storage.load();
         Type new_val; 

@@ -6,13 +6,15 @@
 #include "collections/slice.hpp"
 #include "collections/split_iterator.hpp"
 
-// Farray - fixed-capacity array type.
-
 namespace rg
 {
 
 constexpr sz FARRAY_DEFAULT_CAPACITY = 16;
 
+/*
+ Farray - fixed-capacity array type.
+ It tracks count of allocated elements.
+*/
 template<typename Type, sz CAPACITY = FARRAY_DEFAULT_CAPACITY>
 struct FArray
 {
@@ -36,27 +38,15 @@ struct FArray
     void pop_and_move_ownership(Slice<Type> out_vals);
     void remove_unordered_at(sz idx);
     void resize(sz new_size);
+    void fill(const Type& val);
     Slice<Type> slice(sz start = 0, sz offset = -1) const;
     Slice<Type> slice_idx(sz start = 0, sz end = -1) const;
-    Slice<Type> slice_start_n(sz count);
-    Slice<Type> slice_sequence_start(Slice<Type> value_set);
-    Slice<Type> slice_from_start_to_first_occur(const Type& search, bool inclusive = false);
-    Slice<Type> slice_from_start_to_last_occur(const Type& search, bool inclusive = false);
-    // Trims 'count' characters from end.
-    void trim_end_n(sz count);
-    // Trims sequentially values from the end of input. (input is considered sequential)
-    bool trim_sequence_end(Slice<Type> seq);
-    void trim_from_end_to_first_occur(const Type& search, bool inclusive = false);
-    void trim_from_end_to_last_occur(const Type& search, bool inclusive = false);
-    bool starts_with(Slice<Type> input) const;
-    bool ends_with(Slice<Type> input) const;
     sz index_of(const Type& val) const;
     sz index_of(Slice<Type> slice) const;
     sz last_index_of(const Type& val) const;
     sz last_index_of(Slice<Type> slice) const;
     bool has(const Type& val) const;
     bool has(Slice<Type> val) const;
-    void replace(const Type& find, const Type& replace);
     void foreach(void(*fn)(const Type&)) const;
     void foreach_ref(void(*fn)(Type*));
     SplitIterator<Type> get_split_iter(const Type& splitter);
@@ -134,7 +124,6 @@ template<typename Type, sz CAPACITY>
 void FArray<Type, CAPACITY>::push(const Type& value)
 {
     ASSERT_MSG(this->remain() >= 1, "Must have space for a push");
-    Type* data = this->data;
     *this->end() = value;
     this->count++;
 }
@@ -241,6 +230,12 @@ void FArray<Type, CAPACITY>::resize(sz new_size)
 }
 
 template<typename Type, sz CAPACITY>
+void FArray<Type, CAPACITY>::fill(const Type& with)
+{
+    for (auto& el : *this) el = with;
+}
+
+template<typename Type, sz CAPACITY>
 inline Type FArray<Type, CAPACITY>::at(sz idx) const
 {
     ASSERT_IN_BOUNDS(idx >= 0 && idx < this->count);
@@ -299,64 +294,6 @@ Slice<Type> FArray<Type, CAPACITY>::slice_idx(sz start, sz end) const
 }
 
 template<typename Type, sz CAPACITY>
-Slice<Type> FArray<Type, CAPACITY>::slice_start_n(sz trim_count)
-{
-    ASSERT_MSG(trim_count < this->count, "Shouldn't exceed inner count");
-    Slice<Type> slice = this->slice();
-    slice.trim_start_n(trim_count);
-    return slice;
-}
-
-template<typename Type, sz CAPACITY>
-void FArray<Type, CAPACITY>::trim_end_n(sz trim_count)
-{
-    ASSERT_MSG(trim_count < this->count, "Shouldn't exceed inner count");
-    common_trim_end_n(&this->data, &this->count, trim_count);
-}
-
-template<typename Type, sz CAPACITY>
-Slice<Type> FArray<Type, CAPACITY>::slice_sequence_start(Slice<Type> trim_seq)
-{
-    Slice<Type> slice = this->slice();
-    slice.trim_sequence_start(trim_seq);
-    return slice;
-}
-
-template<typename Type, sz CAPACITY>
-bool FArray<Type, CAPACITY>::trim_sequence_end(Slice<Type> trim_seq)
-{
-    return common_trim_sequence_end(&this->data, &this->count, trim_seq);
-}
-
-template<typename Type, sz CAPACITY>
-Slice<Type> FArray<Type, CAPACITY>::slice_from_start_to_first_occur(const Type& search, bool inclusive)
-{
-    Slice<Type> slice = this->slice();
-    slice.trim_from_start_to_first_occur(search, inclusive);
-    return slice;
-}
-
-template<typename Type, sz CAPACITY>
-Slice<Type> FArray<Type, CAPACITY>::slice_from_start_to_last_occur(const Type& search, bool inclusive)
-{
-    Slice<Type> slice = this->slice();
-    slice.slice_from_start_to_last_occur(search, inclusive);
-    return slice;
-}
-
-template<typename Type, sz CAPACITY>
-void FArray<Type, CAPACITY>::trim_from_end_to_first_occur(const Type& search, bool inclusive)
-{
-    return common_trim_from_end_to_first_occur(&this->data, &this->count, search, inclusive);
-}
-
-template<typename Type, sz CAPACITY>
-void FArray<Type, CAPACITY>::trim_from_end_to_last_occur(const Type& search, bool inclusive)
-{
-    return common_trim_from_end_to_last_occur(&this->data, &this->count, search, inclusive);
-}
-
-template<typename Type, sz CAPACITY>
 sz FArray<Type, CAPACITY>::index_of(const Type& search) const
 {
     return common_index_of(&this->data, this->count, search);
@@ -390,27 +327,6 @@ template<typename Type, sz CAPACITY>
 bool FArray<Type, CAPACITY>::has(Slice<Type> slice) const
 {
     return common_has(&this->data, this->count, slice);
-}
-
-template<typename Type, sz CAPACITY>
-bool FArray<Type, CAPACITY>::starts_with(Slice<Type> input) const
-{
-    return common_starts_with(&this->data, this->count, input);
-}
-
-template<typename Type, sz CAPACITY>
-bool FArray<Type, CAPACITY>::ends_with(Slice<Type> input) const
-{
-    return common_ends_with(&this->data, this->count, input);
-}
-
-template<typename Type, sz CAPACITY>
-void FArray<Type, CAPACITY>::replace(const Type& find, const Type& replace)
-{
-    for (Type* val = this->begin(); val != this->end(); ++val)
-    {
-        if (*val == find) *val = replace;
-    }
 }
 
 template<typename Type, sz CAPACITY>
@@ -465,6 +381,8 @@ struct Array
     constexpr Array(std::initializer_list<Type> init_list);
     Array(const Array<Type, CAPACITY>& rhs);
     Array& operator=(const Array<Type, CAPACITY>& rhs);
+    Slice<Type> slice(sz start = 0, sz offset = -1);
+    Slice<Type> slice_idx(sz start = 0, sz idx = -1);
 
     constexpr sz len() const { return CAPACITY; }
     constexpr sz capacity() const { return CAPACITY; }
@@ -507,6 +425,21 @@ Array<Type, CAPACITY>& Array<Type, CAPACITY>::operator=(const Array<Type, CAPACI
     ASSERT_MSG(this != &rhs, "You mustn't be an idiot");
     mem_copy(this->data, rhs.data, CAPACITY * sizeof(Type));
     return *this;
+}
+
+template<typename Type, sz CAPACITY>
+Slice<Type> Array<Type, CAPACITY>::slice(sz start, sz offset)
+{
+    if (offset == -1) offset = this->capacity();
+    return { this->data + start, offset };
+}
+
+template<typename Type, sz CAPACITY>
+Slice<Type> Array<Type, CAPACITY>::slice_idx(sz start, sz end)
+{
+    if (end == -1) end = this->capacity() - 1;
+    sz dist = (end - start) + 1;
+    return { this->data + start, dist };
 }
 
 // EnumArray.

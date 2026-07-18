@@ -10,41 +10,84 @@ namespace rg
 
 intern void platform_process_cwd(Path* path, Allocator* alloc, sz add_cap = 0);
 intern sz get_steps_back_from_cwd_and_trim(StrView path);
+intern void path_trim_parts_from_end(Path* path, sz trim_count);
 
-void Path::init(Allocator* alloc, Slice<char> init_path, bool null_term)
-{
-    init_path.replace(PATH_SEPARATOR_INVALID, PATH_SEPARATOR);
-    StrView sv_path = slice_to_str_view(init_path);
-    this->init(alloc, sv_path, null_term);
-}
-
-void Path::init(Allocator* alloc, StrView init_path, bool null_term)
+void Path::init(Allocator* alloc, Slice<StrView> parts, bool null_term)
 {
     this->alloc = alloc;
 
-    if (path_is_absolute(init_path))
+    if (path_is_absolute(parts[0]))
     {
-        this->init_capacity(alloc, init_path.count);
-        this->push(init_path);
-        if (null_term) this->ensure_null_term();
+        sz capacity = parts[0].count;
+        for (StrView* part = parts.at_ref(1); part != parts.end(); ++part)
+        {
+           capacity += part->count;
+        }
+        this->init_capacity(alloc, capacity);
+        this->push(parts[0]);
+        this->ensure_separator_at_end();
+        this->add_parts(parts.slice(1));
     }
     else
     {
-        sz steps_back_from_cwd = get_steps_back_from_cwd_and_trim(init_path);
-        sz add_cap = init_path.count;
-        platform_process_cwd(this, alloc, add_cap);
-        // Do back steps.
-        for (; steps_back_from_cwd > 0; --steps_back_from_cwd)
+        StrView first_part = parts[0];
+        sz steps_back_from_cwd = get_steps_back_from_cwd_and_trim(first_part);
+        sz add_cap = first_part.count;
+        for (StrView* part = parts.at_ref(1); part != parts.end(); ++part)
         {
-            this->trim_from_end_to_last_occur(PATH_SEPARATOR);
+            add_cap += part->count;
         }
-        // Add a path separator to the end.
-        this->push(PATH_SEPARATOR);
-        ASSERT_MSG(this->last() == PATH_SEPARATOR, "Must be separated at end");
-        this->ensure_no_null_term();
-        this->push(init_path);
-        if (null_term) this->ensure_null_term();
+        platform_process_cwd(this, alloc, add_cap);
+        this->add_parts(parts);
     }
+    if (null_term) this->ensure_null_term();
+}
+
+// First part can contain relative offsets: "./", "../", "../../"
+void Path::add_parts(Slice<StrView> parts)
+{
+    ASSERT_INITIALIZED(this);
+
+    StrView first_part = parts[0];
+    sz steps_back_from_cwd = get_steps_back_from_cwd_and_trim(first_part);
+    path_trim_parts_from_end(this, steps_back_from_cwd);
+    this->ensure_separator_at_end();
+
+    for (StrView part : parts)
+    {
+        if (part.first() == PATH_SEPARATOR) part.trim_start_n(1);
+        if (part.last() == PATH_SEPARATOR) part.trim_end_n(1);
+        this->push(part);
+        this->push(PATH_SEPARATOR);
+    }
+}
+
+void Path::add_part(StrView part)
+{
+    ASSERT_INITIALIZED(this);
+
+    sz steps_back_from_cwd = get_steps_back_from_cwd_and_trim(part);
+    path_trim_parts_from_end(this, steps_back_from_cwd);
+    this->ensure_separator_at_end();
+    if (part.first() == PATH_SEPARATOR) part.trim_start_n(1);
+    if (part.last() == PATH_SEPARATOR) part.trim_end_n(1);
+    this->push(part);
+    this->push(PATH_SEPARATOR);
+}
+
+intern void path_trim_parts_from_end(Path* self, sz trim_count)
+{
+    for (; trim_count > 1; --trim_count)
+    {
+        self->trim_from_end_to_last_occur(PATH_SEPARATOR);
+    }
+    // Preserve path separator at the end.
+    self->trim_from_end_to_last_occur(PATH_SEPARATOR, true);
+}
+
+void Path::ensure_separator_at_end()
+{
+    if (this->last() != PATH_SEPARATOR) this->push(PATH_SEPARATOR);
 }
 
 Path get_cwd(Allocator* alloc)
@@ -61,7 +104,7 @@ intern void platform_process_cwd(Path* path, Allocator* alloc, sz add_cap)
         u32 size = ::GetCurrentDirectory(0, null);
         path->capacity += (sz)size;
         path->data = (char*)allocator_allocate(alloc, path->capacity);
-        path->count = ::GetCurrentDirectory(path->count, path->ptr);
+        path->count = ::GetCurrentDirectory(path->capacity, path->ptr);
     #else
         path->capacity = PATH_DEFAULT_CAPACITY + add_cap;
         path->data = (char*)allocator_allocate(alloc, path->capacity);
@@ -76,13 +119,22 @@ intern void platform_process_cwd(Path* path, Allocator* alloc, sz add_cap)
         };
         path->count = path->capacity;
         path->trim_from_end_to_first_occur('\0', false);
+
         // How much space left in the allocated buffer.
         sz remain = path->capacity - path->count;
+        // Grow allocation.
         if (remain < add_cap)
         {
             sz diff = add_cap - remain;
-            path->capacity += diff;
-            path->data = (char*)allocator_reallocate(alloc, path->data, path->capacity);
+            sz new_capacity = path->capacity + diff;
+            path->data = (char*)allocator_reallocate(alloc, path->data, new_capacity);
+            path->capacity = new_capacity;
+        }
+        // Shrink allocation if possible.
+        else if (remain > add_cap)
+        {
+            path->data = (char*)allocator_reallocate(alloc, path->data, path->count);
+            path->capacity = path->count;
         }
     #endif
 }

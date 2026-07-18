@@ -4,6 +4,7 @@
 #include "core/basic.hpp"
 #include "collections/slice.hpp"
 #include "collections/split_iterator.hpp"
+#include "core/context.hpp"
 
 // Darray - dynamic array type.
 
@@ -31,6 +32,9 @@ struct DArray
     void init(Allocator* alloc);
     void init_capacity(Allocator* alloc, sz init_capacity = DEFAULT_CAPACITY);
     void init_slice(Allocator* alloc, Slice<Type> values, sz additional_capacity = 0);
+    void tinit();
+    void tinit_capacity(sz init_capacity = DEFAULT_CAPACITY);
+    void tinit_slice(Slice<Type> values, sz additional_capacity = 0);
     void push(const Type& value);
     void push(Slice<Type> values);
     void push_and_move_ownership(Type&& value);
@@ -42,29 +46,17 @@ struct DArray
     void remove_unordered_at(sz idx);
     void reserve(sz needed);
     void resize(sz new_size);
+    void fill(const Type& with);
     void destroy();
     DArray<Type> clone();
     Slice<Type> slice(sz start = 0, sz offset = -1) const;
     Slice<Type> slice_idx(sz start = 0, sz end = -1) const;
-    Slice<Type> slice_start_n(sz count);
-    Slice<Type> slice_sequence_start(Slice<Type> value_set);
-    Slice<Type> slice_from_start_to_first_occur(const Type& search, bool inclusive = false);
-    Slice<Type> slice_from_start_to_last_occur(const Type& search, bool inclusive = false);
-    // Trims 'count' items from end.
-    void trim_end_n(sz count);
-    // Trims items sequentially from the end. (input is considered sequential)
-    bool trim_sequence_end(Slice<Type> seq);
-    void trim_from_end_to_first_occur(const Type& search, bool inclusive = false);
-    void trim_from_end_to_last_occur(const Type& search, bool inclusive = false);
-    bool starts_with(Slice<Type> input) const;
-    bool ends_with(Slice<Type> input) const;
     sz index_of(const Type& val) const;
     sz index_of(Slice<Type> slice) const;
     sz last_index_of(const Type& val) const;
     sz last_index_of(Slice<Type> slice) const;
     bool has(const Type& val) const;
     bool has(Slice<Type> val) const;
-    void replace(const Type& find, const Type& replace);
     void foreach(void(*fn)(Type));
     void foreach_ref(void(*fn)(Type*));
     SplitIterator<Type> get_split_iter(const Type& splitter);
@@ -163,6 +155,39 @@ void DArray<Type>::init_slice(Allocator* alloc, Slice<Type> values, sz additiona
     this->data = (Type*)allocator_allocate(alloc, init_cap * sizeof(Type));
     this->capacity = init_cap;
     this->alloc = alloc;
+    if (values.count)
+    {
+        this->push(values);
+    }
+}
+
+template<typename Type>
+void DArray<Type>::tinit()
+{
+    Allocator* temp_alloc = get_temp_allocator();
+    this->alloc = temp_alloc;
+}
+
+template<typename Type>
+void DArray<Type>::tinit_capacity(sz init_capacity)
+{
+    ASSERT_GREATER_EQ_ZERO(init_capacity);
+    Allocator* temp_alloc = get_temp_allocator();
+    init_capacity = rg::max(DEFAULT_CAPACITY, init_capacity);
+    this->data = (Type*)allocator_allocate(temp_alloc, init_capacity * sizeof(Type));
+    this->capacity = init_capacity;
+    this->alloc = temp_alloc;
+}
+
+template<typename Type>
+void DArray<Type>::tinit_slice(Slice<Type> values, sz additional_capacity)
+{
+    ASSERT_NON_EMPTY_VAL(values);
+    Allocator* temp_alloc = get_temp_allocator();
+    sz init_cap = rg::max(DEFAULT_CAPACITY, values.count + additional_capacity);
+    this->data = (Type*)allocator_allocate(temp_alloc, init_cap * sizeof(Type));
+    this->capacity = init_cap;
+    this->alloc = temp_alloc;
     if (values.count)
     {
         this->push(values);
@@ -334,6 +359,12 @@ void DArray<Type>::resize(sz new_size)
 }
 
 template<typename Type>
+void DArray<Type>::fill(const Type& with)
+{
+    for (auto& el : *this) el = with;
+}
+
+template<typename Type>
 Slice<Type> DArray<Type>::slice(sz start, sz offset) const
 {
     if (offset == -1) offset = this->count;
@@ -350,64 +381,6 @@ Slice<Type> DArray<Type>::slice_idx(sz start, sz end) const
     ASSERT_GREATER_ZERO(dist);
     ASSERT_MSG(start + dist <= this->count, "Mustn't exceed count");
     return { this->data + start, dist };
-}
-
-template<typename Type>
-Slice<Type> DArray<Type>::slice_start_n(sz trim_count)
-{
-    ASSERT_MSG(trim_count < this->count, "Shouldn't exceed inner count");
-    Slice<Type> slice = this->slice();
-    slice.trim_start_n(trim_count);
-    return slice;
-}
-
-template<typename Type>
-void DArray<Type>::trim_end_n(sz trim_count)
-{
-    ASSERT_MSG(trim_count < this->count, "Shouldn't exceed inner count");
-    common_trim_end_n(&this->data, &this->count, trim_count);
-}
-
-template<typename Type>
-Slice<Type> DArray<Type>::slice_sequence_start(Slice<Type> trim_seq)
-{
-    Slice<Type> slice = this->slice();
-    slice.trim_sequence_start(trim_seq);
-    return slice;
-}
-
-template<typename Type>
-bool DArray<Type>::trim_sequence_end(Slice<Type> trim_seq)
-{
-    return common_trim_sequence_end(&this->data, &this->count, trim_seq);
-}
-
-template<typename Type>
-Slice<Type> DArray<Type>::slice_from_start_to_first_occur(const Type& search, bool inclusive)
-{
-    Slice<Type> slice = this->slice();
-    slice.trim_from_start_to_first_occur(search, inclusive);
-    return slice;
-}
-
-template<typename Type>
-Slice<Type> DArray<Type>::slice_from_start_to_last_occur(const Type& search, bool inclusive)
-{
-    Slice<Type> slice = this->slice();
-    slice.slice_from_start_to_last_occur(search, inclusive);
-    return slice;
-}
-
-template<typename Type>
-void DArray<Type>::trim_from_end_to_first_occur(const Type& search, bool inclusive)
-{
-    return common_trim_from_end_to_first_occur(&this->data, &this->count, search, inclusive);
-}
-
-template<typename Type>
-void DArray<Type>::trim_from_end_to_last_occur(const Type& search, bool inclusive)
-{
-    return common_trim_from_end_to_last_occur(&this->data, &this->count, search, inclusive);
 }
 
 template<typename Type>
@@ -448,27 +421,6 @@ template<typename Type>
 bool DArray<Type>::has(Slice<Type> slice) const
 {
     return common_has(&this->data, this->count, slice);
-}
-
-template<typename Type>
-bool DArray<Type>::starts_with(Slice<Type> input) const
-{
-    return common_starts_with(&this->data, this->count, input);
-}
-
-template<typename Type>
-bool DArray<Type>::ends_with(Slice<Type> input) const
-{
-    return common_ends_with(&this->data, this->count, input);
-}
-
-template<typename Type>
-void DArray<Type>::replace(const Type& find, const Type& replace)
-{
-    for (Type* val = this->begin(); val != this->end(); ++val)
-    {
-        if (*val == find) *val = replace;
-    }
 }
 
 template<typename Type>

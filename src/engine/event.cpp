@@ -1,5 +1,5 @@
 #include "core/basic.hpp"
-#include "engine/entry.hpp"
+#include "core/context.hpp"
 #include "engine/event.hpp"
 
 namespace rg

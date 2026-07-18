@@ -36,13 +36,13 @@ void InputSystem::update()
 				if (timer->clock.progress > this->key_repeat_state.delay)
 				{
 					timer->pass_delay = true;
-					timer->clock.restart();
+					timer->clock.start();
 				}
 			}
 			else if (timer->clock.progress > this->key_repeat_state.rate)
 			{
 				this->process_key(i, true);
-				timer->clock.restart();
+				timer->clock.start();
 			}
 		}
 		else

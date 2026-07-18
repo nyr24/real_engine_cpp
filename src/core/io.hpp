@@ -26,8 +26,11 @@ namespace rg
     {
         using DString::DString;
         using DString::init;
-        void init(Allocator* alloc, Slice<char> input_path, bool null_term = true);
-        void init(Allocator* alloc, StrView input_path, bool null_term = true);
+        void init(Allocator* alloc, Slice<StrView> parts, bool null_term = false);
+        // First part can contain relative offsets: "./", "../", "../../"
+        void add_parts(Slice<StrView> part);
+        void add_part(StrView part);
+        void ensure_separator_at_end();
 
     #ifdef RG_PLATFORM_WIN32
     public:

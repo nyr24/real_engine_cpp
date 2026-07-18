@@ -1,6 +1,6 @@
 #include <cstdarg>
-#include "core/context.hpp"
 #include "collections/string.hpp"
+#include "core/context.hpp"
 
 namespace rg
 {
@@ -214,6 +214,74 @@ void DString::ensure_no_null_term()
 {
     if (this->is_empty() || !this->is_null_term()) return;
     this->count--;
+}
+
+Slice<char> DString::slice_start_n(sz trim_count)
+{
+    ASSERT_MSG(trim_count < this->count, "Shouldn't exceed inner count");
+    Slice<char> slice = this->slice();
+    slice.trim_start_n(trim_count);
+    return slice;
+}
+
+void DString::trim_end_n(sz trim_count)
+{
+    ASSERT_MSG(trim_count < this->count, "Shouldn't exceed inner count");
+    common_trim_end_n(&this->data, &this->count, trim_count);
+}
+
+Slice<char> DString::slice_sequence_start(Slice<char> trim_seq)
+{
+    Slice<char> slice = this->slice();
+    slice.trim_sequence_start(trim_seq);
+    return slice;
+}
+
+bool DString::trim_sequence_end(Slice<char> trim_seq)
+{
+    return common_trim_sequence_end(&this->data, &this->count, trim_seq);
+}
+
+Slice<char> DString::slice_from_start_to_first_occur(const char& search, bool inclusive)
+{
+    Slice<char> slice = this->slice();
+    slice.trim_from_start_to_first_occur(search, inclusive);
+    return slice;
+}
+
+Slice<char> DString::slice_from_start_to_last_occur(const char& search, bool inclusive)
+{
+    Slice<char> slice = this->slice();
+    slice.trim_from_start_to_last_occur(search, inclusive);
+    return slice;
+}
+
+void DString::trim_from_end_to_first_occur(const char& search, bool inclusive)
+{
+    return common_trim_from_end_to_first_occur(&this->data, &this->count, search, inclusive);
+}
+
+void DString::trim_from_end_to_last_occur(const char& search, bool inclusive)
+{
+    return common_trim_from_end_to_last_occur(&this->data, &this->count, search, inclusive);
+}
+
+bool DString::starts_with(Slice<char> input) const
+{
+    return common_starts_with(this->data, this->count, input);
+}
+
+bool DString::ends_with(Slice<char> input) const
+{
+    return common_ends_with(this->data, this->count, input);
+}
+
+void DString::replace(const char& find, const char& replace)
+{
+    for (char* val = this->begin(); val != this->end(); ++val)
+    {
+        if (*val == find) *val = replace;
+    }
 }
 
 StrView DString::view(sz start, sz offset)

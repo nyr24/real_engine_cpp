@@ -167,7 +167,7 @@ constexpr sz INDEX_INVALID = -1;
 constexpr sz KB = 1024;
 constexpr sz MB = 1024 * 1024;
 constexpr sz GB = 1024 * 1024 * 1024;
-constexpr sz DEFAULT_MEM_ALIGNMENT = sizeof(uptr) * 2;
+constexpr sz DEFAULT_MEM_ALIGNMENT = sizeof(uptr);
 
 // Logging.
 
@@ -275,7 +275,7 @@ constexpr Type clamp(Type val, Type lower, Type upper)
 }
 
 template<typename Type>
-inline Type swap(Type* a, Type* b)
+inline void swap(Type* a, Type* b)
 {
 	Type temp = *a;
 	*a = *b;
@@ -369,7 +369,7 @@ inline void _mem_copy(void* dest, void* src, sz byte_size)
 	memcpy(dest, src, byte_size);
 }
 
-#define mem_copy(a, b, size) _mem_copy((void*)a, (void*)b, size)
+#define mem_copy(a, b, size) _mem_copy((void*)(a), (void*)(b), size)
 
 inline void _mem_move(void* dest, void* src, sz byte_size)
 {
