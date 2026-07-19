@@ -10,19 +10,24 @@ const char* DEBUG_OUTPUT_DIR = "debug/output";
 const char* RELEASE_OUTPUT_DIR = "release/output";
 const char* THREAD_COUNT_DEF_FMT = "__THREAD_COUNT=%d";
 const char* PAGE_SIZE_DEF_FMT = "__PAGE_SIZE=%d";
+const char* SHADERS_SRC_DIR = "shaders/src";
+const char* SHADERS_BUILD_DIR = "shaders/build";
 
-StrView RELEASE_INPUT_OPT = "release";
-StrView WARNING_INPUT_OPT = "warn";
+const StrView RELEASE_INPUT_OPT = "release";
+const StrView WARNING_INPUT_OPT = "warn";
+const StrView COPY_ASSETS_OPT = "shaders";
 
 int main(int argc, char **argv)
 {
     bool is_release = false;
     bool include_warnings = false;
+    bool compile_shaders = false;
 
     if (argc > 1)
     {
         is_release = is_argument_set(RELEASE_INPUT_OPT, argc, argv);
         include_warnings = is_argument_set(WARNING_INPUT_OPT, argc, argv);
+        compile_shaders = is_argument_set(COPY_ASSETS_OPT, argc, argv);
     }
 
     if (!is_release) log_info("Starting debug build...\n");
@@ -142,4 +147,39 @@ int main(int argc, char **argv)
     bool run = false;
     if (!cmd.end_build(run, force_rebuilt))
         return EXIT_FAILURE;
+
+    if (compile_shaders)
+    {
+        log_info("Compiling shaders...");
+
+        // Processes procs{};
+        Cmd cmd{};
+
+        Array<FileEntry> files;
+        ASSERT(read_folder(SHADERS_SRC_DIR, files), "Failed to read shaders folder");
+        StrBuilder path;
+        const char* shader_entry;
+
+        for (auto& file : files)
+        {
+            if (file.type != FileType::NORMAL) continue;
+
+            if (file.name.contains("default")) shader_entry = "-entry vertMain -entry fragMain";
+            else shader_entry = "-entry main";
+
+            path.appendf("%s/%s", SHADERS_SRC_DIR, file.name.data);
+            cmd.appendf("slangc %.*s ", (s32)path.count(), path.data());
+            s32 dot_idx = file.name.find_first('.');
+            StrView output_file_name = file.name.sub_view(0, dot_idx);
+            cmd.appendf("-target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name %s -o %s/%.*s.spv",
+                shader_entry,
+                SHADERS_BUILD_DIR,
+                (s32)output_file_name.size, output_file_name.data);
+            path.clear();
+
+            // CmdOptions options{};
+            // options.async = &procs;
+            cmd.execute();
+        }
+    }
 }
