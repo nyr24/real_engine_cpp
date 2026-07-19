@@ -9,6 +9,7 @@
 #include "engine/entry.hpp"
 #include "engine/geometry.hpp"
 #include "engine/entity.hpp"
+#include <vulkan/vulkan_core.h>
 
 namespace rg
 {
@@ -500,7 +501,7 @@ intern void query_swapchain_support(
 bool VulkanDevice::detect_depth_format()
 {
 	FArray<VkFormat, 3> candidates = {
-		VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D32_SFLOAT_S8_UINT, 		
+		VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT, 		
 	};
 
 	u32 flags = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
@@ -1921,6 +1922,7 @@ void VulkanShader::create_pipeline(
 	};
 
 	VkPipelineColorBlendStateCreateInfo color_blending_state = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
 		.logicOpEnable = VK_FALSE,
 		.logicOp = VK_LOGIC_OP_COPY,
 		.attachmentCount = 1,
@@ -2249,12 +2251,13 @@ void VulkanShaderModule::get_pipeline_stages(
 {
 	ASSERT_MSG(out_pipeline_stages->count == 0, "Must be zero elements in input");
 
-	VkPipelineShaderStageCreateInfo stage_ci{};
+	VkPipelineShaderStageCreateInfo stage_ci = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO
+	};
 
 	if (this->stage_bits.is_set((sz)ShaderStageKind::VERTEX))
 	{
-		stage_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		stage_ci.flags |= VK_SHADER_STAGE_VERTEX_BIT;
+		stage_ci.stage = VK_SHADER_STAGE_VERTEX_BIT;
 		stage_ci.module = this->handle;
 		stage_ci.pName = VERTEX_SHADER_ENTRY_NAME.ptr;
 
@@ -2263,8 +2266,7 @@ void VulkanShaderModule::get_pipeline_stages(
 	}
 	if (this->stage_bits.is_set((sz)ShaderStageKind::FRAGMENT))
 	{
-		stage_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		stage_ci.flags |= VK_SHADER_STAGE_FRAGMENT_BIT;
+		stage_ci.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 		stage_ci.module = this->handle;
 		stage_ci.pName = FRAGMENT_SHADER_ENTRY_NAME.ptr;
 
@@ -2273,8 +2275,7 @@ void VulkanShaderModule::get_pipeline_stages(
 	}
 	if (this->stage_bits.is_set((sz)ShaderStageKind::COMPUTE))
 	{
-		stage_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		stage_ci.flags |= VK_SHADER_STAGE_COMPUTE_BIT;
+		stage_ci.stage = VK_SHADER_STAGE_COMPUTE_BIT;
 		stage_ci.module = this->handle;
 		stage_ci.pName = COMPUTE_SHADER_ENTRY_NAME.ptr;
 
@@ -2283,8 +2284,7 @@ void VulkanShaderModule::get_pipeline_stages(
 	}
 	if (this->stage_bits.is_set((sz)ShaderStageKind::GEOMETRY))
 	{
-		stage_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		stage_ci.flags |= VK_SHADER_STAGE_GEOMETRY_BIT;
+		stage_ci.stage = VK_SHADER_STAGE_GEOMETRY_BIT;
 		stage_ci.module = this->handle;
 		stage_ci.pName = GEOMETRY_SHADER_ENTRY_NAME.ptr;
 
@@ -2293,8 +2293,7 @@ void VulkanShaderModule::get_pipeline_stages(
 	}
 	if (this->stage_bits.is_set((sz)ShaderStageKind::TESSELLATION_CONTROL))
 	{
-		stage_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		stage_ci.flags |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+		stage_ci.stage = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
 		stage_ci.module = this->handle;
 		stage_ci.pName = TESSELATION_CONTROL_SHADER_ENTRY_NAME.ptr;
 
@@ -2303,8 +2302,7 @@ void VulkanShaderModule::get_pipeline_stages(
 	}
 	if (this->stage_bits.is_set((sz)ShaderStageKind::TESSELLATION_EVAL))
 	{
-		stage_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		stage_ci.flags |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+		stage_ci.stage = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
 		stage_ci.module = this->handle;
 		stage_ci.pName = TESSELATION_EVAL_SHADER_ENTRY_NAME.ptr;
 		out_pipeline_stages->push(stage_ci);
@@ -2326,6 +2324,7 @@ void VulkanShader::destroy(VulkanContext* ctx)
 	}
 	for (auto& pipe : this->pipelines)
 	{
+		vkDestroyPipelineLayout(ctx->dev.log_dev, pipe.layout, ctx->vk_alloc);
 		pipe.destroy(ctx);
 	}
 	for (auto &pool : this->descriptor_pools)
