@@ -43,8 +43,8 @@ struct ThreadPool
     ConditionVariable thread_died;
     RingBuffer<ThreadTask, MAX_TASKS> task_queue;
     sz tasks_in_progress;
-    BitInt<u32, BitMask32> active_threads;
-    BitInt<u32, BitMask32> init_stop;
+    BitInt<u32> active_threads;
+    BitInt<u32> init_stop;
     Array<WorkerInput<THREAD_COUNT, MAX_TASKS>> worker_inputs;
 
     void init();

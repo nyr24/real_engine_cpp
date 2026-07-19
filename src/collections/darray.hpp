@@ -320,13 +320,13 @@ inline void DArray<Type>::swap(sz idx1, sz idx2)
 template<typename Type>
 inline const Type& DArray<Type>::operator[](sz idx) const
 {
-    return this->at(idx);
+    return this->data[idx];
 }
 
 template<typename Type>
 inline Type& DArray<Type>::operator[](sz idx)
 {
-    return this->at(idx);
+    return this->data[idx];
 }
 
 template<typename Type>

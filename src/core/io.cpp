@@ -12,6 +12,26 @@ intern void platform_process_cwd(Path* path, Allocator* alloc, sz add_cap = 0);
 intern sz get_steps_back_from_cwd_and_trim(StrView path);
 intern void path_trim_parts_from_end(Path* path, sz trim_count);
 
+void Path::init(Allocator* alloc, StrView init_part, bool null_term)
+{
+    this->alloc = alloc;
+
+    if (path_is_absolute(init_part))
+    {
+        sz capacity = init_part.count;
+        this->init_capacity(alloc, capacity);
+        this->push(init_part);
+        this->ensure_separator_at_end();
+    }
+    else
+    {
+        sz add_cap = init_part.count;
+        platform_process_cwd(this, alloc, add_cap);
+        this->add_part(init_part);
+    }
+    if (null_term) this->ensure_null_term();
+}
+
 void Path::init(Allocator* alloc, Slice<StrView> parts, bool null_term)
 {
     this->alloc = alloc;
@@ -31,7 +51,6 @@ void Path::init(Allocator* alloc, Slice<StrView> parts, bool null_term)
     else
     {
         StrView first_part = parts[0];
-        sz steps_back_from_cwd = get_steps_back_from_cwd_and_trim(first_part);
         sz add_cap = first_part.count;
         for (StrView* part = parts.at_ref(1); part != parts.end(); ++part)
         {
@@ -50,7 +69,7 @@ void Path::add_parts(Slice<StrView> parts)
 
     StrView first_part = parts[0];
     sz steps_back_from_cwd = get_steps_back_from_cwd_and_trim(first_part);
-    path_trim_parts_from_end(this, steps_back_from_cwd);
+    if (steps_back_from_cwd) path_trim_parts_from_end(this, steps_back_from_cwd);
     this->ensure_separator_at_end();
 
     for (StrView part : parts)
@@ -67,7 +86,7 @@ void Path::add_part(StrView part)
     ASSERT_INITIALIZED(this);
 
     sz steps_back_from_cwd = get_steps_back_from_cwd_and_trim(part);
-    path_trim_parts_from_end(this, steps_back_from_cwd);
+    if (steps_back_from_cwd) path_trim_parts_from_end(this, steps_back_from_cwd);
     this->ensure_separator_at_end();
     if (part.first() == PATH_SEPARATOR) part.trim_start_n(1);
     if (part.last() == PATH_SEPARATOR) part.trim_end_n(1);
@@ -81,8 +100,6 @@ intern void path_trim_parts_from_end(Path* self, sz trim_count)
     {
         self->trim_from_end_to_last_occur(PATH_SEPARATOR);
     }
-    // Preserve path separator at the end.
-    self->trim_from_end_to_last_occur(PATH_SEPARATOR, true);
 }
 
 void Path::ensure_separator_at_end()

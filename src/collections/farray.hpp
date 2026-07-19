@@ -267,13 +267,13 @@ inline void FArray<Type, CAPACITY>::swap(sz idx1, sz idx2)
 template<typename Type, sz CAPACITY>
 inline const Type& FArray<Type, CAPACITY>::operator[](sz idx) const
 {
-    return this->at(idx);
+    return this->data[idx];
 }
 
 template<typename Type, sz CAPACITY>
 inline Type& FArray<Type, CAPACITY>::operator[](sz idx)
 {
-    return this->at(idx);
+    return this->data[idx];
 }
 
 template<typename Type, sz CAPACITY>
@@ -281,7 +281,7 @@ Slice<Type> FArray<Type, CAPACITY>::slice(sz start, sz offset) const
 {
     if (offset == -1) offset = this->count;
     ASSERT_GREATER_ZERO(offset);
-    return Slice{ this->data + start, offset };
+    return { (Type*)(this->data + start), offset };
 }
 
 template<typename Type, sz CAPACITY>

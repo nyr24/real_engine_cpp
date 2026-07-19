@@ -1,6 +1,6 @@
 #include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
 #include "engine/entry.hpp"
-#include "engine/window.hpp"
 
 namespace rg
 {
@@ -25,47 +25,38 @@ intern void glfw_mouse_wheel_callback(
 	double yoffset
 );
 
-Maybe<Window> create(CString name, s32 width, s32 height)
+bool Window::init(AppConfig config)
 {
-    Maybe<Window> wnd;
-
-	if (!glfwInit())
-	{
-		return wnd;
-	}
-	if (!glfwVulkanSupported())
-	{
-		return wnd;
-	}
+	if (!glfwInit()) return false;
+	if (!glfwVulkanSupported()) return false;
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
 	GLFWwindow* handle = glfwCreateWindow(
-		(s32)width,
-		(s32)height,
-		name,
+		(s32)config.window_width,
+		(s32)config.window_height,
+		config.window_name,
 		null,
 		null
 	);
 
-	if (!handle)
-	{
-		return wnd;
-	}
+	if (!handle) return false;
 
-	Window window = { .handle = handle, .width = width, .height = height };
+	this->handle = handle;
+	this->width = config.window_width;
+	this->height = config.window_height;
 
-	glfwSetWindowUserPointer(window.handle, null);
-	glfwSetCursorPosCallback(window.handle, &glfw_mouse_move_callback);
-	glfwSetMouseButtonCallback(window.handle, &glfw_mouse_btn_callback);
-	glfwSetKeyCallback(window.handle, &glfw_key_callback);
-	glfwSetScrollCallback(window.handle, &glfw_mouse_wheel_callback);
+	glfwSetWindowUserPointer(this->handle, null);
+	glfwSetCursorPosCallback(this->handle, &glfw_mouse_move_callback);
+	glfwSetMouseButtonCallback(this->handle, &glfw_mouse_btn_callback);
+	glfwSetKeyCallback(this->handle, &glfw_key_callback);
+	glfwSetScrollCallback(this->handle, &glfw_mouse_wheel_callback);
 
 #ifdef RG_HIDE_CURSOR
 	glfwSetInputMode(window.handle, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 #endif
 
-	return wnd;
+	return true;
 }
 
 intern void glfw_mouse_move_callback(GLFWwindow* window, f64 x, f64 y)
@@ -115,9 +106,9 @@ intern void glfw_mouse_wheel_callback(
 	engine_ctx->input_sys.process_mouse_wheel(yoffset < 0);
 }
 
-void Window::create_vk_surface(VkInstance instance, VkSurfaceKHR* surface)
+void Window::create_vk_surface(VulkanContext* vk_ctx, VkSurfaceKHR* surface)
 {
-	glfwCreateWindowSurface(instance, this->handle, null, surface);
+	VK_CHECK(glfwCreateWindowSurface(vk_ctx->instance, this->handle, vk_ctx->vk_alloc, surface));
 }
 
 VkExtent2D Window::get_screen_coordinates()

@@ -16,6 +16,7 @@ struct VulkanContext;
 struct VulkanDevice;
 bool map_vk_mem(VulkanDevice* dev, void** dest, VkDeviceMemory src, sz size_bytes, sz offset = 0, VkMemoryMapFlags flags = 0);
 void unmap_vk_mem(VulkanDevice* dev, VkDeviceMemory gpu_mem);
+bool init_instance(VulkanContext* vk_ctx);
 
 // Vulkan synch primitives.
 
@@ -262,6 +263,7 @@ struct VulkanDescriptorSetLayout
 	FArray<VkDescriptorSetLayoutBinding, MAX_DESCRIPTOR_BINDING_COUNT> bindings;
 
 	void init(VulkanContext* ctx, Slice<VkDescriptorSetLayoutBinding> bindings);
+	void destroy(VulkanContext* ctx);
 };
 
 VulkanDescriptorSetLayout create_descriptor_set_layout(VulkanContext* ctx, Slice<VkDescriptorSetLayoutBinding> bindings);
@@ -288,6 +290,7 @@ struct VulkanDescriptorPool
 	Maybe<PoolAllocationResult> allocate_sets(VulkanDevice* dev, Slice<VkDescriptorSetLayout> layouts);
 	Slice<VkDescriptorSet> get_sets(sz index, sz len);
 	void free_sets(VulkanContext* ctx, uint start, ushort len);
+	void destroy(VulkanContext* ctx);
 };
 
 VulkanDescriptorPool create_descriptor_pool(VulkanContext* ctx, Slice<VkDescriptorPoolSize> pool_sizes, u32 max_sets);
@@ -322,6 +325,7 @@ struct VulkanShaderModule
 	void get_pipeline_stages(
 		FArray<VkPipelineShaderStageCreateInfo, (sz)ShaderStageKind::EnumSize>* out_pipeline_stages
 	);
+	void destroy(VulkanContext* ctx);
 };
 
 struct DescriptorSetInfo
@@ -370,6 +374,7 @@ struct VulkanPipeline
 	VkPipelineLayout layout;
 
 	void cmd_bind(VulkanCmdBuffer cmd_buffer);
+	void destroy(VulkanContext* ctx);
 };
 
 struct VulkanShader
@@ -385,7 +390,7 @@ struct VulkanShader
 	u32 max_entities;
 	BitInt<u8> stage_bits;
 
-	bool init(VulkanContext* ctx, StrView file_name, VulkanShaderConfig* config);
+	void init(VulkanContext* ctx, StrView file_name, VulkanShaderConfig* config);
 	void init_descriptor_state(VulkanContext* ctx, VulkanShaderConfig* config);
 	void create_pipeline(
 		VulkanPipeline* out_pipeline,
@@ -416,7 +421,10 @@ struct VulkanShader
 		sz first_set = 0
 	);
 	void destroy_entity_resources(VulkanContext* ctx, EntityShaderState entity_state);
+	void destroy(VulkanContext* ctx);
 };
+
+VulkanShader create_shader(VulkanContext* ctx, StrView file_name, VulkanShaderConfig* config);
 
 // Swapchain.
 
@@ -535,31 +543,6 @@ struct VulkanDevice
 	{
 		return this->queue_indices.graphics.fam == this->queue_indices.transfer.fam;
 	}
-};
-
-// Vulkan Context.
-
-struct VulkanContext
-{
-	VulkanSwapchain swapchain;
-	VulkanDevice dev;
-    VkInstance instance;
-    VkSurfaceKHR surface;
-	// TODO: make vk allocator
-	VkAllocationCallbacks* vk_alloc;
-	sz curr_frame;
-	sz curr_shader;
-#ifdef RG_DEBUG
-	VkDebugUtilsMessengerEXT debug_logger;
-#endif
-
-	// FrameData[engine::FRAMES_IN_FLIGHT] frame_data;
-	// FixedList{VulkanShader, MAX_SHADER_COUNT} shaders;
-	// // 1 pool == 1 cmd_buffer for 1 frame.
-	// VulkanCmdPool[env::THREAD_COUNT] graphics_cmd_pools;
-	// VulkanCmdPool[env::THREAD_COUNT] transfer_cmd_pools;
-
-	bool init();
 };
 
 #define VK_CHECK(res) if ((res) != VK_SUCCESS) panic("VK_CHECK failed, result was %d", res)

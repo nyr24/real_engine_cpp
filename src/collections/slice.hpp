@@ -47,8 +47,8 @@ struct Slice
     Type at(sz idx) const;
     Type* at_ref(sz idx);
     void set(Type val, sz idx);
-    const Type& operator[](sz idx) const { return this->at(idx); };
-    Type& operator[](sz idx) { return this->at(idx); };
+    const Type& operator[](sz idx) const { return this->ptr[idx]; };
+    Type& operator[](sz idx) { return this->ptr[idx]; };
     Type* data() { return this->ptr; }
     Type* begin() { return this->ptr; }
     const Type* begin() const { return this->ptr; }
@@ -129,7 +129,7 @@ template<typename Type>
 void Slice<Type>::trim_end_n(sz trim_count)
 {
     ASSERT_MSG(trim_count < this->count, "Shouldn't exceed inner count");
-    common_trim_end_n(&this->ptr, this->count, trim_count);
+    common_trim_end_n(&this->ptr, &this->count, trim_count);
 }
 
 template<typename Type>
@@ -172,40 +172,40 @@ template<typename Type>
 sz Slice<Type>::index_of(Type search) const
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized");
-    return common_index_of(&this->ptr, this->count, search);
+    return common_index_of(this->ptr, this->count, search);
 }
 
 template<typename Type>
 sz Slice<Type>::index_of(Slice<Type> slice) const
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized");
-    return common_index_of(&this->ptr, this->count, slice);
+    return common_index_of(this->ptr, this->count, slice);
 }
 
 template<typename Type>
 sz Slice<Type>::last_index_of(Type search) const
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized");
-    return common_last_index_of(&this->ptr, this->count, search);
+    return common_last_index_of(this->ptr, this->count, search);
 }
 
 template<typename Type>
 sz Slice<Type>::last_index_of(Slice<Type> slice) const
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized");
-    return common_last_index_of(&this->ptr, this->count, slice);
+    return common_last_index_of(this->ptr, this->count, slice);
 }
 
 template<typename Type>
 bool Slice<Type>::has(Type search) const
 {
-    return common_has(&this->ptr, this->count, search);
+    return common_has(this->ptr, this->count, search);
 }
 
 template<typename Type>
 bool Slice<Type>::has(Slice<Type> slice) const
 {
-    return common_has(&this->ptr, this->count, slice);
+    return common_has(this->ptr, this->count, slice);
 }
 
 template<typename Type>
@@ -237,13 +237,13 @@ void Slice<Type>::replace(Type find, Type replace)
 template<typename Type>
 bool Slice<Type>::starts_with(Slice<Type> input) const
 {
-    return common_starts_with(&this->ptr, this->count, input);
+    return common_starts_with(this->ptr, this->count, input);
 }
 
 template<typename Type>
 bool Slice<Type>::ends_with(Slice<Type> input) const
 {
-    return common_ends_with(&this->ptr, this->count, input);
+    return common_ends_with(this->ptr, this->count, input);
 }
 
 template<typename Type>
@@ -331,7 +331,7 @@ bool common_ends_with(Type* ptr, sz count, Slice<Type> input)
 template<typename Type>
 bool common_trim_sequence_start(Type** ptr, sz* count, Slice<Type> trim_seq)
 {
-    if (!common_starts_with(*ptr, count, trim_seq)) return false;
+    if (!common_starts_with(*ptr, *count, trim_seq)) return false;
     *ptr += trim_seq.count;
     *count -= trim_seq.count;
     return true;
@@ -340,7 +340,7 @@ bool common_trim_sequence_start(Type** ptr, sz* count, Slice<Type> trim_seq)
 template<typename Type>
 bool common_trim_sequence_end(Type** ptr, sz* count, Slice<Type> trim_seq)
 {
-    if (!common_ends_with(*ptr, count, trim_seq)) return false;
+    if (!common_ends_with(*ptr, *count, trim_seq)) return false;
     *count -= trim_seq.count;
     return true;
 }

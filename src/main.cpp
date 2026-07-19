@@ -6,7 +6,8 @@ using namespace rg;
 
 s32 main()
 {
-    application_init();
+    AppConfig config = { "ReAl EngiNe WinDow", 2560, 1440 };
+    if (!application_init(config)) panic("Failed to init application");
     defer(application_destroy());
 
     application_run();

@@ -60,6 +60,7 @@ typedef time_t FileTimeUnit;
 #define alias using
 // Application uses signed sizes.
 #define sizeof(expr) (sz)sizeof(expr)
+#define bitsizeof(expr) sizeof(expr) * 8
 
 // Asserts.
 

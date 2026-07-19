@@ -604,6 +604,7 @@ void arena_free(Allocator* self, void* ptr)
 bool arena_resize(Allocator* self, void* ptr, sz new_size, sz alignment)
 {
     ASSERT_GREATER_ZERO(new_size);
+    alignment = alignment_for_allocation(alignment);
     ASSERT_POW_OF_TWO(alignment);
 
     Arena* arena = (Arena*)self;

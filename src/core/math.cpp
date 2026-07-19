@@ -1,7 +1,48 @@
 #include "math.hpp"
+#include <emmintrin.h>
 
 namespace rg
 {
+
+// Vec.
+
+// Vec128char.
+
+Vec128char::Vec128char(Slice<char> vals)
+{
+    ASSERT_MSG(vals.count == 16, "Must be equal to 16 using Vec128char vector");
+    this->repr = _mm_setr_epi8(
+        vals[0], vals[1], vals[2], vals[3],
+        vals[4], vals[5], vals[6], vals[7],
+        vals[8], vals[9], vals[10], vals[11],
+        vals[12], vals[13], vals[14], vals[15]
+    );
+}
+
+bool Vec128char::cmp(const Vec128char& rhs)
+{
+    return *this == rhs;
+}
+
+Maybe<sz> Vec128char::find_first_match(const Vec128char& rhs)
+{
+    Maybe<sz> res;
+    s128 cmp_res = _mm_cmpeq_epi8(this->repr, rhs.repr);
+    s32 mask = _mm_movemask_epi8(cmp_res);
+    s32 ctz = __builtin_ctz(mask);
+    if (ctz == bitsizeof(s32)) return res;
+    res.set_val((sz)ctz);
+    return res;
+}
+
+bool operator==(const Vec128char& a, const Vec128char& b)
+{
+    s128 res = _mm_cmpeq_epi8(a.repr, b.repr);
+    s32 mask = _mm_movemask_epi8(res);
+    return __builtin_ctz(mask) == bitsizeof(s32);
+}
+
+// Matrix.
 
 Mat4 Mat4::identity()
 {
@@ -58,109 +99,23 @@ Mat4& Mat4::operator*=(const Mat4& mat)
 
 Mat4 operator*(const Mat4& a, const Mat4& b)
 {
-    // b contains rows 0, 1, 2, 3 as contiguous 128-bit blocks:
-    // [ B3, B2, B1, B0 ] where each Bn is an __m128 (4 floats)
-    // We can broadcast a single row of B across all 4 lanes of an __m512 register.
-
-    // Broadcast Row 0 of B to all 4 quarters of a 512-bit register
     __m512 b_row0 = _mm512_shuffle_f32x4(b.repr, b.repr, _MM_SHUFFLE(0, 0, 0, 0));
-    // Broadcast Row 1 of B
     __m512 b_row1 = _mm512_shuffle_f32x4(b.repr, b.repr, _MM_SHUFFLE(1, 1, 1, 1));
-    // Broadcast Row 2 of B
     __m512 b_row2 = _mm512_shuffle_f32x4(b.repr, b.repr, _MM_SHUFFLE(2, 2, 2, 2));
-    // Broadcast Row 3 of B
     __m512 b_row3 = _mm512_shuffle_f32x4(b.repr, b.repr, _MM_SHUFFLE(3, 3, 3, 3));
-
-    // Now, we broadcast the corresponding column elements of A across 128-bit boundaries.
-    // For element 0 of every row in A: indices (0, 4, 8, 12)
     __m512 a_col0 = _mm512_shuffle_ps(a.repr, a.repr, _MM_SHUFFLE(0, 0, 0, 0));
-    
-    // Step 1: Base multiplication (a_col0 * b_row0)
     __m512 res = _mm512_mul_ps(a_col0, b_row0);
-
-    // For element 1 of every row in A: indices (1, 5, 9, 13)
     __m512 a_col1 = _mm512_shuffle_ps(a.repr, a.repr, _MM_SHUFFLE(1, 1, 1, 1));
-    // Step 2: Fused Multiply-Add
     res = _mm512_fmadd_ps(a_col1, b_row1, res);
-
-    // For element 2 of every row in A: indices (2, 6, 10, 14)
     __m512 a_col2 = _mm512_shuffle_ps(a.repr, a.repr, _MM_SHUFFLE(2, 2, 2, 2));
-    // Step 3: Fused Multiply-Add
     res = _mm512_fmadd_ps(a_col2, b_row2, res);
-
-    // For element 3 of every row in A: indices (3, 7, 11, 15)
     __m512 a_col3 = _mm512_shuffle_ps(a.repr, a.repr, _MM_SHUFFLE(3, 3, 3, 3));
-    // Step 4: Final Fused Multiply-Add
     res = _mm512_fmadd_ps(a_col3, b_row3, res);
 
     return Mat4{ res };
 }
 
-// 8bit.
-
-// void cmp_string(Slice<char> str)
-// {
-//  // 1. Исходные 16 символов (например, ищем символ 'A')
-//     const char text[16] = {'h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd', '!', '!', 'A', '!', '!'};
-//     char target = 'A';
-
-//     // 2. Загружаем 16 символов в 128-битный регистр
-//     __m128i chunk = _mm_loadu_si128(reinterpret_cast<const __m128i*>(text));
-
-//     // 3. Заполняем второй регистр эталонным символом (размножаем 'A' во все 16 слотов)
-//     __m128i match_pattern = _mm_set1_epi8(target);
-
-//     // 4. Сравниваем их. Если байты равны, в слоте будет 0xFF, если нет — 0x00
-//     __m128i cmp_result = _mm_cmpeq_epi8(chunk, match_pattern);
-
-//     // 5. Собираем старшие биты каждого байта в одно 16-битное число int (маску)
-//     int mask = _mm_movemask_epi8(cmp_result);
-
-//     // 6. Проверяем результат
-//     if (mask != 0) {
-//         std::cout << "Найдено совпадение! Битовая маска: " << std::hex << mask << "\n";
-        
-//         // Дополнительно: как узнать индекс первого совпавшего символа
-//         // Инструкция подсчета хвостовых нулей (требует c++20 <bit> или __builtin_ctz)
-//         int first_index = __builtin_ctz(mask); 
-//         std::cout << "Первый совпавший символ находится на индексе: " << std::dec << first_index << "\n";
-//     } else {
-//         std::cout << "Совпадений нет.\n";
-//     }
-// }
-
-
-// // Функция для безопасной сборки регистра из остатка данных (длиной от 1 до 15 байт)
-// __m128i load_partial_safe(const char* src, size_t remaining_bytes) {
-//     alignas(16) char buffer[16] = {0}; // Гарантированно обнуленный буфер
-//     std::memcpy(buffer, src, remaining_bytes); // Копируем только то, что осталось
-//     return _mm_load_si128(reinterpret_cast<const __m128i*>(buffer));
-// }
-
-// // Пример использования
-// void process_string(const char* str, size_t length, char target) {
-//     size_t i = 0;
-//     __m128i match_pattern = _mm_set1_epi8(target);
-
-//     // 1. Основной цикл по 16 байт
-//     for (; i + 16 <= length; i += 16) {
-//         __m128i chunk = _mm_loadu_si128(reinterpret_cast<const __m128i*>(str + i));
-//         int mask = _mm_movemask_epi8(_mm_cmpeq_epi8(chunk, match_pattern));
-//         if (mask != 0) { /* Обработка совпадения на индексе i + ctz(mask) */ }
-//     }
-
-//     // 2. Безопасная обработка остатка (хвоста строки)
-//     size_t remaining = length - i;
-//     if (remaining > 0) {
-//         __m128i chunk = load_partial_safe(str + i, remaining);
-//         int mask = _mm_movemask_epi8(_mm_cmpeq_epi8(chunk, match_pattern));
-        
-//         // ВАЖНО: Нам нужно сбросить в ноль биты маски, которые вышли за реальную длину строки
-//         mask &= (1 << remaining) - 1; 
-        
-//         if (mask != 0) { /* Обработка совпадения в хвосте */ }
-//     }
-// }
+// Underlying operations.
 
 // f128.
 

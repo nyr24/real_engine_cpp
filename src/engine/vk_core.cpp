@@ -1,5 +1,4 @@
-#include <volk/volk.h>
-#include <vulkan/vulkan_core.h>
+#include "volk/volk.h"
 #include "core/basic.hpp"
 #include "collections/farray.hpp"
 #include "collections/darray.hpp"
@@ -19,9 +18,8 @@ intern constexpr sz MAX_AVAIL_LAYERS = 64;
 intern constexpr sz MAX_REQ_EXTENSIONS = 10;
 intern constexpr sz MAX_AVAIL_EXTENSIONS = 164;
 
-intern bool add_validation_layers(FArray<CString, MAX_REQ_LAYERS>* out_layers);
-intern bool check_req_extensions(FArray<CString, MAX_REQ_EXTENSIONS>* req_extensions);
-intern CString get_surface_ext();
+intern bool add_validation_layers(DArray<CString>* out_layers);
+intern bool check_req_extensions(DArray<CString>* req_extensions);
 intern void init_debug_logger(VulkanContext* ctx);
 VkBool32 vk_debug_callback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT	message_severity,
@@ -46,8 +44,12 @@ bool init_instance(VulkanContext* vk_ctx)
         .pApplicationInfo = &vk_app_info,
     };
 
+    Arena* talloc = get_temp_allocator();
+    TEMP_ALLOC_SCOPE(talloc);
+
 #ifdef RG_DEBUG
-    FArray<CString, MAX_REQ_LAYERS> req_layers;
+    DArray<CString> req_layers;
+    req_layers.init_capacity(talloc, MAX_REQ_LAYERS);
 	req_layers.push("VK_LAYER_KHRONOS_validation");
 
 	if (!add_validation_layers(&req_layers))
@@ -56,9 +58,15 @@ bool init_instance(VulkanContext* vk_ctx)
 	}
 #endif // RG_DEBUG
 
-    FArray<CString, MAX_REQ_EXTENSIONS> req_extensions;
-    req_extensions.push(VK_KHR_SURFACE_EXTENSION_NAME);
-    req_extensions.push(get_surface_ext());
+    DArray<CString> req_extensions;
+    req_extensions.init_capacity(talloc, MAX_REQ_EXTENSIONS);
+
+    u32 platform_extensions_count;
+	CString* platform_extensions = glfwGetRequiredInstanceExtensions(&platform_extensions_count);
+	for (sz i = 0; i < platform_extensions_count; ++i)
+	{
+		req_extensions.push(platform_extensions[i]);
+	}
 
 #ifdef RG_DEBUG
 	req_extensions.push(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
@@ -70,7 +78,7 @@ bool init_instance(VulkanContext* vk_ctx)
 	instance_ci.enabledExtensionCount = (u32)req_extensions.count;
 	instance_ci.ppEnabledExtensionNames = (CString*)req_extensions.data;
 
-	VK_CHECK(vkCreateInstance(&instance_ci, null, &vk_ctx->instance));
+	VK_CHECK(vkCreateInstance(&instance_ci, vk_ctx->vk_alloc, &vk_ctx->instance));
 
 	volkLoadInstanceOnly(vk_ctx->instance);
 
@@ -81,9 +89,10 @@ bool init_instance(VulkanContext* vk_ctx)
     return true;
 }
 
-intern bool add_validation_layers(FArray<CString, MAX_REQ_LAYERS>* req_layers)
+intern bool add_validation_layers(DArray<CString>* req_layers)
 {
-    FArray<VkLayerProperties, MAX_REQ_LAYERS> avail_layers;
+    DArray<VkLayerProperties> avail_layers;
+    avail_layers.tinit_capacity(MAX_AVAIL_LAYERS);
 	u32 avail_layer_count;
 
 	VK_CHECK(vkEnumerateInstanceLayerProperties(&avail_layer_count, null));
@@ -95,7 +104,7 @@ intern bool add_validation_layers(FArray<CString, MAX_REQ_LAYERS>* req_layers)
 	{
 		for (const auto& avail_layer : avail_layers)
 		{
-			if (mem_compare_nullterm(avail_layer.layerName, req_layer))
+			if (rg::mem_compare_nullterm(avail_layer.layerName, req_layer))
 			{
 				LOG_INFO("Required layer was found: %s", req_layer);
 				goto _OUTER;
@@ -111,9 +120,10 @@ intern bool add_validation_layers(FArray<CString, MAX_REQ_LAYERS>* req_layers)
 	return true;
 }
 
-bool check_req_extensions(FArray<CString, MAX_REQ_EXTENSIONS>* req_extensions)
+intern bool check_req_extensions(DArray<CString>* req_extensions)
 {
-    FArray<VkExtensionProperties, MAX_AVAIL_EXTENSIONS> avail_extensions;
+    DArray<VkExtensionProperties> avail_extensions;
+    avail_extensions.tinit_capacity(MAX_AVAIL_EXTENSIONS);
 
 	u32 avail_ext_count;
 	VK_CHECK(vkEnumerateInstanceExtensionProperties(null, &avail_ext_count, null));
@@ -126,7 +136,7 @@ bool check_req_extensions(FArray<CString, MAX_REQ_EXTENSIONS>* req_extensions)
 	{
 		for (const auto& avail_ext : avail_extensions)
 		{
-			if (mem_compare_nullterm(avail_ext.extensionName, req_ext)) goto _OUTER;
+			if (rg::mem_compare_nullterm(avail_ext.extensionName, req_ext)) goto _OUTER;
 		}
 
 		LOG_FATAL("Required extension wasn't found: %s\nexiting", req_ext);
@@ -138,7 +148,7 @@ bool check_req_extensions(FArray<CString, MAX_REQ_EXTENSIONS>* req_extensions)
 	return true;
 }
 
-void init_debug_logger(VulkanContext* vk_ctx)
+intern void init_debug_logger(VulkanContext* vk_ctx)
 {
     u32 log_severity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
                        | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
@@ -181,18 +191,6 @@ VkBool32 vk_debug_callback(
 	return VK_FALSE;
 }
 
-#ifdef RG_PLATFORM_WIN32
-CString get_surface_ext()
-{
-	return "VK_KHR_win32_surface";
-}
-#else
-CString get_surface_ext()
-{
-	return "VK_KHR_xcb_surface";
-}
-#endif
-
 // Device.
 
 intern bool is_phys_device_suitable(
@@ -205,13 +203,13 @@ intern bool is_phys_device_suitable(
 intern bool find_queue_families(
 	VkPhysicalDevice dev,
 	VkSurfaceKHR surface,
-	FArray<u8, MAX_QUEUE_FAMILIES>* selected_fam_queue_counts,
+	DArray<u8>* selected_fam_queue_counts,
 	QueueIndices* out_indices
 );
 
 intern void calc_required_queue_counts(
 	Slice<u8> selected_queue_counts,
-	FArray<QueueCount, MAX_QUEUE_FAMILIES>* out_queue_counts
+	DArray<QueueCount>* out_queue_counts
 );
 
 intern void query_swapchain_support(
@@ -220,7 +218,7 @@ intern void query_swapchain_support(
 	SwapchainSupportInfo* out_swapchain_supp
 );
 
-Maybe<QueueIndex> pick_queue(
+intern Maybe<QueueIndex> pick_queue(
 	Slice<VkQueueFamilyProperties> queue_families,
 	Slice<u8> selected_fam_queue_counts,
 	VkQueueFlagBits required_flag,
@@ -230,7 +228,7 @@ Maybe<QueueIndex> pick_queue(
 	u8 min_queue_count = u8(1)
 );
 
-Maybe<QueueIndex> pick_presentation_queue(
+intern Maybe<QueueIndex> pick_presentation_queue(
 	Slice<VkQueueFamilyProperties> queue_families,
 	Slice<u8> selected_fam_queue_counts,
 	VkPhysicalDevice dev,
@@ -255,8 +253,12 @@ bool VulkanDevice::init(VulkanContext* ctx)
 		return false;
 	}
 
-	FArray<VkPhysicalDevice, MAX_PHYS_DEVS> phys_devs;
-	phys_devs.resize(rg::min(MAX_PHYS_DEVS, device_count));
+	Arena* talloc = get_temp_allocator();
+	TEMP_ALLOC_SCOPE(talloc);
+
+	DArray<VkPhysicalDevice> phys_devs;
+	phys_devs.init_capacity(talloc, device_count);
+	phys_devs.resize(device_count);
 
 	VK_CHECK(vkEnumeratePhysicalDevices(ctx->instance, &device_count, phys_devs.data));
 
@@ -297,7 +299,8 @@ bool VulkanDevice::init(VulkanContext* ctx)
 	// Queue Selection.
 
 	// Here we're tracking how much queues were selected from each family.
-	FArray<u8, MAX_QUEUE_FAMILIES> selected_queue_counts_by_family;
+	DArray<u8> selected_queue_counts_by_family;
+	selected_queue_counts_by_family.init(talloc);
 
 	if (!find_queue_families(selected_phys_dev, ctx->surface, &selected_queue_counts_by_family, &dev->queue_indices))
 	{
@@ -305,7 +308,8 @@ bool VulkanDevice::init(VulkanContext* ctx)
 		return false;
 	}
 
-	FArray<QueueCount, MAX_QUEUE_FAMILIES> compact_queue_fam_counts;
+	DArray<QueueCount> compact_queue_fam_counts;
+	compact_queue_fam_counts.tinit_capacity(MAX_QUEUE_FAMILIES);
 	calc_required_queue_counts(selected_queue_counts_by_family.slice(), &compact_queue_fam_counts);
 
 	FArray<VkDeviceQueueCreateInfo, MAX_QUEUE_FAMILIES> queue_infos;
@@ -313,38 +317,37 @@ bool VulkanDevice::init(VulkanContext* ctx)
 
 	FArray<f32, MAX_QUEUE_FAMILIES> queue_priorities;
 	queue_priorities.resize(compact_queue_fam_counts.count);
-	queue_priorities.fill(1.0);
-	QueueIndex* queue_indices_ptr = (QueueIndex*)&dev->queue_indices;
+	queue_priorities.fill(1.0f);
 
 	for (sz i = 0; i < queue_infos.count; ++i)
 	{
-		auto& info = queue_infos[i];
+		VkDeviceQueueCreateInfo* info = &queue_infos[i];
 		if (compact_queue_fam_counts[i].count == 0)
 		{
 			continue;
 		}
 
-		info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		info.pNext = null;
-		info.queueFamilyIndex = compact_queue_fam_counts[i].fam_ind;
-		info.queueCount = compact_queue_fam_counts[i].count;
-		info.flags = 0;
-		info.pQueuePriorities = &queue_priorities[i];
+		info->sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		info->pNext = null;
+		info->queueFamilyIndex = compact_queue_fam_counts[i].fam_ind;
+		info->queueCount = compact_queue_fam_counts[i].count;
+		info->flags = 0;
+		info->pQueuePriorities = &queue_priorities[i];
 	}
 
 	VkPhysicalDeviceFeatures device_features = { .samplerAnisotropy = VK_TRUE, };
 
 	VkPhysicalDeviceVulkan13Features device_features13 = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-		.dynamicRendering = VK_TRUE,
 		.synchronization2 = VK_TRUE,
+		.dynamicRendering = VK_TRUE,
 	};
 
 	VkPhysicalDeviceVulkan12Features device_features12 = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
 		.pNext = &device_features13,
-		.bufferDeviceAddress = VK_TRUE,
 		.descriptorIndexing = VK_TRUE,
+		.bufferDeviceAddress = VK_TRUE,
 	};
 
 	VkDeviceCreateInfo device_ci = {
@@ -384,7 +387,7 @@ Maybe<u32> VulkanDevice::find_mem_type_index(u32 type_filter, VkMemoryPropertyFl
 	Slice<VkMemoryType> mem_types_view = { this->mem_props.memoryTypes, this->mem_props.memoryTypeCount };
 	for (u32 i = 0; i < (u32)mem_types_view.count; ++i)
 	{
-		auto& mem_type = mem_types_view[i];
+		VkMemoryType& mem_type = mem_types_view[i];
 		if (((type_filter & (1 << i)) > 0) && ((mem_type.propertyFlags & mem_flags) == mem_flags))
 		{
 			res.set_val(i);
@@ -418,13 +421,13 @@ bool is_phys_device_suitable(
 		return false;
 	}
 
-	Arena* temp_alloc = get_temp_allocator(); 
-	TEMP_ALLOC_SCOPE(temp_alloc);
+	Arena* talloc = get_temp_allocator(); 
+	TEMP_ALLOC_SCOPE(talloc);
 	DArray<VkExtensionProperties> avail_extensions;
 
 	u32 avail_ext_count;
 	VK_CHECK(vkEnumerateDeviceExtensionProperties(dev, null, &avail_ext_count, null));
-	avail_extensions.tinit_capacity((sz)avail_ext_count);
+	avail_extensions.init_capacity(talloc, (sz)avail_ext_count);
 	avail_extensions.resize((sz)avail_ext_count);
 
 	VK_CHECK(vkEnumerateDeviceExtensionProperties(dev, null, &avail_ext_count, &avail_extensions[0]));
@@ -434,7 +437,7 @@ bool is_phys_device_suitable(
 		bool found = false;
 		for (const auto& avail_ext : avail_extensions.slice())
 		{
-			if (mem_compare_nullterm(avail_ext.extensionName, req_ext))
+			if (rg::mem_compare_nullterm(avail_ext.extensionName, req_ext))
 			{
 				found = true;
 				break;
@@ -459,12 +462,14 @@ bool is_phys_device_suitable(
 	return true;
 }
 
-void query_swapchain_support(
+intern void query_swapchain_support(
 	VkPhysicalDevice dev,
 	VkSurfaceKHR surface,
 	SwapchainSupportInfo* out_swapchain_supp
 )
 {
+	ASSERT_NON_NULL(surface);
+
 	VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(dev, surface, &out_swapchain_supp->capabilities));
 
 	u32 format_count;
@@ -475,7 +480,7 @@ void query_swapchain_support(
 	if (format_count > 0)
 	{
 		out_swapchain_supp->formats.resize(rg::min((u32)MAX_FORMATS, format_count));
-		VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(dev, surface, &format_count, out_swapchain_supp->formats.first_ref()));
+		VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(dev, surface, &format_count, out_swapchain_supp->formats.data));
 	}
 
 	if (present_mode_count > 0)
@@ -515,22 +520,27 @@ bool VulkanDevice::detect_depth_format()
 	return false;
 }
 
-bool find_queue_families(
+intern bool find_queue_families(
 	VkPhysicalDevice dev,
 	VkSurfaceKHR surface,
-	FArray<u8, MAX_QUEUE_FAMILIES>* selected_queue_counts_by_family,
+	DArray<u8>* selected_queue_counts_by_family,
 	QueueIndices* out_indices
 )
 {
+	ASSERT_INITIALIZED(selected_queue_counts_by_family);
+
+	Arena* talloc = get_temp_allocator();
+	TEMP_ALLOC_SCOPE(talloc);
+
 	u32 queue_fam_count;
 	vkGetPhysicalDeviceQueueFamilyProperties(dev, &queue_fam_count, null);
 
-	FArray<VkQueueFamilyProperties, MAX_QUEUE_FAMILIES> queue_families;
-	queue_fam_count = rg::min(MAX_QUEUE_FAMILIES, queue_fam_count);
+	DArray<VkQueueFamilyProperties> queue_families;
+	queue_families.init_capacity(talloc, queue_fam_count);
 	queue_families.resize(queue_fam_count);
 
 	selected_queue_counts_by_family->resize(queue_fam_count);
-	vkGetPhysicalDeviceQueueFamilyProperties(dev, &queue_fam_count, queue_families.first_ref());
+	vkGetPhysicalDeviceQueueFamilyProperties(dev, &queue_fam_count, queue_families.data);
 
 	Slice<VkQueueFamilyProperties> queue_family_view = queue_families.slice();
 	Slice<u8> selected_queue_counts_by_family_view = selected_queue_counts_by_family->slice();
@@ -626,7 +636,7 @@ bool find_queue_families(
 	return true;
 }
 
-Maybe<QueueIndex> pick_queue(
+intern Maybe<QueueIndex> pick_queue(
 	Slice<VkQueueFamilyProperties> queue_families,
 	Slice<u8> selected_fam_queue_counts,
 	VkQueueFlagBits required_flag,
@@ -680,7 +690,7 @@ Maybe<QueueIndex> pick_queue(
 	return result_index;
 }
 
-Maybe<QueueIndex> pick_presentation_queue(
+intern Maybe<QueueIndex> pick_presentation_queue(
 	Slice<VkQueueFamilyProperties> queue_families,
 	Slice<u8> selected_fam_queue_counts,
 	VkPhysicalDevice dev,
@@ -741,9 +751,9 @@ Maybe<QueueIndex> pick_presentation_queue(
 	return result_index;
 }
 
-void calc_required_queue_counts(
+intern void calc_required_queue_counts(
 	Slice<u8> selected_queue_counts,
-	FArray<QueueCount, MAX_QUEUE_FAMILIES>* out_queue_counts
+	DArray<QueueCount>* out_queue_counts
 )
 {
 	for (u8 i = 0; i < selected_queue_counts.count; ++i)
@@ -914,14 +924,12 @@ void VulkanSwapchain::recreate_if_needed(VulkanContext* ctx)
 {
 	if (this->recreation_scheduled)
 	{
-		// NOTE: TEMP
-		// VkExtent2D new_coords = ctx->renderer.get_extent();
-		VkExtent2D new_coords = { 2560, 1440 };
+		EngineContext* engine_ctx = get_engine_context();
+		VkExtent2D new_coords = engine_ctx->renderer.get_extent();
 		LOG_INFO("Recreating swapchain, new screen coordinates: %d %d", new_coords.width, new_coords.height);
 		this->recreate(ctx, new_coords);
 		this->recreation_scheduled = false;
-		// NOTE: TEMP
-		// ctx->renderer.window_events.resize_scheduled = true;
+		engine_ctx->renderer.set_resize_scheduled(true);
 	}
 }
 
@@ -1534,7 +1542,7 @@ void VulkanCmdBuffer::begin_recording(
 	*cmd_buff_state = CmdBufferState::RECORDING_BEGIN;
 }
 
-void cmd_buff_begin_recording_many(
+void cmd_buffer_begin_recording_many(
 	Slice<VulkanCmdBuffer> cmd_buffs,
 	Slice<CmdBufferState> cmd_buff_states,
 	VkCommandBufferUsageFlags flags
@@ -1557,7 +1565,7 @@ void VulkanCmdBuffer::end_recording(CmdBufferState* cmd_buff_state)
 	*cmd_buff_state = CmdBufferState::RECORDING_END;
 }
 
-void cmd_buff_end_recording_many(Slice<VulkanCmdBuffer> cmd_buffs, Slice<CmdBufferState> cmd_buff_states)
+void cmd_buffer_end_recording_many(Slice<VulkanCmdBuffer> cmd_buffs, Slice<CmdBufferState> cmd_buff_states)
 {
 	for (sz i = 0; i < cmd_buffs.count; ++i)
 	{
@@ -1789,7 +1797,14 @@ void VulkanCmdPool::destroy(VulkanContext* ctx)
 
 intern VkVertexInputBindingDescription get_binding_descr(u8 binding_index);
 
-bool VulkanShader::init(VulkanContext* ctx, StrView file_name, VulkanShaderConfig* config)
+VulkanShader create_shader(VulkanContext* ctx, StrView file_name, VulkanShaderConfig* config)
+{
+	VulkanShader shader;
+	shader.init(ctx, file_name, config);
+	return shader;
+}
+
+void VulkanShader::init(VulkanContext* ctx, StrView file_name, VulkanShaderConfig* config)
 {
 	this->ctx = ctx;
 	this->mod.init(ctx, file_name, config->stage_bits);
@@ -1807,7 +1822,7 @@ bool VulkanShader::init(VulkanContext* ctx, StrView file_name, VulkanShaderConfi
 	VkPipelineLayoutCreateInfo pipeline_layouts_ci = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = (u32)layouts.count,
-		.pSetLayouts = layouts.first_ref(),
+		.pSetLayouts = layouts.data,
 		.pushConstantRangeCount = (u32)config->push_constant_ranges.count,
 		.pPushConstantRanges = config->push_constant_ranges.ptr,
 	};
@@ -1834,8 +1849,6 @@ bool VulkanShader::init(VulkanContext* ctx, StrView file_name, VulkanShaderConfi
 			config->vertex_binding_index
 		);
 	}
-
-	return true;
 }
 
 void VulkanShader::create_pipeline(
@@ -2301,6 +2314,61 @@ void VulkanShaderModule::get_pipeline_stages(
 intern VkVertexInputBindingDescription get_binding_descr(u8 binding_index)
 {
 	return { .binding = (u32)binding_index, .stride = sizeof(Vertex), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX, };
+}
+
+// Pipeline destroy's.
+
+void VulkanShader::destroy(VulkanContext* ctx)
+{
+	for (auto& layout : this->descriptor_layouts)
+	{
+		layout.destroy(ctx);
+	}
+	for (auto& pipe : this->pipelines)
+	{
+		pipe.destroy(ctx);
+	}
+	for (auto &pool : this->descriptor_pools)
+	{
+		pool.destroy(ctx);
+	}
+	this->mod.destroy(ctx);
+}
+
+void VulkanPipeline::destroy(VulkanContext* ctx)
+{
+	if (this->handle)
+	{
+		vkDestroyPipeline(ctx->dev.log_dev, this->handle, ctx->vk_alloc);
+		this->handle = null;
+	}
+}
+
+void VulkanShaderModule::destroy(VulkanContext* ctx)
+{
+	if (this->handle)
+	{
+		vkDestroyShaderModule(ctx->dev.log_dev, this->handle, ctx->vk_alloc);
+		this->handle = null;
+	}
+}
+
+void VulkanDescriptorSetLayout::destroy(VulkanContext* ctx)
+{
+	if (this->handle)
+	{
+		vkDestroyDescriptorSetLayout(ctx->dev.log_dev, this->handle, ctx->vk_alloc);
+		this->handle = null;
+	}
+}
+
+void VulkanDescriptorPool::destroy(VulkanContext* ctx)
+{
+	if (this->handle)
+	{
+		vkDestroyDescriptorPool(ctx->dev.log_dev, this->handle, ctx->vk_alloc);
+		this->handle = null;
+	}
 }
 
 // Utilities.
