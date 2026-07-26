@@ -1,5 +1,4 @@
 #include "core/basic.hpp"
-#include "core/context.hpp"
 #include "engine/event.hpp"
 
 namespace rg
@@ -7,29 +6,21 @@ namespace rg
  
 void EventSystem::init()
 {
-    Context* ctx = get_context();
-	for (auto& event_arr : this->event_arrays)
-	{
-		event_arr.init_capacity(ctx->allocator, DEFAULT_CAPACITY);
-	}
+ //    Context* ctx = get_context();
+	// for (auto& event_arr : this->event_arrays)
+	// {
+	// 	event_arr.init_capacity(ctx->allocator, DEFAULT_CAPACITY);
+	// }
 }
 
-void EventSystem::clear()
+void EventSystem::add_immediate_handler(EventCode code, EventHandlerFn handler, void* listener)
 {
-	for (auto& event_arr : this->event_arrays)
-	{
-		event_arr.clear();
-	}
+	this->immediate_events[code].push({ handler, listener });
 }
 
-void EventSystem::add_event(EventCode code, EventHandlerFn handler, void* listener)
+void EventSystem::execute_immediate_handlers(EventCode code, EventContext ev_ctx)
 {
-	this->event_arrays[code].push(Event{ handler, listener });
-}
-
-void EventSystem::fire_event(EventCode code, EventContext ev_ctx)
-{
-	for (const Event& event : this->event_arrays[code])
+	for (const ImmediateEvent& event : this->immediate_events[code])
 	{
 		if (event.handler(ev_ctx, event.listener))
 		{
@@ -38,14 +29,14 @@ void EventSystem::fire_event(EventCode code, EventContext ev_ctx)
 	}
 }
 
-void EventSystem::remove_event(EventCode code, EventHandlerFn handler)
+void EventSystem::remove_immediate_handler(EventCode code, EventHandlerFn handler)
 {
     sz idx = 0;
-	for (const Event& ev : this->event_arrays[code])
+	for (const ImmediateEvent& ev : this->immediate_events[code])
 	{
 		if (handler == ev.handler)
 		{
-			this->event_arrays[code].remove_unordered_at(idx);
+			this->immediate_events[code].remove_unordered_at(idx);
 		}
 		++idx;
 	}

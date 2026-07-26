@@ -1,6 +1,6 @@
-#include <vulkan/vulkan.h>
-#include <vulkan/vulkan_core.h>
 #include "engine/entry.hpp"
+#define GLFW_INCLUDE_VULKAN
+#include "glfw/glfw3.h"
 
 namespace rg
 {

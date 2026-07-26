@@ -9,7 +9,6 @@
 #include "engine/entry.hpp"
 #include "engine/geometry.hpp"
 #include "engine/entity.hpp"
-#include <vulkan/vulkan_core.h>
 
 namespace rg
 {
@@ -382,13 +381,13 @@ bool VulkanDevice::init(VulkanContext* ctx)
 	return true;
 }
 
-Maybe<u32> VulkanDevice::find_mem_type_index(u32 type_filter, VkMemoryPropertyFlagBits mem_flags)
+Maybe<u32> VulkanDevice::find_mem_type_index(u32 type_filter, VkMemoryPropertyFlagBits mem_flags) const
 {
 	Maybe<u32> res;
-	Slice<VkMemoryType> mem_types_view = { this->mem_props.memoryTypes, this->mem_props.memoryTypeCount };
+	Slice<const VkMemoryType> mem_types_view = { this->mem_props.memoryTypes, this->mem_props.memoryTypeCount };
 	for (u32 i = 0; i < (u32)mem_types_view.count; ++i)
 	{
-		VkMemoryType& mem_type = mem_types_view[i];
+		const VkMemoryType& mem_type = mem_types_view[i];
 		if (((type_filter & (1 << i)) > 0) && ((mem_type.propertyFlags & mem_flags) == mem_flags))
 		{
 			res.set_val(i);

@@ -1,8 +1,9 @@
 #ifndef _RG_ENTITY_HPP_
 #define _RG_ENTITY_HPP_
 
+#include "engine/shared.hpp"
 #include "core/basic.hpp"
-#include "core/bits.hpp"
+#include "collections/bits.hpp"
 #include "engine/geometry.hpp"
 
 namespace rg
@@ -70,8 +71,6 @@ struct EntityTransformsTagged
 	};
 	bool has_matrix;
 };
-
-alias TextureIdx = s32;
 
 struct Entity
 {

@@ -7,6 +7,9 @@
 namespace rg
 {
 
+// How much memory application will use.
+intern constexpr sz APP_MEMORY_CAPACITY = 4 * GB;
+
 intern Context context;
 intern thread_local Arena* temp_allocator;
 intern EngineContext engine_context;
@@ -59,7 +62,7 @@ Allocator* get_persist_allocator()
 
 bool application_init(AppConfig config)
 {
-    persistent_allocator = VmemAllocator::create(2 * GB);
+    persistent_allocator = VmemAllocator::create(APP_MEMORY_CAPACITY);
     context_init(persistent_allocator);
     init_temp_allocator(context.allocator);
     if (!engine_context_init(config)) return false;

@@ -63,7 +63,7 @@ void InputSystem::process_key(sz key, bool is_pressed)
 	ev_ctx.as_u32[0] = key;
 
 	EngineContext* engine_ctx = get_engine_context();
-	engine_ctx->event_sys.fire_event(
+	engine_ctx->event_sys.execute_immediate_handlers(
 		is_pressed ? KEY_DOWN : KEY_UP,
 		ev_ctx
 	);
@@ -78,7 +78,7 @@ void InputSystem::process_mouse_button(MouseButton button, bool is_pressed)
 	ev_ctx.as_u32[0] = (uint)button;
 
 	EngineContext* engine_ctx = get_engine_context();
-	engine_ctx->event_sys.fire_event(
+	engine_ctx->event_sys.execute_immediate_handlers(
 		is_pressed ? MOUSE_DOWN : MOUSE_UP,
 		ev_ctx
 	);
@@ -111,7 +111,7 @@ void InputSystem::process_mouse_move(MousePos pos)
 	ev_ctx.as_f32[1] = this->mouse_delta.y;
 
 	EngineContext* engine_ctx = get_engine_context();
-	engine_ctx->event_sys.fire_event(EventCode::MOUSE_MOVE, ev_ctx);
+	engine_ctx->event_sys.execute_immediate_handlers(EventCode::MOUSE_MOVE, ev_ctx);
 }
 
 void InputSystem::process_mouse_wheel(bool z_delta)
@@ -119,7 +119,7 @@ void InputSystem::process_mouse_wheel(bool z_delta)
 	EventContext ev_ctx;
 	ev_ctx.as_b8[0] = z_delta;
 	EngineContext* engine_ctx = get_engine_context();
-	engine_ctx->event_sys.fire_event(EventCode::MOUSE_WHEEL, ev_ctx);
+	engine_ctx->event_sys.execute_immediate_handlers(EventCode::MOUSE_WHEEL, ev_ctx);
 }
 
 bool operator==(const MousePos& first, const MousePos& sec)

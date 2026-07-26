@@ -1,7 +1,7 @@
 #ifndef _RG_RENDERER_HPP_
 #define _RG_RENDERER_HPP_
 
-#include <vulkan/vulkan.h>
+#include "volk/volk.h"
 #include "core/clock.hpp"
 #include "core/math.hpp"
 #include "engine/vk_core.hpp"
@@ -9,6 +9,8 @@
 
 namespace rg
 {
+
+alias ColorRGBA = Vec4;
 
 struct Renderer
 {
@@ -26,8 +28,7 @@ struct Renderer
 	Clock frame_clock;
 	VkViewport viewport;
 	VkRect2D scissors;
-	// ColorRGBA clear_color;
-	// RingBuffer{BackgroundTask, MAX_BACKGROUND_TASKS} background_tasks;
+	ColorRGBA clear_color;
 	// [exit_scheduled=1;resize_scheduled=0]
 	BitInt<u8> bits;
 

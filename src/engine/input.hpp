@@ -4,7 +4,7 @@
 #include "core/basic.hpp"
 #include "core/clock.hpp"
 #include "collections/farray.hpp"
-#include "GLFW/glfw3.h"
+#include "glfw/glfw3.h"
 
 namespace rg
 {

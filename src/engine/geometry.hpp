@@ -1,7 +1,7 @@
 #ifndef _RG_GEOMETRY_HPP_
 #define _RG_GEOMETRY_HPP_
 
-#include "core/bits.hpp"
+#include "collections/bits.hpp"
 #include "core/math.hpp"
 
 namespace rg

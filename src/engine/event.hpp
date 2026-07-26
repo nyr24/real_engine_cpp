@@ -3,7 +3,6 @@
 
 #include "core/basic.hpp"
 #include "collections/farray.hpp"
-#include "collections/darray.hpp"
 
 namespace rg
 {
@@ -50,10 +49,10 @@ union EventContext
     }
 };
 
-// if returns true, dont proceed with calls to other events (event has been handled)
+// If returns true, dont proceed with calls to other events (event has been handled).
 alias EventHandlerFn = bool(*)(EventContext ctx, void* listener);
 
-struct Event
+struct ImmediateEvent
 {
 	EventHandlerFn handler;
 	void* listener;
@@ -61,14 +60,19 @@ struct Event
 
 struct EventSystem
 {
-    static constexpr sz DEFAULT_CAPACITY = 256;
-	EnumArray<DArray<Event>, EventCode> event_arrays;
+    static constexpr sz MAX_CALLBACKS_FOR_EVENT = 24;
+
+    // TODO: add deffered event-handlers if needed.
+    // For heavy events, collected in the queue during frame,
+    // then executed synchronously at the certain time in the beginning of the next frame.
+    // RingBuffer<> deferred_events;
+    // For light events, they are executed immediately. 
+	EnumArray<FArray<ImmediateEvent, MAX_CALLBACKS_FOR_EVENT>, EventCode> immediate_events;
 
 	void init();
-	void clear();
-    void add_event(EventCode code, EventHandlerFn handler, void* listener);
-    void fire_event(EventCode code, EventContext ev_ctx);
-    void remove_event(EventCode code, EventHandlerFn handler);
+    void add_immediate_handler(EventCode code, EventHandlerFn handler, void* listener);
+    void execute_immediate_handlers(EventCode code, EventContext ev_ctx);
+    void remove_immediate_handler(EventCode code, EventHandlerFn handler);
 };
 
 } // rg

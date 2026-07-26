@@ -1,11 +1,11 @@
 #ifndef _RG_VULKAN_CORE_HPP_
 #define _RG_VULKAN_CORE_HPP_
 
-#include <vulkan/vulkan.h>
+#include "volk/volk.h"
 #include "collections/farray.hpp"
 #include "collections/darray.hpp"
 #include "collections/string.hpp"
-#include "core/bits.hpp"
+#include "collections/bits.hpp"
 #include "core/thread.hpp"
 #include "engine/entity.hpp"
 
@@ -535,11 +535,11 @@ struct VulkanDevice
 
 	bool init(VulkanContext* ctx);
 	bool detect_depth_format();
-	Maybe<u32> find_mem_type_index(u32 type_filter, VkMemoryPropertyFlagBits mem_flags);
+	Maybe<u32> find_mem_type_index(u32 type_filter, VkMemoryPropertyFlagBits mem_flags) const;
 	void destroy(VulkanContext* ctx);
 
-	void wait_idle() { vkDeviceWaitIdle(this->log_dev); }
-	bool graphics_matches_transfer_queue()
+	void wait_idle() const { vkDeviceWaitIdle(this->log_dev); }
+	bool graphics_matches_transfer_queue() const
 	{
 		return this->queue_indices.graphics.fam == this->queue_indices.transfer.fam;
 	}

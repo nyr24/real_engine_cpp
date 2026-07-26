@@ -9,7 +9,6 @@ s32 main()
     AppConfig config = { "ReAl EngiNe WinDow", 2560, 1440 };
     if (!application_init(config)) panic("Failed to init application");
     defer(application_destroy());
-
     application_run();
 // Atomic
     // Atomic<s32> atom = {200};

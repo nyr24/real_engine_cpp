@@ -2,6 +2,7 @@
 #define _RG_ENTRY_HPP_
 
 #include "core/basic.hpp"
+#include "collections/thread_pool.hpp"
 #include "engine/event.hpp"
 #include "engine/input.hpp"
 #include "engine/vk_core.hpp"
@@ -104,6 +105,8 @@ struct Window
 
 // Engine context.
 
+constexpr sz MAX_ENGINE_THREAD_POOL_TASKS = 64;
+
 struct EngineContext
 {
     EventSystem event_sys;
@@ -111,6 +114,7 @@ struct EngineContext
     VulkanContext vk_ctx;
     Renderer renderer;
     Window window;
+    ThreadPool<RG_THREAD_COUNT - 1, MAX_ENGINE_THREAD_POOL_TASKS> thread_pool;
 };
 
 EngineContext* get_engine_context();
