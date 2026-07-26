@@ -612,12 +612,12 @@ bool arena_resize(Allocator* self, void* ptr, sz new_size, sz alignment)
     if (!ptr) return arena_allocate(self, new_size, alignment, false);
     if (new_size == 0) arena_free(self, ptr);
 
-	sz aligned_new_size = align(new_size, DEFAULT_MEM_ALIGNMENT);
 	ArenaAllocHeader* header = (ArenaAllocHeader*)((u8*)ptr - sizeof(ArenaAllocHeader));
 	u64 old_size = header->size();
     bool last_alloc = arena->is_last_alloc(arena->cursor, ptr, old_size);
     if (!last_alloc) return false;
 
+	sz aligned_new_size = align(new_size, DEFAULT_MEM_ALIGNMENT);
 	sz alloc_size_diff = aligned_new_size - old_size;
 
 	// Shrink allocation.
@@ -711,6 +711,252 @@ bool Arena::is_last_alloc(sz cursor, void* ptr, sz alloc_size)
 }
 
 void Arena::destroy()
+{
+    ASSERT_MSG(this->backing_alloc, "Backing allocator must be available");
+    this->fallback_free_all();
+    allocator_free(this->backing_alloc, this);
+}
+
+// Thread-safe arena allocator.
+
+const AllocatorVtable THREAD_ARENA_VTABLE = {
+    .allocate = &thread_arena_allocate,
+    .reallocate = &thread_arena_reallocate,
+    .resize = &thread_arena_resize,
+    .free = &thread_arena_free,
+    .display_info = &thread_arena_display_info,
+};
+
+ThreadArena* ThreadArena::create(Allocator* backing_alloc, sz init_capacity)
+{
+    ASSERT_MSG(init_capacity > 0, "Must be greater than 0");
+
+    ThreadArena* arena = (ThreadArena*)allocator_allocate(backing_alloc, sizeof(ThreadArena) + init_capacity);
+    arena->vtable = &THREAD_ARENA_VTABLE;
+    arena->cursor = 0;
+    arena->capacity = init_capacity;
+    arena->mark_count.val = 0;
+    arena->backing_alloc = backing_alloc;
+    arena->fallback_root = null;
+    arena->mutex.init();
+    return arena;
+}
+
+void* thread_arena_allocate(Allocator* self, sz size, sz alignment, bool zero_mem)
+{
+    ASSERT_GREATER_ZERO(size);
+    alignment = alignment_for_allocation(alignment);
+    ASSERT_POW_OF_TWO(alignment);
+ 
+    ThreadArena* arena = (ThreadArena*)self;
+    size = align(size, DEFAULT_MEM_ALIGNMENT);
+    sz max_needed_size = size + alignment + sizeof(ArenaAllocHeader);
+
+    arena->mutex.lock();
+
+    if (max_needed_size > arena->remain_mem())
+    {
+        // Try to resize backing buffer.
+        if (allocator_resize(arena->backing_alloc, arena, arena->capacity + max_needed_size))
+        {
+            arena->capacity += max_needed_size;
+            goto _NEXT;
+        }
+
+        // Unlock after fallback, because it doesn't use lock.
+        defer(arena->mutex.unlock());
+        return arena->fallback_allocate(size, alignment, zero_mem);
+    }
+
+    _NEXT:
+    // We need to make update before hand, if we're in multi-threaded context, and unlock other threads.
+    u8* curr = arena->cursor_ptr();
+    arena->cursor += max_needed_size;
+    arena->mutex.unlock();
+
+    u8* aligned = align_ptr(curr + sizeof(ArenaAllocHeader), alignment);
+    ASSERT_ALIGNED(aligned, alignment);
+    ArenaAllocHeader* header = (ArenaAllocHeader*)(aligned - sizeof(ArenaAllocHeader));
+    u8 padding = u8(uptr(header) - uptr(curr));
+    header->set_size(u64(size));
+    header->set_padding(padding);
+
+    if (zero_mem) mem_zero(aligned, size);
+    return aligned;
+}
+
+intern void* thread_arena_allocate_non_lock(Allocator* self, sz size, sz alignment, bool zero_mem)
+{
+    ASSERT_GREATER_ZERO(size);
+    alignment = alignment_for_allocation(alignment);
+    ASSERT_POW_OF_TWO(alignment);
+ 
+    ThreadArena* arena = (ThreadArena*)self;
+    size = align(size, DEFAULT_MEM_ALIGNMENT);
+    sz max_needed_size = size + alignment + sizeof(ArenaAllocHeader);
+
+    if (max_needed_size > arena->remain_mem())
+    {
+        // Try to resize backing buffer.
+        if (allocator_resize(arena->backing_alloc, arena, arena->capacity + max_needed_size))
+        {
+            arena->capacity += max_needed_size;
+            goto _NEXT;
+        }
+        return arena->fallback_allocate(size, alignment, zero_mem);
+    }
+
+    _NEXT:
+    // We need to make update before hand, if we're in multi-threaded context, and unlock other threads.
+    u8* curr = arena->cursor_ptr();
+    arena->cursor += max_needed_size;
+
+    u8* aligned = align_ptr(curr + sizeof(ArenaAllocHeader), alignment);
+    ASSERT_ALIGNED(aligned, alignment);
+    ArenaAllocHeader* header = (ArenaAllocHeader*)(aligned - sizeof(ArenaAllocHeader));
+    u8 padding = u8(uptr(header) - uptr(curr));
+    header->set_size(u64(size));
+    header->set_padding(padding);
+
+    if (zero_mem) mem_zero(aligned, size);
+    return aligned;
+}
+
+// Use of this is discouraged, prefer to use 'marks' to free arena memory all at once.
+void thread_arena_free(Allocator* self, void* ptr)
+{
+    ASSERT_NON_NULL(ptr);
+    ThreadArena* arena = (ThreadArena*)self;
+    arena->mutex.lock();
+    defer(arena->mutex.unlock());
+    if (!arena->owns_ptr(ptr)) return;
+    ArenaAllocHeader* header = (ArenaAllocHeader*)((u8*)ptr - sizeof(ArenaAllocHeader));
+    auto [size, padding] = header->size_and_padding();
+    if (!arena->is_last_alloc(arena->cursor, ptr, size)) return;
+    arena->cursor -= (padding + sizeof(ArenaAllocHeader) + size);
+}
+
+bool thread_arena_resize(Allocator* self, void* ptr, sz new_size, sz alignment)
+{
+    ASSERT_GREATER_ZERO(new_size);
+    alignment = alignment_for_allocation(alignment);
+    ASSERT_POW_OF_TWO(alignment);
+
+    ThreadArena* arena = (ThreadArena*)self;
+
+    if (!ptr) return thread_arena_allocate(self, new_size, alignment, false);
+    if (new_size == 0) thread_arena_free(self, ptr);
+
+    arena->mutex.lock();
+    defer(arena->mutex.unlock());
+    
+	ArenaAllocHeader* header = (ArenaAllocHeader*)((u8*)ptr - sizeof(ArenaAllocHeader));
+	u64 old_size = header->size();
+    bool last_alloc = arena->is_last_alloc(arena->cursor, ptr, old_size);
+    if (!last_alloc)
+    {
+        return false;
+    }
+
+	sz aligned_new_size = align(new_size, DEFAULT_MEM_ALIGNMENT);
+	sz alloc_size_diff = aligned_new_size - old_size;
+
+	// Shrink allocation.
+	if (alloc_size_diff < 0)
+	{
+    	arena->cursor -= alloc_size_diff;
+    	header->set_size(old_size - u64(alloc_size_diff));
+        return true;
+	}
+	else if (alloc_size_diff <= arena->remain_mem())
+    {
+    	arena->cursor += alloc_size_diff;
+    	header->set_size(old_size + u64(alloc_size_diff));
+    	return true;
+    }
+
+    return false;
+}
+
+void* thread_arena_reallocate(Allocator* self, void* ptr, sz new_size, sz alignment)
+{
+    if (arena_resize(self, ptr, new_size, alignment)) return ptr;
+
+    ThreadArena* arena = (ThreadArena*)self;
+    arena->mutex.lock();
+    defer(arena->mutex.unlock());
+
+	ArenaAllocHeader* header = (ArenaAllocHeader*)((u8*)ptr - sizeof(ArenaAllocHeader));
+	u64 old_size = header->size();
+
+    // Do fresh allocation.
+    void* ret = thread_arena_allocate_non_lock(self, new_size, alignment, false);
+    mem_copy((u8*)ret, (u8*)ptr, rg::min(old_size, u64(new_size)));
+    return ret;
+}
+
+void thread_arena_display_info(Allocator* self)
+{
+    ThreadArena* arena = (ThreadArena*)self;
+    // Logger uses its own mutex, should be fine.
+    LOG_DEBUG("ThreadArena allocator info:");
+    LOG_DEBUG("capacity: %ll, cursor: %ll, mark count: %ll",
+        arena->capacity, arena->cursor, arena->mark_count);
+}
+
+void* ThreadArena::fallback_allocate(sz size, sz alignment, bool zero_mem)
+{
+    FallbackAllocation* curr = this->fallback_root;
+    while (curr)
+    {
+        curr = curr->next;
+    }
+
+    curr = (FallbackAllocation*)allocator_allocate(this->backing_alloc, size + sizeof(FallbackAllocation), alignment);
+    curr->size = u64(size);
+    curr->next = null;
+
+    if (this->fallback_root == null) this->fallback_root = curr;
+
+    return curr->mem_begin();
+}
+
+void ThreadArena::fallback_free_all()
+{
+    ASSERT_MSG(this->backing_alloc, "Backing allocator must be available");
+
+    FallbackAllocation* curr = this->fallback_root;
+    FallbackAllocation* next;
+
+    while (curr)
+    {
+        next = curr->next;
+        allocator_free(this->backing_alloc, curr);
+        curr = next;
+    }
+
+    this->fallback_root = null;
+}
+
+sz ThreadArena::save_mark()
+{
+    this->mark_count.inc();
+    return this->cursor;
+}
+
+void ThreadArena::restore_mark(sz mark)
+{
+    this->cursor = mark;
+    this->mark_count.dec();
+}
+
+bool ThreadArena::is_last_alloc(sz cursor, void* ptr, sz alloc_size)
+{
+	sz alloc_cursor = ((u8*)ptr + alloc_size) - (u8*)this->mem_begin();
+	return alloc_cursor == cursor;
+}
+
+void ThreadArena::destroy()
 {
     ASSERT_MSG(this->backing_alloc, "Backing allocator must be available");
     this->fallback_free_all();

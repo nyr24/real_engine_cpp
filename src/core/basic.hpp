@@ -19,6 +19,7 @@
 	#include <unistd.h>
 	#include <sys/stat.h>
 	#include <sys/mman.h>	
+	#include <pthread.h>
 	#define FMT_PLACEHOLDER_NULL "%s"
 	#define FMT_PLACEHOLDER_LEN "%.*s"
 #endif // _WIN32
@@ -34,6 +35,26 @@
 #else
 #define RG_THREAD_COUNT 4
 #endif
+
+// Check simd availability.
+
+#if defined(__AVX2__)
+	#include <immintrin.h>
+	#define RG_FEATURE_SIMD_256 1
+#else
+	#define RG_FEATURE_SIMD_256
+#endif
+
+#if defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
+	#include <emmintrin.h>
+	#define RG_FEATURE_SIMD_128 1
+#else
+	#define RG_FEATURE_SIMD_128
+#endif
+
+// volk.h + glfw.
+#define GLFW_INCLUDE_VULKAN
+#define VK_NO_PROTOTYPES
 
 // Types and keywords.
 
@@ -304,6 +325,20 @@ inline Type wrap_sub_assume_pow_two(Type val, Type count, Type boundary)
 {
 	ASSERT_POW_OF_TWO(boundary);
 	return val - count & (boundary - 1);
+}
+
+template<typename Type>
+inline Type wrap_inc_assume_pow_two(Type val, Type boundary)
+{
+	ASSERT_POW_OF_TWO(boundary);
+	return val + 1 & (boundary - 1);
+}
+
+template<typename Type>
+inline Type wrap_dec_assume_pow_two(Type val, Type boundary)
+{
+	ASSERT_POW_OF_TWO(boundary);
+	return val - 1 & (boundary - 1);
 }
 
 template<typename Type>

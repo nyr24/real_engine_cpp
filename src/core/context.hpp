@@ -30,6 +30,7 @@ Context* get_context();
 Arena* get_temp_allocator();
 Allocator* get_persist_allocator();
 void init_temp_allocator(Allocator* backing_alloc, sz capacity = DEFAULT_TEMP_STORAGE_CAPACITY);
+sz get_thread_id();
 
 } // rg
 

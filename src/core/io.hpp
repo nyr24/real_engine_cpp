@@ -32,6 +32,8 @@ namespace rg
         void add_parts(Slice<StrView> part);
         void add_part(StrView part);
         void ensure_separator_at_end();
+        StrView get_view_without_extension() const;
+        StrView get_extension() const;
 
     #ifdef RG_PLATFORM_WIN32
     public:

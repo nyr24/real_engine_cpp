@@ -1,7 +1,7 @@
 #include <stdarg.h>
 #include "core/basic.hpp"
-#include "core/bits.hpp"
 #include "core/clock.hpp"
+#include "collections/bits.hpp"
 
 namespace rg
 {
@@ -204,5 +204,15 @@ void Clock::stop()
     this->progress = 0;
 }
 
+// Thread id.
+
+sz get_thread_id()
+{
+#ifdef RG_PLATFORM_WIN32
+	return (sz)::GetCurrentThreadId();
+#else
+	return (sz)::pthread_self();
+#endif
+}
 
 } // rg

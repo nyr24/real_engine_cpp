@@ -11,6 +11,7 @@ namespace rg
 intern void platform_process_cwd(Path* path, Allocator* alloc, sz add_cap = 0);
 intern sz get_steps_back_from_cwd_and_trim(StrView path);
 intern void path_trim_parts_from_end(Path* path, sz trim_count);
+intern StrView get_extension(StrView value);
 
 void Path::init(Allocator* alloc, StrView init_part, bool null_term)
 {
@@ -92,6 +93,29 @@ void Path::add_part(StrView part)
     if (part.last() == PATH_SEPARATOR) part.trim_end_n(1);
     this->push(part);
     this->push(PATH_SEPARATOR);
+}
+
+intern StrView get_extension(StrView value)
+{
+    auto [dot_idx, found] = value.last_index_of('.');
+    if (!found) return value;
+    return value.view_idx(0, dot_idx);
+}
+
+StrView Path::get_view_without_extension() const
+{
+    auto [dot_idx, found] = this->last_index_of('.');
+    if (!found)
+    {
+        LOG_WARN("Path doesn't have extension or dot: " FMT_PLACEHOLDER_LEN, FMT_DSTRING(this));
+        return this->view();
+    }
+    return this->view_idx(0, dot_idx - 1);
+}
+
+StrView Path::get_extension() const
+{
+    return rg::get_extension(this->view());
 }
 
 intern void path_trim_parts_from_end(Path* self, sz trim_count)
@@ -312,7 +336,8 @@ sz file_get_size_from_path(Path* path)
     return file_size;
 #else
     struct stat stat_buf;
-    ASSERT_EQ_ZERO(::stat(path->data, &stat_buf));
+    s32 res = ::stat(path->data, &stat_buf);
+    ASSERT_MSG(res == 0, "Failed to get file size from path: " FMT_PLACEHOLDER_LEN, FMT_DSTRING(path));
     return stat_buf.st_size;
 #endif
 }
