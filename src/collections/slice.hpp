@@ -361,8 +361,8 @@ bool common_trim_sequence_end(Type** ptr, sz* count, Slice<Type> trim_seq)
 template<typename Type>
 void common_trim_from_start_to_first_occur(Type** start, sz* count, Type search, bool inclusive)
 {
-    sz idx = common_index_of(*start, *count, search);
-    if (idx == INDEX_INVALID || idx == 0) return;
+    auto [idx, found] = common_index_of(*start, *count, search);
+    if (!found || idx == 0) return;
     if (!inclusive) idx++;
     *start += idx;
     *count -= idx;
@@ -371,8 +371,8 @@ void common_trim_from_start_to_first_occur(Type** start, sz* count, Type search,
 template<typename Type>
 void common_trim_from_start_to_last_occur(Type** start, sz* count, Type search, bool inclusive)
 {
-    sz idx = common_last_index_of(*start, *count, search);
-    if (idx == INDEX_INVALID || idx == 0) return;
+    auto [idx, found] = common_last_index_of(*start, *count, search);
+    if (!found || idx == 0) return;
     if (!inclusive) idx++;
     *start += idx;
     *count -= idx;
@@ -381,8 +381,8 @@ void common_trim_from_start_to_last_occur(Type** start, sz* count, Type search, 
 template<typename Type>
 void common_trim_from_end_to_first_occur(Type** start, sz* count, Type search, bool inclusive)
 {
-    sz idx = common_index_of(*start, *count, search);
-    if (idx == INDEX_INVALID || idx == 0) return;
+    auto [idx, found] = common_index_of(*start, *count, search);
+    if (!found || idx == 0) return;
     if (inclusive) idx++;
     *count = idx;
 }
@@ -390,8 +390,8 @@ void common_trim_from_end_to_first_occur(Type** start, sz* count, Type search, b
 template<typename Type>
 void common_trim_from_end_to_last_occur(Type** start, sz* count, Type search, bool inclusive)
 {
-    sz idx = common_last_index_of(*start, *count, search);
-    if (idx == INDEX_INVALID || idx == 0) return;
+    auto [idx, found] = common_index_of(*start, *count, search);
+    if (!found || idx == 0) return;
     if (inclusive) idx++;
     *count = idx;
 }
