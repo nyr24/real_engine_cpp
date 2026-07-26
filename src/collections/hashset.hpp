@@ -55,7 +55,7 @@ struct HashSet
     void init_with_values(Allocator* alloc, Slice<Type> values, sz add_capacity = 0, f32 load_factor = DEFAULT_LOAD_FACTOR);
     void put(const Type& val);
     bool has(const Type& key);
-    Type* get(const Type& key);
+    Maybe<Type*> get(const Type& key);
     bool remove(const Type& key);
     void destroy();
     Iter get_iter();
@@ -201,8 +201,9 @@ void HashSet<Type>::put_inner(u64* data, sz capacity, sz* count, u64 hash, const
 }
 
 template<typename Type>
-Type* HashSet<Type>::get(const Type& val)
+Maybe<Type*> HashSet<Type>::get(const Type& val)
 {
+    Maybe<Type*> res;
     u64 search_hash = calc_hash(val);
     sz idx = get_idx_for_hash(search_hash, this->capacity);
     Type* values = values_begin(this->data, this->capacity);
@@ -210,19 +211,27 @@ Type* HashSet<Type>::get(const Type& val)
 
     for (; curr_idx != this->capacity; ++curr_idx)
     {
-        if (this->data[curr_idx] == HASH_EMPTY) return null;
-        if (this->data[curr_idx] == search_hash && values[curr_idx] == val) return values + curr_idx; 
+        if (this->data[curr_idx] == HASH_EMPTY) return res;
+        if (this->data[curr_idx] == search_hash && values[curr_idx] == val) 
+        {
+            res.set_val(values + curr_idx);
+            return res;
+        }
     }
 
     // if we searched from the start, no need to do wrap around search.
-    if (idx == 0) return null;
+    if (idx == 0) return res;
 
     curr_idx = 0;
 
     for (; curr_idx < idx; ++curr_idx)
     {
-        if (this->data[curr_idx] == HASH_EMPTY) return null;
-        if (this->data[curr_idx] == search_hash && values[curr_idx] == val) return values + curr_idx; 
+        if (this->data[curr_idx] == HASH_EMPTY) return res;
+        if (this->data[curr_idx] == search_hash && values[curr_idx] == val)
+        {
+            res.set_val(values + curr_idx);
+            return res;
+        }
     }
 
     return null;

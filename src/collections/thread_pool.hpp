@@ -3,8 +3,8 @@
 
 #include "core/basic.hpp"
 #include "core/thread.hpp"
-#include "core/bits.hpp"
 #include "core/context.hpp"
+#include "collections/bits.hpp"
 #include "collections/farray.hpp"
 #include "collections/ringbuffer.hpp"
 
@@ -37,6 +37,7 @@ struct ThreadPool
     static constexpr u32 STOP_BIT = 1 << 1;
 
     Array<Thread, THREAD_COUNT> threads;
+    Array<sz, THREAD_COUNT> thread_ids;
     Mutex mutex;
     ConditionVariable work_acquired;
     ConditionVariable work_finished;
@@ -50,7 +51,7 @@ struct ThreadPool
     void init();
     void submit_task(const ThreadTask& task);
     void submit_task_many(Slice<ThreadTask> tasks);
-    void await();
+    void await(bool called_from_thread_pool_thread = false);
     void destroy();
 
     bool is_initialized()
@@ -77,6 +78,7 @@ intern s32 worker(void* arg)
     auto* worker_input = (WorkerInput<THREAD_COUNT, MAX_TASKS>*)arg;
     ThreadPool<THREAD_COUNT, MAX_TASKS>* tpool = worker_input->tpool;
     sz thread_idx = worker_input->idx;
+    tpool->thread_ids[thread_idx] = get_thread_id();
 
     tpool->mutex.lock();
     Context* ctx = get_context();
@@ -150,12 +152,14 @@ void ThreadPool<THREAD_COUNT, MAX_TASKS>::submit_task_many(Slice<ThreadTask> tas
 }
 
 template<sz THREAD_COUNT, sz MAX_TASKS>
-void ThreadPool<THREAD_COUNT, MAX_TASKS>::await()
+void ThreadPool<THREAD_COUNT, MAX_TASKS>::await(bool called_from_thread_pool_thread)
 {
     this->mutex.lock();
     defer(this->mutex.unlock());
-    // TODO: Context->thread_id
-    while (this->tasks_in_progress > 0 || !this->task_queue.is_empty())
+
+    sz wait_count = (sz)called_from_thread_pool_thread;
+
+    while (this->tasks_in_progress > wait_count || !this->task_queue.is_empty())
     {
         this->work_finished.wait(&this->mutex);
     }

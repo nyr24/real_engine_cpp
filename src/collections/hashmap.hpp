@@ -62,7 +62,7 @@ struct HashMap
     void init_with_key_values(Allocator* alloc, Slice<HashMapKVPair<Key, Value>> pairs, sz add_capacity = 0, f32 load_factor = DEFAULT_LOAD_FACTOR);
     void put(const Key& key, const Value& val);
     bool has(const Key& key);
-    Value* get(const Key& key);
+    Maybe<Value*> get(const Key& key);
     bool remove(const Key& key);
     void destroy();
     Iter get_iter();
@@ -214,8 +214,9 @@ void HashMap<Key, Value>::put_inner(u64* data, sz capacity, sz* count, u64 hash,
 }
 
 template<typename Key, typename Value>
-Value* HashMap<Key, Value>::get(const Key& key)
+Maybe<Value*> HashMap<Key, Value>::get(const Key& key)
 {
+    Maybe<Value*> res;
     u64 search_hash = calc_hash(key);
     sz idx = get_idx_for_hash(search_hash, this->capacity);
     auto [keys, values] = keys_values_begin(this->data, this->capacity);
@@ -223,22 +224,30 @@ Value* HashMap<Key, Value>::get(const Key& key)
 
     for (; curr_idx != this->capacity; ++curr_idx)
     {
-        if (this->data[curr_idx] == HASH_EMPTY) return null;
-        if (this->data[curr_idx] == search_hash && keys[curr_idx] == key) return values + curr_idx; 
+        if (this->data[curr_idx] == HASH_EMPTY) return res;
+        if (this->data[curr_idx] == search_hash && keys[curr_idx] == key)
+        {
+            res.set_val(values + curr_idx);
+            return res;
+        }
     }
 
     // if we searched from the start, no need to do wrap around search.
-    if (idx == 0) return null;
+    if (idx == 0) return res;
 
     curr_idx = 0;
 
     for (; curr_idx < idx; ++curr_idx)
     {
-        if (this->data[curr_idx] == HASH_EMPTY) return null;
-        if (this->data[curr_idx] == search_hash && keys[curr_idx] == key) return values + curr_idx; 
+        if (this->data[curr_idx] == HASH_EMPTY) return res;
+        if (this->data[curr_idx] == search_hash && keys[curr_idx] == key) 
+        {
+            res.set_val(values + curr_idx);
+            return res;
+        }
     }
 
-    return null;
+    return res;
 }
 
 template<typename Key, typename Value>

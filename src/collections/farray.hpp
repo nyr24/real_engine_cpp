@@ -38,13 +38,14 @@ struct FArray
     void pop_and_move_ownership(Slice<Type> out_vals);
     void remove_unordered_at(sz idx);
     void resize(sz new_size);
+    void resize_to_capacity();
     void fill(const Type& val);
     Slice<Type> slice(sz start = 0, sz offset = -1) const;
     Slice<Type> slice_idx(sz start = 0, sz end = -1) const;
-    sz index_of(const Type& val) const;
-    sz index_of(Slice<Type> slice) const;
-    sz last_index_of(const Type& val) const;
-    sz last_index_of(Slice<Type> slice) const;
+    Maybe<sz> index_of(const Type& val) const;
+    Maybe<sz> index_of(Slice<Type> slice) const;
+    Maybe<sz> last_index_of(const Type& val) const;
+    Maybe<sz> last_index_of(Slice<Type> slice) const;
     bool has(const Type& val) const;
     bool has(Slice<Type> val) const;
     void foreach(void(*fn)(const Type&)) const;
@@ -230,6 +231,12 @@ void FArray<Type, CAPACITY>::resize(sz new_size)
 }
 
 template<typename Type, sz CAPACITY>
+void FArray<Type, CAPACITY>::resize_to_capacity()
+{
+    this->count = CAPACITY;
+}
+
+template<typename Type, sz CAPACITY>
 void FArray<Type, CAPACITY>::fill(const Type& with)
 {
     for (auto& el : *this) el = with;
@@ -245,7 +252,7 @@ inline Type FArray<Type, CAPACITY>::at(sz idx) const
 template<typename Type, sz CAPACITY>
 inline Type* FArray<Type, CAPACITY>::at_ref(sz idx)
 {
-    return &this->at(idx);
+    return &this->data[idx];
 }
 
 template<typename Type, sz CAPACITY>
@@ -294,27 +301,27 @@ Slice<Type> FArray<Type, CAPACITY>::slice_idx(sz start, sz end) const
 }
 
 template<typename Type, sz CAPACITY>
-sz FArray<Type, CAPACITY>::index_of(const Type& search) const
+Maybe<sz> FArray<Type, CAPACITY>::index_of(const Type& search) const
 {
-    return common_index_of(&this->data, this->count, search);
+    return common_index_of(this->data, this->count, search);
 }
 
 template<typename Type, sz CAPACITY>
-sz FArray<Type, CAPACITY>::index_of(Slice<Type> slice) const
+Maybe<sz> FArray<Type, CAPACITY>::index_of(Slice<Type> slice) const
 {
-    return common_index_of(&this->data, this->count, slice);
+    return common_index_of(this->data, this->count, slice);
 }
 
 template<typename Type, sz CAPACITY>
-sz FArray<Type, CAPACITY>::last_index_of(const Type& search) const
+Maybe<sz> FArray<Type, CAPACITY>::last_index_of(const Type& search) const
 {
-    return common_last_index_of(&this->data, this->count, search);
+    return common_last_index_of(this->data, this->count, search);
 }
 
 template<typename Type, sz CAPACITY>
-sz FArray<Type, CAPACITY>::last_index_of(Slice<Type> slice) const
+Maybe<sz> FArray<Type, CAPACITY>::last_index_of(Slice<Type> slice) const
 {
-    return common_last_index_of(&this->data, this->count, slice);
+    return common_last_index_of(this->data, this->count, slice);
 }
 
 template<typename Type, sz CAPACITY>
@@ -383,6 +390,12 @@ struct Array
     Array& operator=(const Array<Type, CAPACITY>& rhs);
     Slice<Type> slice(sz start = 0, sz offset = -1);
     Slice<Type> slice_idx(sz start = 0, sz idx = -1);
+    Maybe<sz> index_of(const Type& val) const;
+    Maybe<sz> index_of(Slice<Type> slice) const;
+    Maybe<sz> last_index_of(const Type& val) const;
+    Maybe<sz> last_index_of(Slice<Type> slice) const;
+    bool has(const Type& val) const;
+    bool has(Slice<Type> val) const;
 
     constexpr sz len() const { return CAPACITY; }
     constexpr sz capacity() const { return CAPACITY; }
@@ -405,11 +418,11 @@ struct Array
 template<typename Type, sz CAPACITY>
 constexpr Array<Type, CAPACITY>::Array(std::initializer_list<Type> init_list)
 {
-    sz i = 0;
-    const Type* curr = init_list.begin();
-    for (; i < CAPACITY; ++i)
+    Type* start = this->data;    
+    for (Type el : init_list)
     {
-        this->data[i] = curr[i];
+        *start = el;
+        ++start;
     }
 }
 
@@ -440,6 +453,42 @@ Slice<Type> Array<Type, CAPACITY>::slice_idx(sz start, sz end)
     if (end == -1) end = this->capacity() - 1;
     sz dist = (end - start) + 1;
     return { this->data + start, dist };
+}
+
+template<typename Type, sz CAPACITY>
+Maybe<sz> Array<Type, CAPACITY>::index_of(const Type& search) const
+{
+    return common_index_of(&this->data, this->len(), search);
+}
+
+template<typename Type, sz CAPACITY>
+Maybe<sz> Array<Type, CAPACITY>::index_of(Slice<Type> slice) const
+{
+    return common_index_of(&this->data, this->len(), slice);
+}
+
+template<typename Type, sz CAPACITY>
+Maybe<sz> Array<Type, CAPACITY>::last_index_of(const Type& search) const
+{
+    return common_last_index_of(&this->data, this->len(), search);
+}
+
+template<typename Type, sz CAPACITY>
+Maybe<sz> Array<Type, CAPACITY>::last_index_of(Slice<Type> slice) const
+{
+    return common_last_index_of(&this->data, this->len(), slice);
+}
+
+template<typename Type, sz CAPACITY>
+bool Array<Type, CAPACITY>::has(const Type& search) const
+{
+    return common_has(&this->data, this->len(), search);
+}
+
+template<typename Type, sz CAPACITY>
+bool Array<Type, CAPACITY>::has(Slice<Type> slice) const
+{
+    return common_has(&this->data, this->len(), slice);
 }
 
 // EnumArray.

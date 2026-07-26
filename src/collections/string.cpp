@@ -1,4 +1,4 @@
-#include <cstdarg>
+#include <stdarg.h>
 #include "collections/string.hpp"
 #include "core/context.hpp"
 
@@ -32,14 +32,14 @@ void StrView::init(CString cstr, bool preserve_null_term)
     if (preserve_null_term) this->count++;
 }
 
-bool StrView::starts_with(StrView input)
+bool StrView::starts_with(StrView input) const
 {
     ASSERT_INITIALIZED(this);
     ASSERT_INITIALIZED_VAL(input);
     return common_starts_with<const char>(this->ptr, this->count, input);
 }
 
-bool StrView::starts_with(CString input)
+bool StrView::starts_with(CString input) const
 {
     ASSERT_INITIALIZED(this);
     if (!input || *input == '\0') return false;
@@ -51,6 +51,22 @@ bool StrView::starts_with(CString input)
     {
     }
     return *inp_curr == '\0';
+}
+
+StrView StrView::view(sz start, sz offset) const
+{
+    if (offset == -1) offset = this->count;
+    ASSERT_MSG(start + offset <= this->count, "Mustn't exceed count");
+    return { this->ptr + start, offset };
+}
+
+StrView StrView::view_idx(sz start, sz end) const
+{
+    if (end == -1) end = this->count - 1;
+    sz dist = (end - start) + 1;
+    ASSERT_GREATER_ZERO(dist);
+    ASSERT_MSG(start + dist <= this->count, "Mustn't exceed count");
+    return { this->ptr + start, dist };
 }
 
 bool contains_non_ascii(const char* start, const char* end)
@@ -216,7 +232,7 @@ void DString::ensure_no_null_term()
     this->count--;
 }
 
-Slice<char> DString::slice_start_n(sz trim_count)
+Slice<char> DString::slice_start_n(sz trim_count) const
 {
     ASSERT_MSG(trim_count < this->count, "Shouldn't exceed inner count");
     Slice<char> slice = this->slice();
@@ -230,7 +246,7 @@ void DString::trim_end_n(sz trim_count)
     common_trim_end_n(&this->data, &this->count, trim_count);
 }
 
-Slice<char> DString::slice_sequence_start(Slice<char> trim_seq)
+Slice<char> DString::slice_sequence_start(Slice<char> trim_seq) const
 {
     Slice<char> slice = this->slice();
     slice.trim_sequence_start(trim_seq);
@@ -242,14 +258,14 @@ bool DString::trim_sequence_end(Slice<char> trim_seq)
     return common_trim_sequence_end(&this->data, &this->count, trim_seq);
 }
 
-Slice<char> DString::slice_from_start_to_first_occur(const char& search, bool inclusive)
+Slice<char> DString::slice_from_start_to_first_occur(const char& search, bool inclusive) const
 {
     Slice<char> slice = this->slice();
     slice.trim_from_start_to_first_occur(search, inclusive);
     return slice;
 }
 
-Slice<char> DString::slice_from_start_to_last_occur(const char& search, bool inclusive)
+Slice<char> DString::slice_from_start_to_last_occur(const char& search, bool inclusive) const
 {
     Slice<char> slice = this->slice();
     slice.trim_from_start_to_last_occur(search, inclusive);
@@ -284,14 +300,14 @@ void DString::replace(const char& find, const char& replace)
     }
 }
 
-StrView DString::view(sz start, sz offset)
+StrView DString::view(sz start, sz offset) const
 {
     if (offset == -1) offset = this->count;
     ASSERT_MSG(start + offset <= this->count, "Mustn't exceed count");
     return { this->data + start, offset };
 }
 
-StrView DString::view_idx(sz start, sz end)
+StrView DString::view_idx(sz start, sz end) const
 {
     if (end == -1) end = this->count - 1;
     sz dist = (end - start) + 1;
@@ -300,7 +316,7 @@ StrView DString::view_idx(sz start, sz end)
     return { this->data + start, dist };
 }
 
-void DString::foreach_codepoint(void(*fn)(Utf8Codepoint&))
+void DString::foreach_codepoint(void(*fn)(Utf8Codepoint&)) const
 {
     if (this->is_empty()) return;
     Utf8CodepointIterator iter = this->get_codepoint_iter();
@@ -314,7 +330,7 @@ void DString::foreach_codepoint(void(*fn)(Utf8Codepoint&))
     }
 }
 
-Utf8CodepointIterator DString::get_codepoint_iter()
+Utf8CodepointIterator DString::get_codepoint_iter() const
 {
     StrView view = this->view();
     Utf8CodepointIterator iter; 
@@ -323,7 +339,7 @@ Utf8CodepointIterator DString::get_codepoint_iter()
     return iter;
 }
 
-u64 DString::hash()
+u64 DString::hash() const
 {
     return rg::hash_fnv(this->data, this->count);
 }

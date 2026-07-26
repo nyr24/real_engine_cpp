@@ -46,15 +46,16 @@ struct DArray
     void remove_unordered_at(sz idx);
     void reserve(sz needed);
     void resize(sz new_size);
+    void resize_to_capacity();
     void fill(const Type& with);
     void destroy();
     DArray<Type> clone();
     Slice<Type> slice(sz start = 0, sz offset = -1) const;
     Slice<Type> slice_idx(sz start = 0, sz end = -1) const;
-    sz index_of(const Type& val) const;
-    sz index_of(Slice<Type> slice) const;
-    sz last_index_of(const Type& val) const;
-    sz last_index_of(Slice<Type> slice) const;
+    Maybe<sz> index_of(const Type& val) const;
+    Maybe<sz> index_of(Slice<Type> slice) const;
+    Maybe<sz> last_index_of(const Type& val) const;
+    Maybe<sz> last_index_of(Slice<Type> slice) const;
     bool has(const Type& val) const;
     bool has(Slice<Type> val) const;
     void foreach(void(*fn)(Type));
@@ -359,6 +360,12 @@ void DArray<Type>::resize(sz new_size)
 }
 
 template<typename Type>
+void DArray<Type>::resize_to_capacity()
+{
+    this->count = this->capacity;
+}
+
+template<typename Type>
 void DArray<Type>::fill(const Type& with)
 {
     for (auto& el : *this) el = with;
@@ -384,31 +391,31 @@ Slice<Type> DArray<Type>::slice_idx(sz start, sz end) const
 }
 
 template<typename Type>
-sz DArray<Type>::index_of(const Type& search) const
+Maybe<sz> DArray<Type>::index_of(const Type& search) const
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized");
-    return common_index_of(&this->data, this->count, search);
+    return common_index_of(this->data, this->count, search);
 }
 
 template<typename Type>
-sz DArray<Type>::index_of(Slice<Type> slice) const
+Maybe<sz> DArray<Type>::index_of(Slice<Type> slice) const
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized");
-    return common_index_of(&this->data, this->count, slice);
+    return common_index_of(this->data, this->count, slice);
 }
 
 template<typename Type>
-sz DArray<Type>::last_index_of(const Type& search) const
+Maybe<sz> DArray<Type>::last_index_of(const Type& search) const
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized");
-    return common_last_index_of(&this->data, this->count, search);
+    return common_last_index_of(this->data, this->count, search);
 }
 
 template<typename Type>
-sz DArray<Type>::last_index_of(Slice<Type> slice) const
+Maybe<sz> DArray<Type>::last_index_of(Slice<Type> slice) const
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized");
-    return common_last_index_of(&this->data, this->count, slice);
+    return common_last_index_of(this->data, this->count, slice);
 }
 
 template<typename Type>

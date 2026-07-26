@@ -11,12 +11,15 @@ namespace rg
 template<typename Type>
 struct Slice
 {
+    static constexpr sz DEFAULT_MAKE_CAPACITY = 8;
+    
     Type* ptr;
     sz count;
 
     Slice() = default;
     Slice(Type* ptr, sz count);
 
+    static Slice make(Allocator* alloc, sz capacity = DEFAULT_MAKE_CAPACITY);
     void init(Type* ptr, sz count);
     // Trims 'count' characters from start.
     void trim_start_n(sz count);
@@ -35,10 +38,10 @@ struct Slice
     Slice slice_idx(sz start_idx = 0, sz end_idx = INDEX_INVALID) const;
     bool starts_with(Slice<Type> input) const;
     bool ends_with(Slice<Type> input) const;
-    sz index_of(Type val) const;
-    sz index_of(Slice<Type> slice) const;
-    sz last_index_of(Type val) const;
-    sz last_index_of(Slice<Type> slice) const;
+    Maybe<sz> index_of(Type val) const;
+    Maybe<sz> index_of(Slice<Type> slice) const;
+    Maybe<sz> last_index_of(Type val) const;
+    Maybe<sz> last_index_of(Slice<Type> slice) const;
     bool has(Type val) const;
     bool has(Slice<Type> val) const;
     void replace(Type find, Type replace);
@@ -61,6 +64,7 @@ struct Slice
     bool is_initialized() const { return this->ptr && this->count; }
     bool is_empty() const { return this->ptr == null && this->count == 0; }
     sz byte_size() const { return sizeof(Type) * this->count; }
+    operator bool() const { return this->ptr && this->count; }
 };
 
 // For printf formatting with length (%.*s).
@@ -92,13 +96,13 @@ void common_trim_from_end_to_first_occur(Type** start, sz* count, Type search, b
 template<typename Type>
 void common_trim_from_end_to_last_occur(Type** start, sz* count, Type search, bool inclusive);
 template<typename Type>
-sz common_index_of(Type* start, sz count, Type search);
+Maybe<sz> common_index_of(const Type* start, sz count, Type search);
 template<typename Type>
-sz common_index_of(Type* start, sz count, Slice<Type> slice);
+Maybe<sz> common_index_of(const Type* start, sz count, Slice<Type> slice);
 template<typename Type>
-sz common_last_index_of(Type* start, sz count, Type search);
+Maybe<sz> common_last_index_of(const Type* start, sz count, Type search);
 template<typename Type>
-sz common_last_index_of(Type* start, sz count, Slice<Type> seq);
+Maybe<sz> common_last_index_of(const Type* start, sz count, Slice<Type> seq);
 template<typename Type>
 bool common_has(Type* start, sz count, Type search);
 template<typename Type>
@@ -116,6 +120,15 @@ void Slice<Type>::init(Type* ptr, sz count)
 {
     this->ptr = ptr;
     this->count = count;
+}
+
+template<typename Type>
+Slice<Type> Slice<Type>::make(Allocator* alloc, sz capacity)
+{
+    Slice<Type> res;
+    res.ptr = (Type*)allocator_allocate(alloc, capacity * sizeof(Type));
+    res.count = capacity;
+    return res;
 }
 
 template<typename Type>
@@ -169,28 +182,28 @@ void Slice<Type>::trim_from_end_to_last_occur(Type search, bool inclusive)
 }
 
 template<typename Type>
-sz Slice<Type>::index_of(Type search) const
+Maybe<sz> Slice<Type>::index_of(Type search) const
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized");
     return common_index_of(this->ptr, this->count, search);
 }
 
 template<typename Type>
-sz Slice<Type>::index_of(Slice<Type> slice) const
+Maybe<sz> Slice<Type>::index_of(Slice<Type> slice) const
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized");
     return common_index_of(this->ptr, this->count, slice);
 }
 
 template<typename Type>
-sz Slice<Type>::last_index_of(Type search) const
+Maybe<sz> Slice<Type>::last_index_of(Type search) const
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized");
     return common_last_index_of(this->ptr, this->count, search);
 }
 
 template<typename Type>
-sz Slice<Type>::last_index_of(Slice<Type> slice) const
+Maybe<sz> Slice<Type>::last_index_of(Slice<Type> slice) const
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized");
     return common_last_index_of(this->ptr, this->count, slice);
@@ -384,25 +397,31 @@ void common_trim_from_end_to_last_occur(Type** start, sz* count, Type search, bo
 }
 
 template<typename Type>
-sz common_index_of(Type* start, sz count, Type search)
+Maybe<sz> common_index_of(const Type* start, sz count, Type search)
 {
+    Maybe<sz> res;
     for (sz i = 0; i < count; ++i)
     {
-        if (start[i] == search) return i;
+        if (start[i] == search)
+        {
+            res.set_val(i);
+            return res;
+        }
     }
-    return INDEX_INVALID;
+    return res;
 }
 
 template<typename Type>
-sz common_index_of(Type* start, sz count, Slice<Type> slice)
+Maybe<sz> common_index_of(const Type* start, sz count, Slice<Type> slice)
 {
     if (slice.count == 1) return common_index_of(start, count, slice[0]);
 
-    Type* curr;
-    Type* inp_curr = slice.at_ref(1);
-    Type match_start = slice[0];
-    Type* end = start + count;
-    Type* inp_end = slice->end();
+    Maybe<sz> res;
+    const Type* curr;
+    const Type* inp_curr = slice.at_ref(1);
+    const Type match_start = slice[0];
+    const Type* end = start + count;
+    const Type* inp_end = slice->end();
     sz i = 0;
 
     for (; i < count && (count - i) >= slice.count; ++i)
@@ -416,33 +435,43 @@ sz common_index_of(Type* start, sz count, Slice<Type> slice)
                 ++inp_curr;
             }
             // Test for success.
-            if (inp_curr == inp_end) return i;
+            if (inp_curr == inp_end)
+            {
+                res.set_val(i);
+                return res;
+            }
             inp_curr = slice.at_ref(1);
         }
     }
-    return INDEX_INVALID;
+    return res;
 }
 
 template<typename Type>
-sz common_last_index_of(Type* start, sz count, Type search)
+Maybe<sz> common_last_index_of(const Type* start, sz count, Type search)
 {
+    Maybe<sz> res;
     sz i = count - 1;
     for (; i >= 0; --i)
     {
-        if (start[i] == search) return i;
+        if (start[i] == search)
+        {
+            res.set_val(i);
+            return res;
+        }
     }
-    return INDEX_INVALID;
+    return res;
 }
 
 template<typename Type>
-sz common_last_index_of(Type* start, sz count, Slice<Type> seq)
+Maybe<sz> common_last_index_of(const Type* start, sz count, Slice<Type> seq)
 {
     if (seq.count == 1) return common_last_index_of(seq[0]);
 
+    Maybe<sz> res;
     Type match_start = seq.last();
-    Type* curr;
-    Type* inp_curr = seq.last_ref() - 1;
-    Type* begin = start - 1;
+    const Type* curr;
+    const Type* inp_curr = seq.last_ref() - 1;
+    const Type* begin = start - 1;
     Type* inp_begin = seq->begin() - 1;
     sz i = count - 1;
     sz j;
@@ -460,23 +489,27 @@ sz common_last_index_of(Type* start, sz count, Slice<Type> seq)
                 --j;
             }
             // Test for success.
-            if (inp_curr == inp_begin) return j + 1;
+            if (inp_curr == inp_begin)
+            {
+                res.set_val(j + 1);
+                return res;
+            }
             inp_curr = seq.last_ref() - 1;
         }
     }
-    return INDEX_INVALID;
+    return res;
 }
 
 template<typename Type>
 bool common_has(Type* start, sz count, Type search)
 {
-    return common_index_of(start, count, search) != INDEX_INVALID;
+    return (bool)common_index_of(start, count, search);
 }
 
 template<typename Type>
 bool common_has(Type* start, sz count, Slice<Type> slice)
 {
-    return common_index_of(start, count, slice) != INDEX_INVALID;
+    return (bool)(common_index_of(start, count, slice));
 }
 
 } // rg

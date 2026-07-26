@@ -18,12 +18,14 @@ struct StrView : Slice<const char>
     StrView(CString cstr, sz count);
     void init(CString cstr, bool preserve_null_term = false);
     void trim_until_null(bool inclusive = true);
-    bool starts_with(StrView input);
-    bool starts_with(CString input);
+    bool starts_with(StrView input) const;
+    bool starts_with(CString input) const;
+    StrView view(sz start = 0, sz offset = -1) const;
+    StrView view_idx(sz start = 0, sz end = -1) const;
     // Removes const qualifier from pointer, be careful.
-    Slice<u8> to_byte_slice_unsafe() { return { (u8*)this->ptr, this->count }; }
+    Slice<u8> to_byte_slice_unsafe() const { return { (u8*)this->ptr, this->count }; }
     // Removes const qualifier from pointer, be careful.
-    Slice<char> to_char_slice_unsafe() { return { (char*)this->ptr, this->count }; }
+    Slice<char> to_char_slice_unsafe() const { return { (char*)this->ptr, this->count }; }
 };
 
 inline StrView slice_to_str_view(Slice<char> slice)
@@ -80,20 +82,20 @@ struct DString : DArray<char>
     void push_fmt(CString fmt, ...);
     void ensure_null_term();
     void ensure_no_null_term();
-    Utf8CodepointIterator get_codepoint_iter();
-    void foreach_codepoint(void(*fn)(Utf8Codepoint&));
-    u64 hash();
+    Utf8CodepointIterator get_codepoint_iter() const;
+    void foreach_codepoint(void(*fn)(Utf8Codepoint&)) const;
+    u64 hash() const;
     CString cstr();
-    StrView view(sz start = 0, sz offset = -1);
-    StrView view_idx(sz start = 0, sz end = -1);
-    bool is_null_term() { return this->count && this->last() == '\0'; }
+    StrView view(sz start = 0, sz offset = -1) const; 
+    StrView view_idx(sz start = 0, sz end = -1) const; 
+    bool is_null_term() const { return this->count && this->last() == '\0'; }
     bool starts_with(Slice<char> input) const;
     bool ends_with(Slice<char> input) const;
     void replace(const char& find, const char& replace);
-    Slice<char> slice_start_n(sz count);
-    Slice<char> slice_sequence_start(Slice<char> value_set);
-    Slice<char> slice_from_start_to_first_occur(const char& search, bool inclusive = false);
-    Slice<char> slice_from_start_to_last_occur(const char& search, bool inclusive = false);
+    Slice<char> slice_start_n(sz count) const;
+    Slice<char> slice_sequence_start(Slice<char> value_set) const;
+    Slice<char> slice_from_start_to_first_occur(const char& search, bool inclusive = false) const;
+    Slice<char> slice_from_start_to_last_occur(const char& search, bool inclusive = false) const;
     // Trims 'count' items from end.
     void trim_end_n(sz count);
     // Trims items sequentially from the end. (input is considered sequential)
@@ -131,16 +133,16 @@ struct FString : FArray<char, CAPACITY>
     void push_cstr_sized(CString cstr, sz size);
     bool ensure_null_term();
     void ensure_no_null_term();
-    Utf8CodepointIterator get_codepoint_iter();
-    void foreach_codepoint(void(*fn)(Utf8Codepoint));
-    u64 hash();
-    StrView view(sz start = 0, sz offset = -1);
-    StrView view_idx(sz start = 0, sz end = -1);
-    bool is_null_term() { return this->count && this->last() == '\0'; }
-    Slice<char> slice_start_n(sz count);
-    Slice<char> slice_sequence_start(Slice<char> value_set);
-    Slice<char> slice_from_start_to_first_occur(const char& search, bool inclusive = false);
-    Slice<char> slice_from_start_to_last_occur(const char& search, bool inclusive = false);
+    Utf8CodepointIterator get_codepoint_iter() const;
+    void foreach_codepoint(void(*fn)(Utf8Codepoint)) const;
+    u64 hash() const;
+    StrView view(sz start = 0, sz offset = -1) const;
+    StrView view_idx(sz start = 0, sz end = -1) const;
+    bool is_null_term() const { return this->count && this->last() == '\0'; }
+    Slice<char> slice_start_n(sz count) const;
+    Slice<char> slice_sequence_start(Slice<char> value_set) const;
+    Slice<char> slice_from_start_to_first_occur(const char& search, bool inclusive = false) const;
+    Slice<char> slice_from_start_to_last_occur(const char& search, bool inclusive = false) const;
     // Trims 'count' characters from end.
     void trim_end_n(sz count);
     // Trims sequentially values from the end of input. (input is considered sequential)
@@ -255,7 +257,7 @@ void FString<CAPACITY>::ensure_no_null_term()
 }
 
 template<sz CAPACITY>
-StrView FString<CAPACITY>::view(sz start, sz offset)
+StrView FString<CAPACITY>::view(sz start, sz offset) const
 {
     if (offset == -1) offset = this->count;
     ASSERT_MSG(start + offset <= this->count, "Mustn't exceed count");
@@ -263,7 +265,7 @@ StrView FString<CAPACITY>::view(sz start, sz offset)
 }
 
 template<sz CAPACITY>
-StrView FString<CAPACITY>::view_idx(sz start, sz end)
+StrView FString<CAPACITY>::view_idx(sz start, sz end) const
 {
     if (end == -1) end = this->count - 1;
     sz dist = (end - start) + 1;
@@ -273,7 +275,7 @@ StrView FString<CAPACITY>::view_idx(sz start, sz end)
 }
 
 template<sz CAPACITY>
-Slice<char> FString<CAPACITY>::slice_start_n(sz trim_count)
+Slice<char> FString<CAPACITY>::slice_start_n(sz trim_count) const
 {
     ASSERT_MSG(trim_count < this->count, "Shouldn't exceed inner count");
     Slice<char> slice = this->slice();
@@ -289,7 +291,7 @@ void FString<CAPACITY>::trim_end_n(sz trim_count)
 }
 
 template<sz CAPACITY>
-Slice<char> FString<CAPACITY>::slice_sequence_start(Slice<char> trim_seq)
+Slice<char> FString<CAPACITY>::slice_sequence_start(Slice<char> trim_seq) const
 {
     Slice<char> slice = this->slice();
     slice.trim_sequence_start(trim_seq);
@@ -303,7 +305,7 @@ bool FString<CAPACITY>::trim_sequence_end(Slice<char> trim_seq)
 }
 
 template<sz CAPACITY>
-Slice<char> FString<CAPACITY>::slice_from_start_to_first_occur(const char& search, bool inclusive)
+Slice<char> FString<CAPACITY>::slice_from_start_to_first_occur(const char& search, bool inclusive) const
 {
     Slice<char> slice = this->slice();
     slice.trim_from_start_to_first_occur(search, inclusive);
@@ -311,7 +313,7 @@ Slice<char> FString<CAPACITY>::slice_from_start_to_first_occur(const char& searc
 }
 
 template<sz CAPACITY>
-Slice<char> FString<CAPACITY>::slice_from_start_to_last_occur(const char& search, bool inclusive)
+Slice<char> FString<CAPACITY>::slice_from_start_to_last_occur(const char& search, bool inclusive) const
 {
     Slice<char> slice = this->slice();
     slice.trim_from_start_to_last_occur(search, inclusive);
@@ -352,7 +354,7 @@ void FString<CAPACITY>::replace(const char& find, const char& replace)
 }
 
 template<sz CAPACITY>
-void FString<CAPACITY>::foreach_codepoint(void(*fn)(Utf8Codepoint))
+void FString<CAPACITY>::foreach_codepoint(void(*fn)(Utf8Codepoint)) const
 {
     if (this->is_empty()) return;
     Utf8CodepointIterator iter = this->get_codepoint_iter();
@@ -367,7 +369,7 @@ void FString<CAPACITY>::foreach_codepoint(void(*fn)(Utf8Codepoint))
 }
 
 template<sz CAPACITY>
-Utf8CodepointIterator FString<CAPACITY>::get_codepoint_iter()
+Utf8CodepointIterator FString<CAPACITY>::get_codepoint_iter() const
 {
     StrView view = this->view();
     Utf8CodepointIterator iter; 
@@ -377,7 +379,7 @@ Utf8CodepointIterator FString<CAPACITY>::get_codepoint_iter()
 }
 
 template<sz CAPACITY>
-u64 FString<CAPACITY>::hash()
+u64 FString<CAPACITY>::hash() const
 {
     return rg::hash_fnv(this->data, this->count);
 }
