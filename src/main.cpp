@@ -7,9 +7,49 @@ using namespace rg;
 s32 main()
 {
     AppConfig config = { "ReAl EngiNe WinDow", 2560, 1440 };
-    if (!application_init(config)) panic("Failed to init application");
+    if (!application_init(config)) PANIC("Failed to init application");
     defer(application_destroy());
     application_run();
+
+// Bitsets.
+    //  HeapAlloc heap;
+    //  heap.init();
+
+    //  DBitSet<u32> bits;
+    //  bits.init(&heap, sizeof(u32) * 4);
+    //  ASSERT(bits.count_trailing_ones() == 0);
+    //  bits.set(0);
+    //  ASSERT(bits.count_trailing_ones() == 1);
+    //  bits.set(1);
+    //  ASSERT(bits.count_trailing_ones() == 2);
+    //  bits.set_all();
+    //  ASSERT(bits.count_trailing_ones() == bits.bit_capacity());
+
+    //  SlotArray<s32> sarr = {};
+    //  sarr.init(&heap, 100);
+
+    //  for (s32 i = 0; i < 32; ++i)
+    //  {
+    //      sarr.add(i);
+    //      s32 set_count = sarr.bits.set_bit_count();
+    //      ASSERT_MSG(set_count == i + 1, "Should be: %d, actual: %d", i, set_count);
+    //  }
+
+    //  for (s32 i = 32; i < 64; ++i)
+    //  {
+    //      sarr.add(i);
+    //      s32 set_count = sarr.bits.set_bit_count();
+    //      ASSERT_MSG(set_count == i + 1, "Should be: %d, actual: %d", i, set_count);
+    //  }
+
+    //  for (s32 i = 64; i < 69; ++i)
+    //  {
+    //      sarr.add(i);
+    //      s32 set_count = sarr.bits.set_bit_count();
+    //      ASSERT_MSG(set_count == i + 1, "Should be: %d, actual: %d", i, set_count);
+    // }
+
+
 // Atomic
     // Atomic<s32> atom = {200};
     // atom.add(228);

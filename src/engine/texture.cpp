@@ -31,15 +31,19 @@ bool Texture::load_cpu(
 		Arena* talloc = get_temp_allocator();
 		TEMP_ALLOC_SCOPE(talloc);
 
-		auto [texture_data, was_error] = load_from_disk(this);
-		if (was_error)
+		auto [texture_data, is_ok] = load_from_disk(this);
+		if (!is_ok)
 		{
 			this->load_state = TextureLoadState::FREE;
 			return false;
 		}
 
 		Array<Slice<u8>, 1> data_to_append = {{ texture_data, this->size }};
+		EngineContext* engine_ctx = get_engine_context();
+
+		engine_ctx->mutex.lock();
 		this->buff_view = staging_buff->append_data(data_to_append.slice());
+		engine_ctx->mutex.unlock();
 	}
 
 	this->load_state = TextureLoadState::LOADED_CPU_VISIBLE;
@@ -56,13 +60,14 @@ bool Texture::load_cpu(
 	this->gltf_sampler = gltf_sampler;
 
 	// NOTE: DEBUG
-	LOG_TRACE("Loaded cpu texture: " FMT_PLACEHOLDER_LEN, FMT_DSTRING_VAL(this->path));
+	LOG_INFO("Loaded cpu texture: " FMT_PLACEHOLDER_LEN, FMT_DSTRING_VAL(this->path));
 	return true;
 }
 
 intern Maybe<u8*> load_from_disk(Texture* self)
 {
 	Maybe<u8*> res;
+
 	u8* data = stbi_load(
 		(CString)self->path.cstr(),
 		(s32*)&self->width,
@@ -136,7 +141,7 @@ void Texture::cmd_transfer_to_gpu(
 	this->load_state = TextureLoadState::LOADED_GPU;
 
 	// NOTE: DEBUG
-	LOG_TRACE("Transfered gpu texture: " FMT_PLACEHOLDER_LEN, FMT_DSTRING_VAL(this->path));
+	LOG_INFO("Transfered gpu texture: " FMT_PLACEHOLDER_LEN, FMT_DSTRING_VAL(this->path));
 }
 
 bool Texture::load_cpu_and_transfer_gpu(
@@ -192,7 +197,7 @@ VkDescriptorImageInfo Texture::to_vk_descriptor_info()
 
 void TextureSystem::init(Allocator* alloc, sz capacity)
 {
-	this->textures.init_capacity(alloc, capacity);
+	this->textures.init(alloc, capacity);
 	for (auto& tex : this->textures)
 	{
 		tex.load_state = TextureLoadState::FREE;
@@ -215,7 +220,11 @@ void TextureSystem::load_new_textures_cpu_and_transfer_to_gpu(
 	Slice<VulkanCmdBuffer> cmd_buffs
 )
 {
+	BENCH_SCOPE(b, "Texture loading");
+	
 	EngineContext* engine_ctx = get_engine_context();
+	// NOTE: TEMP: multi-thread variant
+#if 0
 	Arena* talloc = get_temp_allocator();
 	TEMP_ALLOC_SCOPE(talloc);
 
@@ -233,7 +242,9 @@ void TextureSystem::load_new_textures_cpu_and_transfer_to_gpu(
 	{
 		curr_cmd_buff = cmd_buffs[cmd_buff_idx];
 
-		curr_task->self = this->textures.get_free_slot();
+		auto [tex, idx] = this->textures.get_free_slot_and_idx();
+		curr_config->idx = idx;
+		curr_task->self = tex;
 		curr_task->texture_path = &curr_config->path;
 		curr_task->vk_ctx = &engine_ctx->vk_ctx;
 		curr_task->staging_buff = &this->staging_buff;
@@ -245,12 +256,24 @@ void TextureSystem::load_new_textures_cpu_and_transfer_to_gpu(
 
 		++curr_task;
 		++curr_config;
+		++curr_thread_task;
 		wrap_inc_assume_pow_two(cmd_buff_idx, cmd_buffs.count);
 	}
 
 	engine_ctx->thread_pool.submit_task_many(thread_tasks);
 	// TODO: wait from IO thread.
 	engine_ctx->thread_pool.await();
+// NOTE: TEMP - Temporary single-threaded fallback.
+#else
+	VulkanCmdBuffer cmd_buff = cmd_buffs[0];
+	for (auto& conf : configs)
+	{
+		auto [tex, idx] = this->textures.get_free_slot_and_idx();
+		bool load_res = tex->load_cpu_and_transfer_gpu(conf.path, &engine_ctx->vk_ctx, &this->staging_buff, conf.gltf_sampler, cmd_buff);
+		if (!load_res) continue;
+		conf.idx = idx;
+	}
+#endif
 }
 
 inline StrView path_to_key(const Path& path)
@@ -288,12 +311,14 @@ using namespace rg;
 
 void* stb_alloc_extern(sz size)
 {
+	// LOG_TRACE("STb alloc of size: %dl", size);
     Arena* talloc = get_temp_allocator(); 
     return allocator_allocate(talloc, size);
 }
 
 void* stb_realloc_extern(void* old_ptr, sz new_size)
 {
+	// LOG_TRACE("STb realloc of size: %dl on ptr: %p", new_size, old_ptr);
     Arena* talloc = get_temp_allocator(); 
     return allocator_reallocate(talloc, old_ptr, new_size);
 }
@@ -301,4 +326,5 @@ void* stb_realloc_extern(void* old_ptr, sz new_size)
 // Made as noop because we rely on arena 'marks' to free memory.
 void  stb_free_extern(void* ptr)
 {     
+	// LOG_TRACE("Stb free on ptr: %p", ptr);
 }

@@ -50,8 +50,8 @@ struct KeyRepeatTimer
 
 struct InputSystem
 {
-    static sz constexpr DEFAULT_KEY_REPEAT_RATE_NS = 10 * MILLI_SEC;
-    static sz constexpr DEFAULT_KEY_REPEAT_DELAY_MS = 100 * MILLI_SEC;
+    static sz constexpr DEFAULT_KEY_REPEAT_DELAY_MS = ms_to_ns(20);
+    static sz constexpr DEFAULT_KEY_REPEAT_RATE_NS = ms_to_ns(10);
 
 	MouseState mouse_curr;
 	MouseState mouse_prev;
@@ -62,7 +62,7 @@ struct InputSystem
 	Array<KeyRepeatTimer, GLFW_KEY_LAST> key_repeat_timers;
 	bool accept_move_events;
 
-	void init(Milliseconds rate = DEFAULT_KEY_REPEAT_RATE_NS, Milliseconds delay = DEFAULT_KEY_REPEAT_DELAY_MS);
+	void init(Nanoseconds rate = DEFAULT_KEY_REPEAT_RATE_NS, Nanoseconds delay = DEFAULT_KEY_REPEAT_DELAY_MS);
 	void update();
 
     bool is_key_down(sz key) { return this->kb_curr[key]; }
@@ -80,6 +80,8 @@ struct InputSystem
     void process_mouse_move(MousePos pos);
     void process_mouse_wheel(bool z_delta);
 };
+
+bool is_move_key(u32 key);
 
 } // rg
 

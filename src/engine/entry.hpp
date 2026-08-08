@@ -7,6 +7,7 @@
 #include "engine/input.hpp"
 #include "engine/vk_core.hpp"
 #include "engine/renderer.hpp"
+#include "engine/texture.hpp"
 
 namespace rg
 {
@@ -101,6 +102,8 @@ struct Window
     void create_vk_surface(VulkanContext* vk_ctx, VkSurfaceKHR* surface);
     VkExtent2D get_screen_coordinates();
     void destroy();
+
+    bool should_close() { return glfwWindowShouldClose(this->handle); }
 };
 
 // Engine context.
@@ -111,10 +114,15 @@ struct EngineContext
 {
     EventSystem event_sys;
     InputSystem input_sys;
+    TextureSystem tex_sys;
     VulkanContext vk_ctx;
     Renderer renderer;
     Window window;
+    ThreadArena* frame_allocator;
+    ThreadArena* persist_allocator;
     ThreadPool<RG_THREAD_COUNT - 1, MAX_ENGINE_THREAD_POOL_TASKS> thread_pool;
+    // NOTE: don't know, shared mutex is not very good idea
+    Mutex mutex;
 };
 
 EngineContext* get_engine_context();

@@ -5,7 +5,7 @@
 namespace rg
 {
 
-void InputSystem::init(Milliseconds rate, Milliseconds delay)
+void InputSystem::init(Nanoseconds rate, Nanoseconds delay)
 {
 	rg::mem_zero(this, sizeof(*this));
 	this->key_repeat_state.rate = rate;
@@ -86,11 +86,6 @@ void InputSystem::process_mouse_button(MouseButton button, bool is_pressed)
 
 void InputSystem::process_mouse_move(MousePos pos)
 {
-	[[unlikely]] if (!this->accept_move_events)
-	{
-		return;
-	}
-
 	static bool first_mouse_move = true;
 
 	[[unlikely]] if (first_mouse_move)
@@ -120,6 +115,11 @@ void InputSystem::process_mouse_wheel(bool z_delta)
 	ev_ctx.as_b8[0] = z_delta;
 	EngineContext* engine_ctx = get_engine_context();
 	engine_ctx->event_sys.execute_immediate_handlers(EventCode::MOUSE_WHEEL, ev_ctx);
+}
+
+bool is_move_key(u32 key)
+{
+	return key == GLFW_KEY_W || key == GLFW_KEY_S || key == GLFW_KEY_A || key == GLFW_KEY_D;
 }
 
 bool operator==(const MousePos& first, const MousePos& sec)

@@ -6,15 +6,15 @@
 #include "collections/darray.hpp"
 #include "collections/string.hpp"
 #include "collections/bits.hpp"
-#include "core/thread.hpp"
-#include "engine/entity.hpp"
+#include "engine/shared.hpp"
 
 namespace rg
 {
 
+struct EngineContext;
 struct VulkanContext;
 struct VulkanDevice;
-bool map_vk_mem(VulkanDevice* dev, void** dest, VkDeviceMemory src, sz size_bytes, sz offset = 0, VkMemoryMapFlags flags = 0);
+void map_vk_mem(VulkanDevice* dev, void** dest, VkDeviceMemory src, sz size_bytes, sz offset = 0, VkMemoryMapFlags flags = 0);
 void unmap_vk_mem(VulkanDevice* dev, VkDeviceMemory gpu_mem);
 bool init_instance(VulkanContext* vk_ctx);
 
@@ -63,7 +63,7 @@ struct VulkanBuffer
 
 	void init(VulkanContext* ctx, sz capacity, const VulkanBufferConfig& config);
 	void destroy(VulkanContext* ctx);
-	void realloc(sz capacity);
+	void realloc(sz new_capacity);
 
 	bool buffer_is_initialized(VulkanBuffer* self)
 	{
@@ -75,12 +75,14 @@ struct VulkanBufferCpu : VulkanBuffer
 {
 	sz size;
 	void* cpu_mem;
-	Mutex mutex;
 
 	void init(VulkanContext* ctx, sz capacity, const VulkanBufferConfig& config);
 	void destroy(VulkanContext* ctx);
+	// Must be externally synchronized when multi-threaded.
 	BufferChunkView append_data(Slice<Slice<u8>> data);
 	Maybe<BufferChunkView> append_data_non_realloc(Slice<Slice<u8>> data);
+	// Must be externally synchronized when multi-threaded.
+	void realloc(sz add_capacity);
 
 	bool buffer_cpu_is_initialized()
 	{
@@ -262,6 +264,7 @@ struct VulkanDescriptorSetLayout
 	VkDescriptorSetLayout handle;
 	FArray<VkDescriptorSetLayoutBinding, MAX_DESCRIPTOR_BINDING_COUNT> bindings;
 
+	static VulkanDescriptorSetLayout create(VulkanContext* ctx, Slice<VkDescriptorSetLayoutBinding> bindings);
 	void init(VulkanContext* ctx, Slice<VkDescriptorSetLayoutBinding> bindings);
 	void destroy(VulkanContext* ctx);
 };
@@ -286,14 +289,13 @@ struct VulkanDescriptorPool
 	VkDescriptorPool handle;
 	DArray<VkDescriptorSet> sets;
 
-	void init(VulkanContext* ctx, Slice<VkDescriptorPoolSize> pool_sizes, u32 max_sets);
+	static VulkanDescriptorPool create(EngineContext* ctx, Slice<VkDescriptorPoolSize> pool_sizes, u32 max_sets);
+	void init(EngineContext* ctx, Slice<VkDescriptorPoolSize> pool_sizes, u32 max_sets);
 	Maybe<PoolAllocationResult> allocate_sets(VulkanDevice* dev, Slice<VkDescriptorSetLayout> layouts);
 	Slice<VkDescriptorSet> get_sets(sz index, sz len);
 	void free_sets(VulkanContext* ctx, uint start, ushort len);
 	void destroy(VulkanContext* ctx);
 };
-
-VulkanDescriptorPool create_descriptor_pool(VulkanContext* ctx, Slice<VkDescriptorPoolSize> pool_sizes, u32 max_sets);
 
 enum struct ShaderStageKind : u8
 {
@@ -379,7 +381,6 @@ struct VulkanPipeline
 
 struct VulkanShader
 {
-	VulkanContext* ctx;
 	FArray<VulkanPipeline, MAX_PIPELINE_COUNT> pipelines;
 	FArray<VulkanDescriptorSetLayout, MAX_DESCRIPTOR_LAYOUT_COUNT> descriptor_layouts;
 	// for creating new pools easily
@@ -390,22 +391,23 @@ struct VulkanShader
 	u32 max_entities;
 	BitInt<u8> stage_bits;
 
-	void init(VulkanContext* ctx, StrView file_name, VulkanShaderConfig* config);
-	void init_descriptor_state(VulkanContext* ctx, VulkanShaderConfig* config);
+	static VulkanShader create(EngineContext* ctx, StrView file_name, const VulkanShaderConfig& config);
+	void init(EngineContext* ctx, StrView file_name, const VulkanShaderConfig& config);
+	void init_descriptor_state(EngineContext* ctx, const VulkanShaderConfig& config);
 	void create_pipeline(
 		VulkanPipeline* out_pipeline,
 		VulkanContext* ctx,
-		VulkanPipelineConfig* config,
+		const VulkanPipelineConfig& config,
 		Slice<VkVertexInputAttributeDescription> attrib_descriptions,
 		u8 vertex_bind_ind
 	);
-	VulkanDescriptorPool* allocate_pool(VulkanContext* ctx);
+	VulkanDescriptorPool* allocate_pool(EngineContext* ctx);
 	VulkanPipeline* get_curr_pipeline()
 	{
 		return &this->pipelines[this->curr_pipeline];
 	}
 	void cmd_bind_curr_pipeline(VulkanCmdBuffer cmd_buffer);
-	EntityShaderState allocate_entity_resources(VulkanContext* ctx);
+	EntityShaderState allocate_entity_resources(EngineContext* ctx);
 	Slice<VkDescriptorSet> get_entity_resources(EntityShaderState entity_state, sz curr_frame);
 	void update_entity_resources(
 		VulkanContext* ctx,
@@ -423,8 +425,6 @@ struct VulkanShader
 	void destroy_entity_resources(VulkanContext* ctx, EntityShaderState entity_state);
 	void destroy(VulkanContext* ctx);
 };
-
-VulkanShader create_shader(VulkanContext* ctx, StrView file_name, VulkanShaderConfig* config);
 
 // Swapchain.
 
@@ -545,7 +545,7 @@ struct VulkanDevice
 	}
 };
 
-#define VK_CHECK(res) if ((res) != VK_SUCCESS) panic("VK_CHECK failed, result was %d", res)
+#define VK_CHECK(res) if ((res) != VK_SUCCESS) PANIC("VK_CHECK failed, result was %d", res)
 
 } // rg
 

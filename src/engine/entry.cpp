@@ -8,18 +8,20 @@ namespace rg
 {
 
 // How much memory application will use.
-intern constexpr sz APP_MEMORY_CAPACITY = 4 * GB;
+intern constexpr sz FRAME_MEMORY_CAPACITY = 128 * MB;
+intern constexpr sz PERSISTENT_MEMORY_CAPACITY = 1024 * MB;
+intern constexpr sz APP_MEMORY_CAPACITY = PERSISTENT_MEMORY_CAPACITY + FRAME_MEMORY_CAPACITY + DEFAULT_TEMP_STORAGE_CAPACITY * RG_THREAD_COUNT + 128 * MB;
 
 intern Context context;
 intern thread_local Arena* temp_allocator;
 intern EngineContext engine_context;
-intern VmemAllocator* persistent_allocator;
+intern VmemAllocator* main_allocator;
 
 intern void context_init(Allocator* allocator);
 intern void context_destroy();
-intern bool engine_context_init(AppConfig config);
+intern bool engine_context_init(Context* ctx, AppConfig config);
 intern void engine_context_destroy();
-intern void init_main_shader(VulkanContext* ctx);
+intern void init_main_shader(EngineContext* ctx);
 intern void init_frame_data(VulkanContext* ctx);
 intern void destroy_frame_data(VulkanContext* ctx);
 
@@ -53,7 +55,7 @@ Arena* get_temp_allocator()
     return temp_allocator;
 }
 
-Allocator* get_persist_allocator()
+Allocator* get_main_allocator()
 {
     return context.allocator;
 }
@@ -62,37 +64,66 @@ Allocator* get_persist_allocator()
 
 bool application_init(AppConfig config)
 {
-    persistent_allocator = VmemAllocator::create(APP_MEMORY_CAPACITY);
-    context_init(persistent_allocator);
+    main_allocator = VmemAllocator::create(APP_MEMORY_CAPACITY);
+    context_init(main_allocator);
     init_temp_allocator(context.allocator);
-    if (!engine_context_init(config)) return false;
+    if (!engine_context_init(&context, config)) return false;
     return true;
 }
 
 void application_run()
 {
-    // TODO("make app run!");
+	EngineContext* engine_ctx = get_engine_context();
+	Renderer* renderer = &engine_ctx->renderer;
+
+	renderer->start_clock();
+	while (!renderer->should_close() && !engine_ctx->window.should_close())
+	{
+		glfwPollEvents();
+		SwapchainPresentResult res = renderer->begin_frame();
+		if (res != SwapchainPresentResult::NEEDS_RECREATION_CANT_PROCEED)
+		{
+			renderer->draw_frame();
+			renderer->end_frame();
+		}
+	}
 }
 
 void application_destroy()
 {
+    engine_context_destroy();
     context_destroy();
-    persistent_allocator->destroy();
+    main_allocator->destroy();
 }
 
 // Engine context.
 
-bool engine_context_init(AppConfig config)
+bool engine_context_init(Context* ctx, AppConfig config)
 {
     EngineContext* engine_context = get_engine_context();
+    engine_context->persist_allocator = ThreadArena::create(ctx->allocator, PERSISTENT_MEMORY_CAPACITY); 
+    engine_context->frame_allocator = ThreadArena::create(ctx->allocator, FRAME_MEMORY_CAPACITY); 
+	engine_context->thread_pool.init();
+	engine_context->mutex.init();
 
     if (!engine_context->window.init(config))
+    {
+    	LOG_FATAL("Failed to initialize a window");
         return false;
+    }
     if (!engine_context->vk_ctx.init(config))
+    {
+    	LOG_FATAL("Failed to initialize a vulkan context");
         return false;
+    }
 
     engine_context->event_sys.init();
     engine_context->input_sys.init();
+    engine_context->tex_sys.init(engine_context->persist_allocator);
+
+    engine_context->renderer.init({ config.window_width, config.window_height }, COLOR_BLACK_RGBA);
+
+    ctx->panic_handlers.push(application_destroy);
 
     return true;
 }
@@ -100,7 +131,13 @@ bool engine_context_init(AppConfig config)
 void engine_context_destroy()
 {
     EngineContext* engine_context = get_engine_context();
+
+    engine_context->renderer.destroy();
+    engine_context->tex_sys.destroy();
     engine_context->vk_ctx.destroy();
+    engine_context->window.destroy();
+    engine_context->thread_pool.destroy();
+	engine_context->mutex.destroy();
 }
 
 EngineContext* get_engine_context()
@@ -116,6 +153,9 @@ bool VulkanContext::init(AppConfig config)
 
 	EngineContext* engine_ctx = get_engine_context();
 	VulkanContext* vk_ctx = &engine_ctx->vk_ctx;
+	vk_ctx->curr_frame = 0;
+	vk_ctx->curr_shader = 0;
+	vk_ctx->vk_alloc = null;
 
 	if (!init_instance(vk_ctx)) return false;
 
@@ -128,11 +168,11 @@ bool VulkanContext::init(AppConfig config)
 	VkExtent2D extent = { (u32)config.window_width, (u32)config.window_height };
 	if (!vk_ctx->swapchain.init(vk_ctx, extent)) return false;
 
-	init_main_shader(vk_ctx);
+	init_main_shader(engine_ctx);
 	return true;
 }
 
-intern void init_main_shader(VulkanContext* ctx)
+intern void init_main_shader(EngineContext* engine_ctx)
 {
 	constexpr sz MAIN_SHADER_MAX_ENTITY_COUNT         = 1024;
 	constexpr CString MAIN_SHADER_NAME                = "shader_default.spv";
@@ -169,14 +209,14 @@ intern void init_main_shader(VulkanContext* ctx)
 			.location = 1,
 			.binding = 0,
 			.format = VK_FORMAT_R32G32B32_SFLOAT,
-			.offset = sizeof(f32) * 3,
+			.offset = offsetof(Vertex, normal),
 		},
 		// Texture coordinate.
-		{ .location = 2, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = sizeof(f32) * 3 * 2, },
+		{ .location = 2, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, tex_coord), },
 	};
 
 	Array<VkPushConstantRange, 1> push_constant_ranges = {
-		{ .stageFlags = VK_SHADER_STAGE_VERTEX_BIT, .offset = 0, .size = sizeof(f32) * 16, }
+		{ .stageFlags = VK_SHADER_STAGE_VERTEX_BIT, .offset = 0, .size = sizeof(Mat4), }
 	};
 
 	Array<VulkanPipelineConfig, 1> pipeline_configs = {
@@ -202,8 +242,9 @@ intern void init_main_shader(VulkanContext* ctx)
 	shader_conf.stage_bits.set((u8)ShaderStageKind::VERTEX);
 	shader_conf.stage_bits.set((u8)ShaderStageKind::FRAGMENT);
 
-	ctx->curr_shader = 0;
-	ctx->shaders.push(create_shader(ctx, MAIN_SHADER_NAME, &shader_conf));
+	VulkanContext* vk_ctx = &engine_ctx->vk_ctx;
+	vk_ctx->curr_shader = 0;
+	vk_ctx->shaders.push(VulkanShader::create(engine_ctx, MAIN_SHADER_NAME, shader_conf));
 }
 
 intern void init_frame_data(VulkanContext* ctx)

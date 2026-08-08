@@ -21,8 +21,8 @@ intern void glfw_key_callback(
 );
 intern void glfw_mouse_wheel_callback(
 	GLFWwindow* window,
-	double xoffset,
-	double yoffset
+	f64 xoffset,
+	f64 yoffset
 );
 
 bool Window::init(AppConfig config)
@@ -53,17 +53,43 @@ bool Window::init(AppConfig config)
 	glfwSetScrollCallback(this->handle, &glfw_mouse_wheel_callback);
 
 #ifdef RG_HIDE_CURSOR
-	glfwSetInputMode(window.handle, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	glfwSetInputMode(this->handle, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 #endif
 
 	return true;
 }
 
+void Window::create_vk_surface(VulkanContext* vk_ctx, VkSurfaceKHR* surface)
+{
+	VK_CHECK(glfwCreateWindowSurface(vk_ctx->instance, this->handle, vk_ctx->vk_alloc, surface));
+}
+
+VkExtent2D Window::get_screen_coordinates()
+{
+	VkExtent2D coords;
+	glfwGetFramebufferSize(
+		this->handle,
+		(s32*)&coords.width,
+		(s32*)&coords.height
+	);
+	return coords;
+}
+
+void Window::destroy()
+{
+	if (this->handle)
+	{
+		glfwDestroyWindow(this->handle);
+		this->handle = null;
+		glfwTerminate();
+	}
+}
+
 intern void glfw_mouse_move_callback(GLFWwindow* window, f64 x, f64 y)
 {
 	MousePos pos;
-	pos.x = (float)x;
-	pos.y = (float)y;
+	pos.x = (f32)x;
+	pos.y = (f32)y;
 	EngineContext* engine_ctx = get_engine_context();
 	engine_ctx->input_sys.process_mouse_move(pos);
 }
@@ -98,38 +124,12 @@ intern void glfw_key_callback(
 
 intern void glfw_mouse_wheel_callback(
 	GLFWwindow* window,
-	double xoffset,
-	double yoffset
+	f64 xoffset,
+	f64 yoffset
 )
 {
 	EngineContext* engine_ctx = get_engine_context();
 	engine_ctx->input_sys.process_mouse_wheel(yoffset < 0);
-}
-
-void Window::create_vk_surface(VulkanContext* vk_ctx, VkSurfaceKHR* surface)
-{
-	VK_CHECK(glfwCreateWindowSurface(vk_ctx->instance, this->handle, vk_ctx->vk_alloc, surface));
-}
-
-VkExtent2D Window::get_screen_coordinates()
-{
-	VkExtent2D coords;
-	glfwGetFramebufferSize(
-		this->handle,
-		(s32*)&coords.width,
-		(s32*)&coords.height
-	);
-	return coords;
-}
-
-void Window::destroy()
-{
-	if (this->handle)
-	{
-		glfwDestroyWindow(this->handle);
-		this->handle = null;
-		glfwTerminate();
-	}
 }
  
 } // rg

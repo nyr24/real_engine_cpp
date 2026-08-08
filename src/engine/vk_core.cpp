@@ -7,8 +7,6 @@
 #include "core/io.hpp"
 #include "engine/vk_core.hpp"
 #include "engine/entry.hpp"
-#include "engine/geometry.hpp"
-#include "engine/entity.hpp"
 
 namespace rg
 {
@@ -20,6 +18,8 @@ intern constexpr sz MAX_AVAIL_EXTENSIONS = 164;
 
 intern bool add_validation_layers(DArray<CString>* out_layers);
 intern bool check_req_extensions(DArray<CString>* req_extensions);
+
+#ifdef RG_DEBUG
 intern void init_debug_logger(VulkanContext* ctx);
 VkBool32 vk_debug_callback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT	message_severity,
@@ -27,6 +27,7 @@ VkBool32 vk_debug_callback(
 	const VkDebugUtilsMessengerCallbackDataEXT*	callback_data,
 	void*                                 	user_data
 );
+#endif // RG_DEBUG
 
 // Instance.
 
@@ -148,6 +149,7 @@ intern bool check_req_extensions(DArray<CString>* req_extensions)
 	return true;
 }
 
+#ifdef RG_DEBUG
 intern void init_debug_logger(VulkanContext* vk_ctx)
 {
     u32 log_severity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
@@ -190,6 +192,7 @@ VkBool32 vk_debug_callback(
 	}
 	return VK_FALSE;
 }
+#endif // RG_DEBUG
 
 // Device.
 
@@ -717,7 +720,7 @@ intern Maybe<QueueIndex> pick_presentation_queue(
 			continue;
 		}
 
-		if (mb_graphics_queue_combine_index)
+		if (mb_graphics_queue_combine_index.is_ok)
 		{
 			if (mb_graphics_queue_combine_index.val.fam == i)
 			{
@@ -851,7 +854,7 @@ SwapchainPresentResult VulkanSwapchain::acquire_next_image_index(
 				VkExtent2D curr_coords = engine_ctx->renderer.get_extent();
 				if (new_coords != curr_coords)
 				{
-					LOG_INFO("Swapchain is outdated, scheduling recreation...");
+					LOG_TRACE("Swapchain is outdated, scheduling resize to width: %d | height: %d", new_coords.width, new_coords.height);
 					engine_ctx->renderer.update_viewport_scissors(new_coords);
 					this->recreation_scheduled = true;
 					return SwapchainPresentResult::NEEDS_RECREATION;
@@ -860,11 +863,11 @@ SwapchainPresentResult VulkanSwapchain::acquire_next_image_index(
 			}
 			break;
 		case VK_ERROR_OUT_OF_DATE_KHR:
-			LOG_WARN("Swapchain is outdated, can't proceed next frame, scheduling recreation...");
+			LOG_WARN("Swapchain is outdated, skipping current frame, scheduling recreation");
 			this->recreation_scheduled = true;
 			return SwapchainPresentResult::NEEDS_RECREATION_CANT_PROCEED;
 		default:
-			panic("Failed to acquire swapchain image, reason: %s");
+			PANIC("Failed to acquire swapchain image, reason: %s");
 	}
 }
 
@@ -909,7 +912,7 @@ SwapchainPresentResult VulkanSwapchain::present(
 			this->recreation_scheduled = true;
 			return SwapchainPresentResult::NEEDS_RECREATION_CANT_PROCEED;
 		default:
-			panic("Failed to present swapchain image, reason: %d", result);
+			PANIC("Failed to present swapchain image, reason: %d", result);
 	}
 }
 
@@ -926,7 +929,7 @@ void VulkanSwapchain::recreate_if_needed(VulkanContext* ctx)
 	{
 		EngineContext* engine_ctx = get_engine_context();
 		VkExtent2D new_coords = engine_ctx->renderer.get_extent();
-		LOG_INFO("Recreating swapchain, new screen coordinates: %d %d", new_coords.width, new_coords.height);
+		LOG_WARN("Recreating swapchain, new screen coordinates: %d %d", new_coords.width, new_coords.height);
 		this->recreate(ctx, new_coords);
 		this->recreation_scheduled = false;
 		engine_ctx->renderer.set_resize_scheduled(true);
@@ -1121,7 +1124,7 @@ void VulkanImage::init(
 	vkGetImageMemoryRequirements(ctx->dev.log_dev, this->handle, &mem_reqs);
 
 	auto [mem_type_idx, is_acquired] = ctx->dev.find_mem_type_index(mem_reqs.memoryTypeBits, mem_flags);
-	if (!is_acquired) panic("Failed to acquire memory type index");
+	if (!is_acquired) PANIC("Failed to acquire memory type index");
 
 	VkMemoryAllocateInfo alloc_info = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -1360,7 +1363,7 @@ void VulkanBuffer::init(VulkanContext* ctx, sz capacity, const VulkanBufferConfi
 	vkGetBufferMemoryRequirements(ctx->dev.log_dev, this->handle, &mem_reqs);
 
 	auto [mem_idx, is_acquired] = ctx->dev.find_mem_type_index(mem_reqs.memoryTypeBits, config.mem_props);
-	if (!is_acquired) panic("Failed to acquire memory type index");
+	if (!is_acquired) PANIC("Failed to acquire memory type index");
 
 	VkMemoryAllocateInfo alloc_info = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -1378,7 +1381,8 @@ void VulkanBuffer::realloc(sz new_capacity)
 {
 	EngineContext* engine_ctx = get_engine_context();
 	VulkanContext* vk_ctx = &engine_ctx->vk_ctx;
-	this->destroy(vk_ctx);
+	// TODO: destroy old buffer (task system, next frame).
+	// this->destroy(vk_ctx);
 	this->init(vk_ctx, new_capacity, this->config);
 }
 
@@ -1398,19 +1402,9 @@ void VulkanBuffer::destroy(VulkanContext* ctx)
 
 // VulkanBufferCpu.
 
-intern void vk_buffer_cpu_init_inner(VulkanBufferCpu* self, VulkanContext* ctx, sz capacity, const VulkanBufferConfig& config);
-intern void vk_buffer_cpu_destroy_inner(VulkanBufferCpu* self, VulkanContext* ctx);
-intern void vk_buff_cpu_realloc(VulkanBufferCpu* self, sz add_capacity);
-
 void VulkanBufferCpu::init(VulkanContext* ctx, sz capacity, const VulkanBufferConfig& config)
 {
 	ASSERT_MSG((config.mem_props & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) > 0, "Must be HOST_VISIBLE");
-	vk_buffer_cpu_init_inner(this, ctx, capacity, config);
-	this->mutex.init();
-}
-
-intern void vk_buffer_cpu_init_inner(VulkanBufferCpu* self, VulkanContext* ctx, sz capacity, const VulkanBufferConfig& config)
-{
 	VkBufferCreateInfo buff_ci = {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 		.size = (u64)capacity,
@@ -1418,27 +1412,28 @@ intern void vk_buffer_cpu_init_inner(VulkanBufferCpu* self, VulkanContext* ctx, 
 		.sharingMode = config.sharing_mode,
 	};
 
-	VK_CHECK(vkCreateBuffer(ctx->dev.log_dev, &buff_ci, ctx->vk_alloc, &self->handle));
+	VK_CHECK(vkCreateBuffer(ctx->dev.log_dev, &buff_ci, ctx->vk_alloc, &this->handle));
 
 	VkMemoryRequirements mem_reqs;
-	vkGetBufferMemoryRequirements(ctx->dev.log_dev, self->handle, &mem_reqs);
+	vkGetBufferMemoryRequirements(ctx->dev.log_dev, this->handle, &mem_reqs);
 
-	u32 memory_index = ctx->dev.find_mem_type_index(mem_reqs.memoryTypeBits, config.mem_props);
+	auto [mem_idx, found] = ctx->dev.find_mem_type_index(mem_reqs.memoryTypeBits, config.mem_props);
+	ASSERT_MSG(found, "Failed to find proper memory type index for vkBufferCpu");
 
 	VkMemoryAllocateInfo alloc_info = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
 		.allocationSize = mem_reqs.size,
-		.memoryTypeIndex = memory_index,
+		.memoryTypeIndex = mem_idx,
 	};
 
-	VK_CHECK(vkAllocateMemory(ctx->dev.log_dev, &alloc_info, ctx->vk_alloc, &self->gpu_mem));
-	VK_CHECK(vkBindBufferMemory(ctx->dev.log_dev, self->handle, self->gpu_mem, 0));
+	VK_CHECK(vkAllocateMemory(ctx->dev.log_dev, &alloc_info, ctx->vk_alloc, &this->gpu_mem));
+	VK_CHECK(vkBindBufferMemory(ctx->dev.log_dev, this->handle, this->gpu_mem, 0));
 
-	self->capacity = mem_reqs.size;
-	self->size = 0;
-	self->config = config;
+	this->capacity = mem_reqs.size;
+	this->size = 0;
+	this->config = config;
 
-	ASSERT(map_vk_mem(&ctx->dev, &self->cpu_mem, self->gpu_mem, self->capacity));
+	map_vk_mem(&ctx->dev, &this->cpu_mem, this->gpu_mem, this->capacity);
 }
 
 BufferChunkView VulkanBufferCpu::append_data(Slice<Slice<u8>> data)
@@ -1449,10 +1444,6 @@ BufferChunkView VulkanBufferCpu::append_data(Slice<Slice<u8>> data)
 	{
 		data_len += chunk.count;
 	}
-
-	// Critical part.
-	this->mutex.lock();
-	defer(this->mutex.unlock());
 
 	sz diff = data_len - this->remain_mem();
 	if (diff > 0) this->realloc(diff);
@@ -1493,40 +1484,41 @@ Maybe<BufferChunkView> VulkanBufferCpu::append_data_non_realloc(Slice<Slice<u8>>
 	return res;
 }
 
-intern void vk_buff_cpu_realloc(VulkanBufferCpu* self, sz add_capacity)
+void VulkanBufferCpu::realloc(sz add_capacity)
 {
 	EngineContext* engine_ctx = get_engine_context();
 	VulkanContext* vk_ctx = &engine_ctx->vk_ctx;
 
+	ASSERT_GREATER_ZERO(this->capacity);
+	sz new_capacity = this->capacity;
+	sz min_req_capacity = new_capacity + add_capacity;
+
+	while (new_capacity < min_req_capacity) new_capacity *= 2;
+
 	VulkanBufferCpu new_buff;
-	vk_buffer_cpu_init_inner(&new_buff, vk_ctx, self->capacity + add_capacity, self->config);
-	rg::mem_copy(new_buff.cpu_mem, self->cpu_mem, self->size);
-	new_buff.size = self->size;
-	vk_buffer_cpu_destroy_inner(self, vk_ctx);
-	Mutex mutex = self->mutex;
-	*self = new_buff;
-	self->mutex = mutex;
+	new_buff.init(vk_ctx, new_capacity, this->config);
+	rg::mem_copy(new_buff.cpu_mem, this->cpu_mem, this->size);
+	new_buff.size = this->size;
+	new_buff.capacity = new_capacity;
+	// TODO: destroy old buffer (task system, next frame).
+	// vk_buffer_cpu_destroy_inner(this, vk_ctx);
+
+	*this = new_buff;
 }
 
-void VulkanBufferCpu::destroy(VulkanContext* ctx)
+void VulkanBufferCpu::destroy(VulkanContext* vk_ctx)
 {
-	vk_buffer_cpu_destroy_inner(this, ctx);
-	this->mutex.destroy();
-}
-
-intern void vk_buffer_cpu_destroy_inner(VulkanBufferCpu* self, VulkanContext* vk_ctx)
-{
-	if (self->handle)
+	if (this->handle)
 	{
-		vkDestroyBuffer(vk_ctx->dev.log_dev, self->handle, vk_ctx->vk_alloc);
-		self->handle = null;
+		vkDestroyBuffer(vk_ctx->dev.log_dev, this->handle, vk_ctx->vk_alloc);
+		this->handle = null;
 	}
-	if (self->gpu_mem)
+	if (this->gpu_mem)
 	{
-		unmap_vk_mem(&vk_ctx->dev, self->gpu_mem);
-		self->cpu_mem = null;
-		vkFreeMemory(vk_ctx->dev.log_dev, self->gpu_mem, vk_ctx->vk_alloc);
-		self->gpu_mem = null;
+		unmap_vk_mem(&vk_ctx->dev, this->gpu_mem);
+		this->cpu_mem = null;
+		vkFreeMemory(vk_ctx->dev.log_dev, this->gpu_mem, vk_ctx->vk_alloc);
+		this->gpu_mem = null;
 	}
 }
 
@@ -1797,20 +1789,23 @@ void VulkanCmdPool::destroy(VulkanContext* ctx)
 
 intern VkVertexInputBindingDescription get_binding_descr(u8 binding_index);
 
-VulkanShader create_shader(VulkanContext* ctx, StrView file_name, VulkanShaderConfig* config)
+VulkanShader VulkanShader::create(EngineContext* ctx, StrView file_name, const VulkanShaderConfig& config)
 {
 	VulkanShader shader;
 	shader.init(ctx, file_name, config);
 	return shader;
 }
 
-void VulkanShader::init(VulkanContext* ctx, StrView file_name, VulkanShaderConfig* config)
+void VulkanShader::init(EngineContext* engine_ctx, StrView file_name, const VulkanShaderConfig& config)
 {
-	this->ctx = ctx;
-	this->mod.init(ctx, file_name, config->stage_bits);
-	this->stage_bits = config->stage_bits;
+	ASSERT_INITIALIZED_VAL(file_name);
 
-	this->init_descriptor_state(ctx, config);
+	VulkanContext* vk_ctx = &engine_ctx->vk_ctx;
+	this->curr_pipeline = 0;
+	this->mod.init(vk_ctx, file_name, config.stage_bits);
+	this->stage_bits = config.stage_bits;
+
+	this->init_descriptor_state(engine_ctx, config);
 
 	FArray<VkDescriptorSetLayout, MAX_DESCRIPTOR_LAYOUT_COUNT> layouts;
 
@@ -1823,38 +1818,40 @@ void VulkanShader::init(VulkanContext* ctx, StrView file_name, VulkanShaderConfi
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = (u32)layouts.count,
 		.pSetLayouts = layouts.data,
-		.pushConstantRangeCount = (u32)config->push_constant_ranges.count,
-		.pPushConstantRanges = config->push_constant_ranges.ptr,
+		.pushConstantRangeCount = (u32)config.push_constant_ranges.count,
+		.pPushConstantRanges = config.push_constant_ranges.ptr,
 	};
 
 	// Will be shared across all pipelines for this shader.
 	VkPipelineLayout pipeline_layout;
-	VK_CHECK(vkCreatePipelineLayout(ctx->dev.log_dev, &pipeline_layouts_ci, ctx->vk_alloc, &pipeline_layout));
+	VK_CHECK(vkCreatePipelineLayout(vk_ctx->dev.log_dev, &pipeline_layouts_ci, vk_ctx->vk_alloc, &pipeline_layout));
 
-	this->pipelines.resize(config->pipeline_configs.count);
+	this->pipelines.resize(config.pipeline_configs.count);
 
 	for (VulkanPipeline& pipe : this->pipelines)
 	{
 		pipe.layout = pipeline_layout;
 	}
 
-	for (u32 i = 0; i < config->pipeline_configs.count; ++i)
+	for (u32 i = 0; i < config.pipeline_configs.count; ++i)
 	{
-		VulkanPipelineConfig* pipe_config = &config->pipeline_configs[i];
+		const VulkanPipelineConfig& pipe_config = config.pipeline_configs[i];
 		this->create_pipeline(
 			&this->pipelines[i],
-			ctx,
+			vk_ctx,
 			pipe_config,
-			config->attrib_descriptions,
-			config->vertex_binding_index
+			config.attrib_descriptions,
+			config.vertex_binding_index
 		);
 	}
+
+	LOG_INFO("Shader was created successfully from file: ", FMT_PLACEHOLDER_LEN, FMT_STR_VIEW(file_name));
 }
 
 void VulkanShader::create_pipeline(
 	VulkanPipeline* out_pipeline,
 	VulkanContext* ctx,
-	VulkanPipelineConfig* config,
+	const VulkanPipelineConfig& config,
 	Slice<VkVertexInputAttributeDescription> attrib_descriptions,
 	u8 vertex_bind_ind
 )
@@ -1880,7 +1877,7 @@ void VulkanShader::create_pipeline(
 
 	VkPipelineInputAssemblyStateCreateInfo input_assembly_ci = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-		.topology = config->primitive_topology,
+		.topology = config.primitive_topology,
 	};
 
 	VkPipelineViewportStateCreateInfo viewport_ci = {
@@ -1895,21 +1892,21 @@ void VulkanShader::create_pipeline(
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
 		.depthClampEnable = VK_FALSE,
 		.rasterizerDiscardEnable = VK_FALSE,
-		.polygonMode = config->polygon_mode,
+		.polygonMode = config.polygon_mode,
 		.cullMode = VK_CULL_MODE_BACK_BIT,
 		.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
 		.depthBiasEnable = VK_FALSE,
-		.lineWidth = config->line_width,
+		.lineWidth = config.line_width,
 	};
 
 	VkPipelineMultisampleStateCreateInfo multisample_ci = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples = config->sample_count,
+		.rasterizationSamples = config.sample_count,
 		.sampleShadingEnable = VK_FALSE,
 	};
 
 	VkPipelineColorBlendAttachmentState color_blending_attachment = {
-		.blendEnable = (VkBool32)config->enable_color_blend,
+		.blendEnable = (VkBool32)config.enable_color_blend,
 		.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
 		.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
 		.colorBlendOp = VK_BLEND_OP_ADD,
@@ -1968,34 +1965,33 @@ void VulkanShader::create_pipeline(
 	};
 
 	VK_CHECK(vkCreateGraphicsPipelines(ctx->dev.log_dev, null, 1, &pipeline_ci, ctx->vk_alloc, &out_pipeline->handle));
-	out_pipeline->bind_point = config->bind_point;
+	out_pipeline->bind_point = config.bind_point;
 
 	LOG_INFO("Pipeline was successfully created!");
 }
 
-void VulkanShader::init_descriptor_state(VulkanContext* ctx, VulkanShaderConfig* conf)
+void VulkanShader::init_descriptor_state(EngineContext* ctx, const VulkanShaderConfig& conf)
 {
-	this->max_entities = conf->max_entities_per_frame;
+	this->max_entities = conf.max_entities_per_frame;
 
 	// create layout for each set
-	for (auto& set_info : conf->descriptor_set_infos)
+	for (auto& set_info : conf.descriptor_set_infos)
 	{
-		this->descriptor_layouts.push(create_descriptor_set_layout(ctx, set_info.bindings));
+		this->descriptor_layouts.push(VulkanDescriptorSetLayout::create(&ctx->vk_ctx, set_info.bindings));
 		for (VkDescriptorType type : set_info.types)
 		{
 			this->pool_sizes.push({ type, this->max_entities * (u32)FRAMES_IN_FLIGHT });
 		}
 	}
 
-	Allocator* persist_alloc = get_persist_allocator();
-	this->descriptor_pools.init_capacity(persist_alloc, INIT_POOL_COUNT);
+	this->descriptor_pools.init_capacity(ctx->persist_allocator, INIT_POOL_COUNT);
 	this->allocate_pool(ctx);
 }
 
-VulkanDescriptorPool* VulkanShader::allocate_pool(VulkanContext* ctx)
+VulkanDescriptorPool* VulkanShader::allocate_pool(EngineContext* ctx)
 {
 	this->descriptor_pools.push(
-		create_descriptor_pool(ctx, this->pool_sizes.slice(), this->max_entities * FRAMES_IN_FLIGHT)
+		VulkanDescriptorPool::create(ctx, this->pool_sizes.slice(), this->max_entities * FRAMES_IN_FLIGHT)
 	);
 	return this->descriptor_pools.last_ref();
 }
@@ -2013,8 +2009,9 @@ void VulkanPipeline::cmd_bind(VulkanCmdBuffer cmd_buffer)
 	vkCmdBindPipeline(cmd_buffer.handle, this->bind_point, this->handle);
 }
 
-EntityShaderState VulkanShader::allocate_entity_resources(VulkanContext* ctx)
+EntityShaderState VulkanShader::allocate_entity_resources(EngineContext* ctx)
 {
+	VulkanContext* vk_ctx = &ctx->vk_ctx;
 	// Doubling layouts for each frame in flight.
 	FArray<VkDescriptorSetLayout, MAX_DESCRIPTOR_LAYOUT_COUNT * FRAMES_IN_FLIGHT> all_layouts;
 	u32 i = 0;
@@ -2031,7 +2028,7 @@ EntityShaderState VulkanShader::allocate_entity_resources(VulkanContext* ctx)
 	for (i = 0; i < this->descriptor_pools.count; ++i)
 	{
 		VulkanDescriptorPool* pool = &this->descriptor_pools[i];
-		auto [alloc_res, is_success] = pool->allocate_sets(&ctx->dev, all_layouts.slice());
+		auto [alloc_res, is_success] = pool->allocate_sets(&vk_ctx->dev, all_layouts.slice());
 		if (!is_success) continue;
 
 		EntityShaderState res;
@@ -2042,7 +2039,7 @@ EntityShaderState VulkanShader::allocate_entity_resources(VulkanContext* ctx)
 	}
 
 	VulkanDescriptorPool* new_pool = this->allocate_pool(ctx);
-	auto [alloc_res, is_success] = new_pool->allocate_sets(&ctx->dev, all_layouts.slice());
+	auto [alloc_res, is_success] = new_pool->allocate_sets(&vk_ctx->dev, all_layouts.slice());
 	ASSERT_MSG(is_success, "Can't allocate descriptor sets from the new pool, probably internal error");
 
 	EntityShaderState res;
@@ -2095,12 +2092,15 @@ void VulkanShader::update_entity_resources(
 		{
 			case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
 				write.pImageInfo = &update_info.image_info;
+				break;
 			case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
 				write.pBufferInfo = &update_info.buff_info;
+				break;
 			case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
 				write.pTexelBufferView = update_info.texel_buff_info;
+				break;
 			default:
-				unreachable("Unknown descriptor set update info type: %s", update_info.type);
+				UNREACHABLE("Unknown descriptor set update info type: %s", update_info.type);
 		}
 		writes.push(write);
 	}
@@ -2123,14 +2123,14 @@ void VulkanShader::cmd_bind_entity_resources(
 
 // Descriptor pool.
 
-VulkanDescriptorPool create_descriptor_pool(VulkanContext* ctx, Slice<VkDescriptorPoolSize> pool_sizes, u32 max_sets)
+VulkanDescriptorPool VulkanDescriptorPool::create(EngineContext* ctx, Slice<VkDescriptorPoolSize> pool_sizes, u32 max_sets)
 {
 	VulkanDescriptorPool pool;
 	pool.init(ctx, pool_sizes, max_sets);
 	return pool;
 }
 
-void VulkanDescriptorPool::init(VulkanContext* ctx, Slice<VkDescriptorPoolSize> pool_sizes, u32 max_sets)
+void VulkanDescriptorPool::init(EngineContext* ctx, Slice<VkDescriptorPoolSize> pool_sizes, u32 max_sets)
 {
 	VkDescriptorPoolCreateInfo descriptor_pool_ci = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -2138,9 +2138,9 @@ void VulkanDescriptorPool::init(VulkanContext* ctx, Slice<VkDescriptorPoolSize> 
 		.poolSizeCount = (u32)pool_sizes.count,
 		.pPoolSizes = pool_sizes.ptr,
 	};
-	VK_CHECK(vkCreateDescriptorPool(ctx->dev.log_dev, &descriptor_pool_ci, ctx->vk_alloc, &this->handle));
-	Allocator* p_alloc = get_persist_allocator();
-	this->sets.init_capacity(p_alloc, max_sets);
+	VulkanContext* vk_ctx = &ctx->vk_ctx;
+	VK_CHECK(vkCreateDescriptorPool(vk_ctx->dev.log_dev, &descriptor_pool_ci, vk_ctx->vk_alloc, &this->handle));
+	this->sets.init_capacity(ctx->persist_allocator, max_sets);
 }
 
 Maybe<PoolAllocationResult> VulkanDescriptorPool::allocate_sets(VulkanDevice* dev, Slice<VkDescriptorSetLayout> layouts)
@@ -2178,7 +2178,7 @@ void VulkanDescriptorPool::free_sets(VulkanContext* ctx, u32 start, ushort len)
 
 // Descriptor set layout.
 
-VulkanDescriptorSetLayout create_descriptor_set_layout(VulkanContext* ctx, Slice<VkDescriptorSetLayoutBinding> bindings)
+VulkanDescriptorSetLayout VulkanDescriptorSetLayout::create(VulkanContext* ctx, Slice<VkDescriptorSetLayoutBinding> bindings)
 {
 	VulkanDescriptorSetLayout layout;
 	layout.init(ctx, bindings);
@@ -2371,21 +2371,10 @@ void VulkanDescriptorPool::destroy(VulkanContext* ctx)
 
 // Utilities.
 
-bool map_vk_mem(VulkanDevice* dev, void** dest, VkDeviceMemory src, sz size_bytes, sz offset, VkMemoryMapFlags flags)
+void map_vk_mem(VulkanDevice* dev, void** dest, VkDeviceMemory src, sz size_bytes, sz offset, VkMemoryMapFlags flags)
 {
-	if (vkMapMemory(
-		dev->log_dev,
-		src,
-		offset,
-		size_bytes,
-		flags,
-		dest
-	)
-		!= VK_SUCCESS)
-	{
-		return false;
-	}
-	return true;
+	VkResult res = vkMapMemory(dev->log_dev, src, offset, size_bytes, flags, dest);
+	ASSERT_MSG(res == VK_SUCCESS, "Failed to map vk memory, vkResult was: %d", res);
 }
 
 void unmap_vk_mem(VulkanDevice* dev, VkDeviceMemory gpu_mem)

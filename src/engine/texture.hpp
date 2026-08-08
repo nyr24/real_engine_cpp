@@ -4,11 +4,9 @@
 #include "volk/volk.h"
 #include "engine/shared.hpp"
 #include "core/basic.hpp"
-#include "core/io.hpp"
 #include "collections/slot_array.hpp"
 #include "collections/hashmap.hpp"
 #include "engine/vk_core.hpp"
-#include "engine/gltf.hpp"
 
 namespace rg
 {
@@ -17,7 +15,7 @@ constexpr sz MAX_TEXTURE_NAME_LEN  = 32;
 constexpr sz TEXTURE_CHANNEL_COUNT = 4;
 constexpr TextureIdx TEX_INDEX_INVALID = -1;
 constexpr f32 TABLE_LOAD_FACTOR = 0.95;
-constexpr sz INIT_TEX_STAGING_BUFF_CAPACITY = 1 << 28;
+constexpr sz INIT_TEX_STAGING_BUFF_CAPACITY = 64 * MB;
 
 enum struct TextureLoadState
 {
@@ -79,16 +77,6 @@ struct TextureSystemSlot
 {
 	Texture* texture;
 	TextureIdx idx;
-};
-
-struct TextureCreateConfig
-{
-	Path path;
-	GltfSampler gltf_sampler;
-	// Result index.
-	TextureIdx idx;
-	// Passed from outside if needed.
-	EntityTextureKind kind;
 };
 
 struct TextureLookupState
