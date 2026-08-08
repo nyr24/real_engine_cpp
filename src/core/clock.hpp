@@ -12,6 +12,7 @@ struct Clock
 {
     Nanoseconds start_time;
     Nanoseconds progress;
+    Nanoseconds delta;
 
     void start();
     Nanoseconds update_and_get_delta();

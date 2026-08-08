@@ -13,20 +13,34 @@ intern sz get_steps_back_from_cwd_and_trim(StrView path);
 intern void path_trim_parts_from_end(Path* path, sz trim_count);
 intern StrView get_extension(StrView value);
 
+Path Path::create(Allocator* alloc, Slice<StrView> parts, bool null_term)
+{
+    Path res;
+    res.init(alloc, parts, null_term);
+    return res;
+}
+
+Path Path::create(Allocator* alloc, StrView init_part, bool null_term)
+{
+    Path res;
+    res.init(alloc, init_part, null_term);
+    return res;
+}
+
 void Path::init(Allocator* alloc, StrView init_part, bool null_term)
 {
     this->alloc = alloc;
 
     if (path_is_absolute(init_part))
     {
-        sz capacity = init_part.count;
+        sz capacity = init_part.count + 1;
         this->init_capacity(alloc, capacity);
         this->push(init_part);
         this->ensure_separator_at_end();
     }
     else
     {
-        sz add_cap = init_part.count;
+        sz add_cap = init_part.count + 1;
         platform_process_cwd(this, alloc, add_cap);
         this->add_part(init_part);
     }
@@ -39,7 +53,7 @@ void Path::init(Allocator* alloc, Slice<StrView> parts, bool null_term)
 
     if (path_is_absolute(parts[0]))
     {
-        sz capacity = parts[0].count;
+        sz capacity = parts[0].count + 1;
         for (StrView* part = parts.at_ref(1); part != parts.end(); ++part)
         {
            capacity += part->count;
@@ -52,7 +66,7 @@ void Path::init(Allocator* alloc, Slice<StrView> parts, bool null_term)
     else
     {
         StrView first_part = parts[0];
-        sz add_cap = first_part.count;
+        sz add_cap = first_part.count + 1;
         for (StrView* part = parts.at_ref(1); part != parts.end(); ++part)
         {
             add_cap += part->count;

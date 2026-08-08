@@ -26,6 +26,9 @@ namespace rg
     {
         using DString::DString;
         using DString::init;
+
+        static Path create(Allocator* alloc, Slice<StrView> parts, bool null_term = false);
+        static Path create(Allocator* alloc, StrView init_part, bool null_term = false);
         void init(Allocator* alloc, Slice<StrView> parts, bool null_term = false);
         void init(Allocator* alloc, StrView init_part, bool null_term = false);
         // First part can contain relative offsets: "./", "../", "../../"

@@ -14,13 +14,12 @@ void Thread::start(ThreadFunc start_fn, void* arg)
         start_fn,
         arg,
         0,
-        &this->id,
+        null,
     );
-    if (res == HANDLE_INVALID) panic("Failed to start a thread");
+    if (res == HANDLE_INVALID) PANIC("Failed to start a thread");
 #else
     s32 res = ::pthread_create(&this->handle, null, (NativeThreadFunc)start_fn, arg);
-    if (res != 0) panic("Failed to start a thread");
-    this->id = (u32)res;
+    if (res != 0) PANIC("Failed to start a thread");
 #endif
 }
 
@@ -28,27 +27,27 @@ void Thread::join()
 {
 #ifdef RG_PLATFORM_WIN32
     u32 res = ::WaitForSingleObject(this->handle, INFINITE);
-    if (res == WAIT_FAILED) panic("Failed to join a thread");
+    if (res == WAIT_FAILED) PANIC("Failed to join a thread");
 #else
     s32 res = ::pthread_join(this->handle, null);
-    if (res != 0) panic("Failed to join a thread");
+    if (res != 0) PANIC("Failed to join a thread");
 #endif
 }
 
 void Thread::detach()
 {
 #ifdef RG_PLATFORM_WIN32
-    if (!::CloseHandle(this->handle)) panic("Failed to detach a thread");
+    if (!::CloseHandle(this->handle)) PANIC("Failed to detach a thread");
 #else
     s32 res = ::pthread_detach(this->handle);
-    if (res != 0) panic("Failed to detach a thread");
+    if (res != 0) PANIC("Failed to detach a thread");
 #endif
 }
 
 void Thread::destroy()
 {
 #ifdef RG_PLATFORM_WIN32
-    if (!::CloseHandle(this->handle)) panic("Failed to destroy a thread");
+    if (!::CloseHandle(this->handle)) PANIC("Failed to destroy a thread");
 #endif
 }
 
@@ -59,13 +58,13 @@ void Mutex::init()
 #ifdef RG_PLATFORM_WIN32
 #ifdef RG_MULTI_PROCESS
     this->handle = ::CreateMutex(null, false, null);
-    if (this->handle == HANDLE_INVALID) panic("Failed to create mutex");
+    if (this->handle == HANDLE_INVALID) PANIC("Failed to create mutex");
 #else
     ::InitializeCriticalSection(&this->handle);
 #endif
 #else
     s32 res = ::pthread_mutex_init(&this->handle, null);
-    if (res != 0) panic("Failed to create mutex");
+    if (res != 0) PANIC("Failed to create mutex");
 #endif
 }
 
@@ -74,13 +73,13 @@ void Mutex::lock()
 #ifdef RG_PLATFORM_WIN32
 #ifdef RG_MULTI_PROCESS
     u32 res = ::WaitForSingleObject(this->handle, INFINITE);
-    if (res == WAIT_FAILED) panic("Failed to join a thread");
+    if (res == WAIT_FAILED) PANIC("Failed to join a thread");
 #else
     ::EnterCriticalSection(&this->handle);
 #endif
 #else
     s32 res = ::pthread_mutex_lock(&this->handle);
-    if (res != 0) panic("Failed to lock mutex");
+    if (res != 0) PANIC("Failed to lock mutex");
 #endif
 }
 
@@ -88,13 +87,13 @@ void Mutex::unlock()
 {
 #ifdef RG_PLATFORM_WIN32
 #ifdef RG_MULTI_PROCESS
-    if (!::ReleaseMutex(this->handle)) panic("Failed to unlock mutex");
+    if (!::ReleaseMutex(this->handle)) PANIC("Failed to unlock mutex");
 #else
     ::LeaveCriticalSection(&this->handle);
 #endif
 #else
     s32 res = ::pthread_mutex_unlock(&this->handle);
-    if (res != 0) panic("Failed to unlock mutex");
+    if (res != 0) PANIC("Failed to unlock mutex");
 #endif
 }
 
@@ -102,13 +101,13 @@ void Mutex::destroy()
 {
 #ifdef RG_PLATFORM_WIN32
 #ifdef RG_MULTI_PROCESS
-    if (!::CloseHandle(this->handle)) panic("Failed to destroy a mutex");
+    if (!::CloseHandle(this->handle)) PANIC("Failed to destroy a mutex");
 #else
     ::DeleteCriticalSection(this->handle);
 #endif
 #else
     s32 res = ::pthread_mutex_destroy(&this->handle);
-    if (res != 0) panic("Failed to destroy mutex");
+    if (res != 0) PANIC("Failed to destroy mutex");
 #endif
 }
 
@@ -120,7 +119,7 @@ void ConditionVariable::init()
     ::InitializeConditionVariable(&this->handle);
 #else
     s32 res = ::pthread_cond_init(&this->handle, null);
-    if (res != 0) panic("Failed to init a condition variable");
+    if (res != 0) PANIC("Failed to init a condition variable");
 #endif
 }
 
@@ -128,10 +127,10 @@ void ConditionVariable::wait(Mutex* mutex)
 {
 #ifdef RG_PLATFORM_WIN32
     if (!::SleepConditionVariableCS(&this->handle, mutex, INFINITE))
-        panic("Failed to wait on a condition");
+        PANIC("Failed to wait on a condition");
 #else
     s32 res = ::pthread_cond_wait(&this->handle, &mutex->handle);
-    if (res != 0) panic("Failed to wait on a condition");
+    if (res != 0) PANIC("Failed to wait on a condition");
 #endif
 }
 
@@ -141,7 +140,7 @@ void ConditionVariable::signal()
     ::WakeConditionVariable(&this->handle);
 #else
     s32 res = ::pthread_cond_signal(&this->handle);
-    if (res != 0) panic("Failed to signal on a condition");
+    if (res != 0) PANIC("Failed to signal on a condition");
 #endif
 }
 
@@ -151,7 +150,7 @@ void ConditionVariable::broadcast()
     ::WakeAllConditionVariable(&this->handle);
 #else
     s32 res = ::pthread_cond_broadcast(&this->handle);
-    if (res != 0) panic("Failed to broadcast on a condition");
+    if (res != 0) PANIC("Failed to broadcast on a condition");
 #endif
 }
 
@@ -159,7 +158,7 @@ void ConditionVariable::destroy()
 {
 #ifdef RG_PLATFORM_POSIX
     s32 res = ::pthread_cond_destroy(&this->handle);
-    if (res != 0) panic("Failed to destroy a condition");
+    if (res != 0) PANIC("Failed to destroy a condition");
 #endif
 }
 
@@ -170,10 +169,10 @@ void Semaphore::init(sz init_val, sz max_val)
 #ifdef RG_PLATFORM_WIN32
     ASSERT_MSG(init_val <= max_val, "Must be smaller or equal to max_val");
     this->handle = ::CreateSemaphore(null, init_val, max_val, null);
-    if (this->handle == NULL) panic("Failed to initialize semaphore");
+    if (this->handle == NULL) PANIC("Failed to initialize semaphore");
 #else
     s32 res = ::sem_init(&this->handle, 0, init_val);
-    if (res != 0) panic("Failed to initialize semaphore");
+    if (res != 0) PANIC("Failed to initialize semaphore");
 #endif
 }
 
@@ -181,10 +180,10 @@ void Semaphore::wait()
 {
 #ifdef RG_PLATFORM_WIN32
     if (::WaitForSingleObject(this->handle, INFINITE) == WAIT_FAILED)
-        panic("Failed to wait on semaphore");
+        PANIC("Failed to wait on semaphore");
 #else
     s32 res = ::sem_wait(&this->handle);
-    if (res != 0) panic("Failed to wait on semaphore");
+    if (res != 0) PANIC("Failed to wait on semaphore");
 #endif
 }
 
@@ -192,12 +191,12 @@ void Semaphore::increment(sz count)
 {
 #ifdef RG_PLATFORM_WIN32
     if (!::ReleaseSemaphore(this->handle, count, null))
-        panic("Failed to increment semaphore");
+        PANIC("Failed to increment semaphore");
 #else
     for (sz i = 0; i < count; ++i)
     {
         s32 res =::sem_post(&this->handle);
-        if (res != 0) panic("Failed to increment semaphore");
+        if (res != 0) PANIC("Failed to increment semaphore");
     }
 #endif
 }
@@ -208,7 +207,7 @@ void Semaphore::destroy()
     ::CloseHandle(this->handle);
 #else
     s32 res = ::sem_destroy(&this->handle);
-    if (res != 0) panic("Failed to destroy semaphore");
+    if (res != 0) PANIC("Failed to destroy semaphore");
 #endif
 }
 

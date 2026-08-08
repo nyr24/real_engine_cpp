@@ -119,7 +119,7 @@ FloatType string_to_float(Slice<char> str)
             curr++;
         }
 
-        res *= pow(10.0, sign * exponent);
+        res *= rg::pow(10.0f, (f32)sign * exponent);
     }
 
     return res * sign;

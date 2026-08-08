@@ -4,9 +4,12 @@
 #include "core/basic.hpp"
 #include "core/thread.hpp"
 #include "core/allocators.hpp"
+#include "collections/ringbuffer.hpp"
 
 namespace rg
 {
+
+constexpr sz MAX_PANIC_HANDLERS = 16;
 
 // Global, application-level context.
 
@@ -15,12 +18,10 @@ struct Context
     Allocator* allocator;
     XorshiftRng rng;
     Mutex logger_mutex;
-
-    void init(Allocator* persistent_alloc);
-    void destroy();
+    RingBuffer<PanicHandler, MAX_PANIC_HANDLERS> panic_handlers;
 };
 
-intern constexpr sz DEFAULT_TEMP_STORAGE_CAPACITY = 8 * MB;
+intern constexpr sz DEFAULT_TEMP_STORAGE_CAPACITY = 64 * MB;
 
 #define TEMP_ALLOC_SCOPE(temp_alloc) \
     sz mark = temp_alloc->save_mark(); \

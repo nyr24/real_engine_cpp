@@ -83,7 +83,7 @@ struct VmemFallbackRegion
 };
 
 /*
- Virtual memory allocator.
+ Thread-safe Virtual memory allocator.
  Allocated contiguously on the heap (metadata + storage)
  Implemented as a Free-list allocator:
  alloc = O(n)
@@ -100,6 +100,7 @@ struct VmemAllocator final : Allocator
     sz capacity;
     VmemFreeNode* free_root;
     VmemFallbackRegion* fallback_root;
+    Mutex mutex;
  
     static VmemAllocator* create(sz init_cap = DEFAULT_CAPACITY);
     void reset();
@@ -216,7 +217,7 @@ struct ThreadArena final : Allocator
     void* fallback_allocate(sz size, sz alignment = 0, bool zero_mem = 0);
     void fallback_free_all();
 
-    u8* mem_begin() { return (u8*)this + sizeof(Arena); }
+    u8* mem_begin() { return (u8*)this + sizeof(*this); }
     u8* mem_end() { return this->mem_begin() + this->capacity; }
     sz remain_mem() { return this->capacity - this->cursor; }
     u8* cursor_ptr() { return this->mem_begin() + this->cursor; }
@@ -235,20 +236,10 @@ void thread_arena_display_info(Allocator* self);
  It can only allocate memory of a certain size or Type.
 */
 
-// Node doesn't store its size, it would be wasteful.
-// Its stored instide pool allocator structure.
-struct PoolNode
-{
-    PoolNode* prev;
-    PoolNode* next;
-    // Data sits here.
-
-    PoolNode* prev_phys(sz node_size) { return (PoolNode*)((u8*)this - sizeof(PoolNode) - node_size); }
-    PoolNode* next_phys(sz node_size) { return (PoolNode*)(this->mem_begin() + node_size); }
-    u8* mem_begin() { return (u8*)this + sizeof(*this); }
-    static PoolNode* ptr_to_node(void* ptr) { return (PoolNode*)((u8*)ptr - sizeof(PoolNode)); }
-};
-
+// Tracks free nodes with bitset,
+// compared to having a free list, it has a benefit of not using space inside the nodes,
+// so, space consumption is reduced drastically.
+// And we also can forget about manipulating links between doubly-linked list.
 struct PoolAllocator
 {
     static constexpr sz DEFAULT_NODE_COUNT = 128;
@@ -256,23 +247,22 @@ struct PoolAllocator
     sz node_size;
     sz node_count;
     Allocator* backing_alloc; 
-    // Freelist.
-    PoolNode* free_root;
+    // bit == one -> node used, bit == zero -> node is free.
+    DBitSet<u64> bitset;
 
     static PoolAllocator* create(Allocator* backing_alloc, sz node_size, sz node_alignment, sz node_count = DEFAULT_NODE_COUNT);
     void* allocate();
     void free(void* ptr);
-    void reset();
+    Maybe<u8*> get_first_available_node();
+    // Doesn't check if its full.
+    u8* get_first_available_node_dont_check();
+    u8* get_node_by_idx(sz idx);
     void destroy();
-    void* fallback_allocate(sz size, sz alignment, bool zero_mem);
 
-    static sz calc_mem_req(sz node_size, sz node_count)
-    {
-        return (sizeof(PoolNode) + node_size) * node_count;
-    }
-    sz capacity() { return (this->node_size + sizeof(PoolNode)) * this->node_count; }
-    PoolNode* begin() { return (PoolNode*)((u8*)this + sizeof(*this)); }
-    PoolNode* end() { return (PoolNode*)(this->begin() + this->capacity()); }
+    void reset() { this->bitset.clear(); }
+    sz capacity() { return this->node_size * this->node_count; }
+    u8* begin() { return (u8*)this + sizeof(*this); }
+    u8* end() { return this->begin() + this->capacity(); }
     bool owns_ptr(void* ptr) { return ptr >= this->begin() && ptr < this->end(); }
 };
 

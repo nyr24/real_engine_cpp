@@ -38,18 +38,18 @@
 
 // Check simd availability.
 
-#if defined(__AVX2__)
-	#include <immintrin.h>
-	#define RG_FEATURE_SIMD_256 1
-#else
-	#define RG_FEATURE_SIMD_256
-#endif
-
 #if defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
 	#include <emmintrin.h>
 	#define RG_FEATURE_SIMD_128 1
 #else
 	#define RG_FEATURE_SIMD_128
+#endif
+
+#if defined(__AVX2__)
+	#include <immintrin.h>
+	#define RG_FEATURE_SIMD_256 1
+#else
+	#define RG_FEATURE_SIMD_256
 #endif
 
 // volk.h + glfw.
@@ -108,6 +108,8 @@ typedef time_t FileTimeUnit;
     #define DEBUG_BREAK()
 #endif //_DEBUG
 
+alias PanicHandler = void(*)();
+
 // Restrict (to avoid aliasing problems when accepting 2 identical pointer types).
 
 #if defined(__clang__) || defined(__GNUC__)
@@ -125,8 +127,11 @@ namespace rg
 
 void assert_proc(bool expr, CString file, s32 line);
 void assert_msg_proc(bool expr, CString file, s32 line, CString fmt, ...);
-[[noreturn]] void panic(CString message = "", ...);
-[[noreturn]] void unreachable(CString message = "", ...);
+[[noreturn]] void panic(CString file, s32 line, CString message, ...);
+[[noreturn]] void unreachable(CString file, s32 line, CString message, ...);
+
+#define PANIC(msg, ...) panic(__FILE__, __LINE__, (msg), ##__VA_ARGS__);
+#define UNREACHABLE(msg, ...) unreachable(__FILE__, __LINE__, (msg), ##__VA_ARGS__);
 
 #ifdef RG_DEBUG
 	#define ASSERT(expr) assert_proc((expr), __FILE__, __LINE__)
@@ -166,7 +171,8 @@ void assert_msg_proc(bool expr, CString file, s32 line, CString fmt, ...);
 	#define TODO(msg)
 #endif
 
-#define CONCAT(a, b) a b
+// TODO: we need gcc variant for this
+#define ASSUME(expr) __builtin_assume(expr);
 
 // Statically determine cstring length without doing costly strlen().
 #define CSTR_SIZED(cstr) cstr, sizeof(cstr) - 1
@@ -376,17 +382,15 @@ constexpr Type align_backward(Type val, sz alignment)
 }
 
 template<typename PtrType>
-constexpr PtrType align_ptr(PtrType ptr, sz alignment = 0)
+constexpr PtrType align_ptr(PtrType ptr, sz alignment)
 {
-	alignment = alignment ? alignment : alignof(PtrType);
 	ASSERT_POW_OF_TWO(alignment);
 	return PtrType(align((uptr)ptr, alignment));
 }
 
 template<typename PtrType>
-constexpr PtrType align_ptr_backward(PtrType ptr, sz alignment = 0)
+constexpr PtrType align_ptr_backward(PtrType ptr, sz alignment)
 {
-	alignment = alignment ? alignment : alignof(PtrType);
 	ASSERT_POW_OF_TWO(alignment);
 	return (uptr)ptr - ((uptr)ptr & alignment - 1);
 }
@@ -507,7 +511,6 @@ struct Maybe
 
 	void set_val(Type val);
 	void set_empty();
-    inline operator bool() { return is_ok; }
 };
 
 template<typename Type>
@@ -639,13 +642,27 @@ alias Microseconds = sz;
 alias Milliseconds = sz;
 alias Seconds = sz;
 
-Nanoseconds get_current_time();
-constexpr Microseconds ns_to_micro(Nanoseconds ns) { return ns / 1'000; }
-constexpr Milliseconds ns_to_milli(Nanoseconds ns) { return ns / 1'000'000; }
-constexpr Microseconds ns_to_sec(Nanoseconds ns) { return ns / 1'000'000'000; }
-constexpr Milliseconds sec_to_milli(Seconds sec) { return sec * 1'000; }
-constexpr Microseconds sec_to_micro(Seconds sec) { return sec * 1'000'000; }
-constexpr Nanoseconds sec_to_ns(Seconds sec) { return sec * 1'000'000'000; }
+Nanoseconds get_current_time_ns();
+constexpr Milliseconds ns_to_ms(Nanoseconds ns) { return ns * MILLI_SEC / NANO_SEC; }
+constexpr Seconds ns_to_sec(Nanoseconds ns) { return ns * 1 / NANO_SEC; }
+constexpr Milliseconds sec_to_ms(Seconds sec) { return sec * MILLI_SEC; }
+constexpr Nanoseconds sec_to_ns(Seconds sec) { return sec * NANO_SEC; }
+constexpr Nanoseconds ms_to_ns(Milliseconds ms) { return ms * NANO_SEC / MILLI_SEC; }
+constexpr Nanoseconds ms_to_sec(Milliseconds ms) { return ms * 1 / MILLI_SEC; }
+
+// ScopeBencher
+
+struct ScopeBencher
+{
+	Nanoseconds init_timestamp;
+	CString name;
+
+	ScopeBencher(CString name);
+	~ScopeBencher();
+};
+
+#define BENCH_SCOPE(var, name) \
+	ScopeBencher var(name);
 
 } // rg
 

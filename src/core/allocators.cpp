@@ -40,7 +40,7 @@ intern void* virtual_alloc(sz size)
 {
 #ifdef RG_PLATFORM_WIN32
     u8* res = (u8*)::VirtualAlloc(null, size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-    if (!res) panic("Failed to allocate memory with VirtualAlloc");
+    if (!res) PANIC("Failed to allocate memory with VirtualAlloc");
     // Cause page faults for all memory pages, to get them in RAM.
     for (sz i = 0; i < size; i += RG_PAGE_SIZE)
     {
@@ -49,7 +49,7 @@ intern void* virtual_alloc(sz size)
     return (void*)res;
 #else
     void* res = ::mmap(null, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
-    if (res == MAP_FAILED) panic("Failed to mmap memory");
+    if (res == MAP_FAILED) PANIC("Failed to mmap memory");
     return res;
 #endif
 }
@@ -84,6 +84,7 @@ VmemAllocator* VmemAllocator::create(sz init_capacity)
     vmem->vtable = &VMEM_VTABLE;
     vmem->capacity = init_capacity;
     vmem->fallback_root = null;
+    vmem->mutex.init();
     vmem->reset();
     return vmem;
 }
@@ -101,6 +102,7 @@ void VmemAllocator::reset()
 void VmemAllocator::destroy()
 {
     this->fallback_free_all();
+    this->mutex.destroy();
     virtual_free(this, this->capacity + sizeof(VmemAllocator));
 }
 
@@ -114,6 +116,8 @@ void* vmem_allocate(Allocator* self, sz size_alloc, sz alignment, bool zero_mem)
     if (!vmem->free_root)
     {
         LOG_WARN("Virtual allocator is out of main memory");
+        vmem->mutex.lock();
+        defer(vmem->mutex.unlock());
         return vmem->fallback_allocate(size_alloc, alignment);
     }
 
@@ -121,13 +125,17 @@ void* vmem_allocate(Allocator* self, sz size_alloc, sz alignment, bool zero_mem)
     size_alloc = align(size_alloc, alignof(VmemFreeNode));
     u64 max_needed_size = u64(alignment) + u64(size_alloc);
 
+    vmem->mutex.lock();
+    defer(vmem->mutex.unlock());
+
     VmemFreeNode* enough_node = vmem->find_best_node(max_needed_size);
     if (!enough_node) return vmem->fallback_allocate(size_alloc, alignment);
 
+    VmemFreeNode* prev_node = (VmemFreeNode*)enough_node->prev_phys;
+    vmem->remove_from_free_list(enough_node);
     u8* ptr = enough_node->mem_begin();
-    u8* aligned_ptr = align_ptr(ptr); 
+    u8* aligned_ptr = align_ptr(ptr, alignment); 
     auto* aligned_node = (VmemFreeNode*)(aligned_ptr - sizeof(VmemAllocHeader));
-    vmem->remove_from_free_list(aligned_node);
     auto* alloc_header = (VmemAllocHeader*)aligned_node;
 
     // Divide node if possible.
@@ -135,12 +143,13 @@ void* vmem_allocate(Allocator* self, sz size_alloc, sz alignment, bool zero_mem)
     u8* enough_node_mem_end = enough_node->mem_end();
     sz remain_space = enough_node_mem_end - alloc_end;
     bool can_add_new_node = remain_space >= VmemAllocator::MIN_ALLOC_SIZE;
+    VmemFreeNode* new_free_node = null;
 
     // Insert new free node if have enough space.
     if (can_add_new_node)
     {
         alloc_header->set_size(size_alloc);
-        auto* new_free_node = (VmemFreeNode*)alloc_header->next_phys();
+        new_free_node = (VmemFreeNode*)alloc_header->next_phys();
         new_free_node->init(aligned_node, remain_space);
         // Need to check if it can be merged with the next block only.
         vmem->insert_after_divide(new_free_node);
@@ -157,7 +166,7 @@ void* vmem_allocate(Allocator* self, sz size_alloc, sz alignment, bool zero_mem)
     // And update the size on the previous node if it exist.
     if (aligned_ptr != ptr)
     {
-        auto* prev_node = (VmemFreeNode*)enough_node->prev_phys;
+        ASSERT_MSG((u8*)prev_node >= vmem->mem_begin(), "Previous pointer must be in range of vmem allocator memory");
         if (prev_node)
         {
             // Increase prev node size.
@@ -166,7 +175,8 @@ void* vmem_allocate(Allocator* self, sz size_alloc, sz alignment, bool zero_mem)
         auto* next_node = (VmemFreeNode*)enough_node_mem_end;
         if (next_node < vmem->mem_end())
         {
-            next_node->prev_phys = alloc_header; 
+            if (can_add_new_node) next_node->prev_phys = new_free_node; 
+            else next_node->prev_phys = alloc_header;
         }
     }
 
@@ -187,9 +197,14 @@ bool vmem_resize(Allocator* self, void* ptr, sz new_size, sz alignment)
     // Shrink allocation.
     if (size_diff < 0)
     {
+        vmem->mutex.lock();
         alloc_header->set_size(old_size + size_diff);
+        vmem->mutex.unlock();
         return true;
     }
+
+    vmem->mutex.lock();
+    defer(vmem->mutex.unlock());
 
     // Grow allocation.
     // We can grow current block only if next block is free, so we can chop memory from it.
@@ -255,7 +270,9 @@ void vmem_free(Allocator* self, void* ptr)
     ASSERT_NON_NULL(ptr);
     auto* vmem = (VmemAllocator*)self; 
     auto* free_node = (VmemFreeNode*)((u8*)ptr - sizeof(VmemAllocHeader));
+    vmem->mutex.lock();
     vmem->insert_after_free(free_node);
+    vmem->mutex.unlock();
 }
 
 /*
@@ -506,7 +523,7 @@ void heap_free(Allocator* self, void* ptr)
 [[noreturn]]
 bool heap_resize(Allocator* self, void* ptr, sz new_size, sz alignment)
 {
-    panic("Can't reliably resize allocation from heap allocator");
+    PANIC("Can't reliably resize allocation from heap allocator");
 }
 
 void* heap_reallocate(Allocator* self, void* ptr, sz new_size, sz alignment)
@@ -880,7 +897,7 @@ bool thread_arena_resize(Allocator* self, void* ptr, sz new_size, sz alignment)
 
 void* thread_arena_reallocate(Allocator* self, void* ptr, sz new_size, sz alignment)
 {
-    if (arena_resize(self, ptr, new_size, alignment)) return ptr;
+    if (thread_arena_resize(self, ptr, new_size, alignment)) return ptr;
 
     ThreadArena* arena = (ThreadArena*)self;
     arena->mutex.lock();
@@ -960,6 +977,7 @@ void ThreadArena::destroy()
 {
     ASSERT_MSG(this->backing_alloc, "Backing allocator must be available");
     this->fallback_free_all();
+    this->mutex.destroy();
     allocator_free(this->backing_alloc, this);
 }
 
@@ -969,56 +987,61 @@ PoolAllocator* PoolAllocator::create(Allocator* backing_alloc, sz node_size, sz 
 {
     ASSERT_GREATER_ZERO(node_count);
     node_alignment = alignment_for_allocation(node_alignment);
-    sz node_size_with_metadata = sizeof(PoolNode) * node_size;
-    sz capacity = sizeof(PoolAllocator) + node_size_with_metadata * node_count;
+    sz capacity = sizeof(PoolAllocator) + node_alignment + node_size * node_count;
     auto* pool = (PoolAllocator*)allocator_allocate(backing_alloc, capacity, node_alignment);
     pool->node_size = node_size;
     pool->node_count = node_count;
     pool->backing_alloc = backing_alloc;
+    pool->bitset.init(backing_alloc, node_count);
     pool->reset();
     return pool;
 }
 
-void PoolAllocator::reset()
+Maybe<u8*> PoolAllocator::get_first_available_node()
 {
-    PoolNode* curr = this->begin();
-    PoolNode* end = this->end();
-    PoolNode* next;
-    curr->prev = null;
-    this->free_root = curr;
+    Maybe<u8*> res;
+    if (this->bitset.is_all_set()) return res;
+    sz idx = this->bitset.count_trailing_ones(true);
+    res.set_val(this->get_node_by_idx(idx));
+    return res;
+}
 
-    for (;curr != end;)
+u8* PoolAllocator::get_first_available_node_dont_check()
+{
+    sz idx = this->bitset.count_trailing_ones(true);
+    return this->get_node_by_idx(idx);
+}
+
+u8* PoolAllocator::get_node_by_idx(sz idx)
+{
+    u8* curr = this->begin();
+    for (sz i = 0; i < idx; ++i)
     {
-        next = curr->next_phys(this->node_size);
-        curr->next = next;
-        next->prev = curr;
-        curr = next;
+        curr += this->node_size;
     }
+    return curr;
 }
 
 void* PoolAllocator::allocate()
 {
-    if (!this->free_root)
+    if (this->bitset.is_all_set())
     {
         // Try to make pool capacity x2.
         if (allocator_resize(
             this->backing_alloc, this,
-            this->calc_mem_req(this->node_size, this->node_count * 2)))
+            this->node_size, this->node_count * 2))
         {
             this->node_count *= 2;
             goto _NEXT;
         }
 
-        panic("Pool is out of memory and failed to resize");
+        // TODO: maybe we need to handle this.
+        PANIC("Pool is out of memory and failed to resize");
         return null;
     }
 
     _NEXT:
-    PoolNode* alloc_node = this->free_root;
-    if (alloc_node->prev) alloc_node->prev->next = alloc_node->next;
-    if (alloc_node->next) alloc_node->next->prev = alloc_node->prev;
-    this->free_root = alloc_node->next;
-    return alloc_node->mem_begin();
+    return this->get_first_available_node_dont_check();
 }
 
 void PoolAllocator::free(void* ptr)
@@ -1027,12 +1050,9 @@ void PoolAllocator::free(void* ptr)
         "Pool allocator doesn't own this ptr, range: %p - %p, pointer was: %p",
         this->begin(), this->end(), ptr);
 
-    PoolNode* freed_node = PoolNode::ptr_to_node(ptr); 
-    PoolNode* root = this->free_root;
-    freed_node->prev = null;
-    freed_node->next = root;
-    if (root) root->prev = freed_node;
-    this->free_root = freed_node;
+    sz ptr_diff = (u8*)ptr - this->begin();
+    sz node_idx = ptr_diff / this->node_size;
+    this->bitset.unset(node_idx);
 }
 
 void PoolAllocator::destroy()

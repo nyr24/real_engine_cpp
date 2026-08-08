@@ -27,7 +27,6 @@ alias ThreadFunc = s32(*)(void*);
 struct Thread
 {
     ThreadHandle handle;
-    u32 id;
 
     Thread() {}
     void start(ThreadFunc start_fn, void* arg);

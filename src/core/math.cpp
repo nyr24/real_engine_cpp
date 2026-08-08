@@ -1,28 +1,27 @@
 #include "core/basic.hpp"
 #include "core/math.hpp"
-#include "math.h"
 
 namespace rg
 {
 
 // Vec2.
 
-Vec2 vec2_add(Vec2 lhs, Vec2 rhs)
+Vec2 vec_add(Vec2 lhs, Vec2 rhs)
 {
     return { lhs.x + rhs.x, lhs.y + rhs.y };
 }
 
-Vec2 vec2_sub(Vec2 lhs, Vec2 rhs)
+Vec2 vec_sub(Vec2 lhs, Vec2 rhs)
 {
     return { lhs.x - rhs.x, lhs.y - rhs.y };
 }
 
-Vec2 vec2_mul(Vec2 lhs, Vec2 rhs)
+Vec2 vec_mul(Vec2 lhs, Vec2 rhs)
 {
     return { lhs.x * rhs.x, lhs.y * rhs.y };
 }
 
-Vec2 vec2_div(Vec2 lhs, Vec2 rhs)
+Vec2 vec_div(Vec2 lhs, Vec2 rhs)
 {
     return { lhs.x / rhs.x, lhs.y / rhs.y };
 }
@@ -51,22 +50,88 @@ void Vec2::div_inplace(Vec2 rhs)
     this->y /= rhs.y;
 }
 
-void Vec2::negate()
+void Vec2::print(LogLevel level)
+{
+    ScopedLogger lg(level);
+    LOG_SCOPED("{ %f, %f }\n", x, y);
+}
+
+// Math on primitives.
+
+Vec2 vec_add(Vec2 lhs, f32 rhs)
+{
+    return { lhs.x + rhs, lhs.y + rhs };
+}
+
+Vec2 vec_sub(Vec2 lhs, f32 rhs)
+{
+    return { lhs.x - rhs, lhs.y - rhs };
+}
+
+Vec2 vec_mul(Vec2 lhs, f32 rhs)
+{
+    return { lhs.x * rhs, lhs.y * rhs };
+}
+
+Vec2 vec_div(Vec2 lhs, f32 rhs)
+{
+    return { lhs.x / rhs, lhs.y / rhs };
+}
+
+void Vec2::add_inplace(f32 rhs)
+{
+    this->x += rhs;
+    this->y += rhs;
+}
+
+void Vec2::sub_inplace(f32 rhs)
+{
+    this->x -= rhs;
+    this->y -= rhs;
+}
+
+void Vec2::mul_inplace(f32 rhs)
+{
+    this->x *= rhs;
+    this->y *= rhs;
+}
+
+void Vec2::div_inplace(f32 rhs)
+{
+    this->x /= rhs;
+    this->y /= rhs;
+}
+
+void Vec2::negate_inplace()
 {
     this->x *= -1;
     this->y *= -1;
 }
 
-void Vec2::normalize()
+void Vec2::normalize_inplace()
 {
     f32 mag_inv = 1 / this->magninute();
     this->x *= mag_inv;
     this->y *= mag_inv;
 }
 
+Vec2 Vec2::negate()
+{
+    Vec2 res;
+    res.negate_inplace();
+    return res;
+}
+
+Vec2 Vec2::normalize()
+{
+    Vec2 res;
+    res.normalize_inplace();
+    return res;
+}
+
 f32 Vec2::magninute()
 {
-    return std::sqrt(this->magninute_square());
+    return sqrt(this->magninute_square());
 }
 
 f32 Vec2::magninute_square()
@@ -76,24 +141,34 @@ f32 Vec2::magninute_square()
     return x*x + y*y;
 }
 
-Vec2 vec2_direction(Vec2 a, Vec2 b)
+Vec2 vec_direction(Vec2 a, Vec2 b)
 {
     return { b.x - a.x, b.y - a.y };
 }
 
-f32 vec2_dist(Vec2 a, Vec2 b)
+f32 vec_dist(Vec2 a, Vec2 b)
 {
-    return vec2_direction(a, b).magninute();
+    return vec_direction(a, b).magninute();
 }
 
-Vec2 operator+(Vec2 a, Vec2 b) { return vec2_add(a, b); }
-Vec2 operator-(Vec2 a, Vec2 b) { return vec2_sub(a, b); }
-Vec2 operator*(Vec2 a, Vec2 b) { return vec2_mul(a, b); }
-Vec2 operator/(Vec2 a, Vec2 b) { return vec2_div(a, b); }
+Vec2 operator+(Vec2 a, Vec2 b) { return vec_add(a, b); }
+Vec2 operator-(Vec2 a, Vec2 b) { return vec_sub(a, b); }
+Vec2 operator*(Vec2 a, Vec2 b) { return vec_mul(a, b); }
+Vec2 operator/(Vec2 a, Vec2 b) { return vec_div(a, b); }
+
+Vec2 operator+(Vec2 a, f32 b) { return vec_add(a, b); }
+Vec2 operator-(Vec2 a, f32 b) { return vec_sub(a, b); }
+Vec2 operator*(Vec2 a, f32 b) { return vec_mul(a, b); }
+Vec2 operator/(Vec2 a, f32 b) { return vec_div(a, b); }
+
+Vec2 operator+(f32 a, Vec2 b) { return vec_add(b, a); }
+Vec2 operator-(f32 a, Vec2 b) { return vec_sub(b, a); }
+Vec2 operator*(f32 a, Vec2 b) { return vec_mul(b, a); }
+Vec2 operator/(f32 a, Vec2 b) { return vec_div(b, a); }
 
 // Vec3.
 
-Vec3 vec3_add(Vec3 lhs, Vec3 rhs)
+Vec3 vec_add(Vec3 lhs, Vec3 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
     Vec3 res;
@@ -107,7 +182,7 @@ Vec3 vec3_add(Vec3 lhs, Vec3 rhs)
 #endif
 }
 
-Vec3 vec3_sub(Vec3 lhs, Vec3 rhs)
+Vec3 vec_sub(Vec3 lhs, Vec3 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
     Vec3 res;
@@ -121,7 +196,7 @@ Vec3 vec3_sub(Vec3 lhs, Vec3 rhs)
 #endif
 }
 
-Vec3 vec3_mul(Vec3 lhs, Vec3 rhs)
+Vec3 vec_mul(Vec3 lhs, Vec3 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
     Vec3 res;
@@ -135,7 +210,7 @@ Vec3 vec3_mul(Vec3 lhs, Vec3 rhs)
 #endif
 }
 
-Vec3 vec3_div(Vec3 lhs, Vec3 rhs)
+Vec3 vec_div(Vec3 lhs, Vec3 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
     Vec3 res;
@@ -205,7 +280,127 @@ void Vec3::div_inplace(Vec3 rhs)
 #endif
 }
 
-void Vec3::negate()
+void Vec3::print(LogLevel level)
+{
+    ScopedLogger lg(level);
+    LOG_SCOPED("{ %f, %f, %f }\n", x, y, z);
+}
+
+// Math on primitives.
+
+Vec3 vec_add(Vec3 lhs, f32 rhs)
+{
+#ifdef RG_FEATURE_SIMD_128
+    Vec3 res;
+    __m128 a = _mm_load_ps(lhs.arr);
+    __m128 b = _mm_set1_ps(rhs);
+    __m128 add_res = _mm_add_ps(a, b);
+    _mm_store_ps(res.arr, add_res);
+    return res;
+#else
+    return { this->x + rhs.x, this->y + rhs.y, this->z + rhs.z };
+#endif
+}
+
+Vec3 vec_sub(Vec3 lhs, f32 rhs)
+{
+#ifdef RG_FEATURE_SIMD_128
+    Vec3 res;
+    __m128 a = _mm_load_ps(lhs.arr);
+    __m128 b = _mm_set1_ps(rhs);
+    __m128 sub_res = _mm_sub_ps(a, b);
+    _mm_store_ps(res.arr, sub_res);
+    return res;
+#else
+    return { this->x - rhs.x, this->y - rhs.y, this->z - rhs.z };
+#endif
+}
+
+Vec3 vec_mul(Vec3 lhs, f32 rhs)
+{
+#ifdef RG_FEATURE_SIMD_128
+    Vec3 res;
+    __m128 a = _mm_load_ps(lhs.arr);
+    __m128 b = _mm_set1_ps(rhs);
+    __m128 mul_res = _mm_mul_ps(a, b);
+    _mm_store_ps(res.arr, mul_res);
+    return res;
+#else
+    return { this->x * rhs.x, this->y * rhs.y, this->z * rhs.z };
+#endif
+}
+
+Vec3 vec_div(Vec3 lhs, f32 rhs)
+{
+#ifdef RG_FEATURE_SIMD_128
+    Vec3 res;
+    __m128 a = _mm_load_ps(lhs.arr);
+    __m128 b = _mm_set1_ps(rhs);
+    __m128 div_res = _mm_div_ps(a, b);
+    _mm_store_ps(res.arr, div_res);
+    return res;
+#else
+    return { this->x / rhs.x, this->y / rhs.y, this->z / rhs.z };
+#endif
+}
+
+void Vec3::add_inplace(f32 rhs)
+{
+#ifdef RG_FEATURE_SIMD_128
+    __m128 a = _mm_load_ps(this->arr);
+    __m128 b = _mm_set1_ps(rhs);
+    __m128 add_res = _mm_add_ps(a, b);
+    _mm_store_ps(this->arr, add_res);
+#else
+    this->x += rhs.x;
+    this->y += rhs.y;
+    this->z += rhs.z;
+#endif
+}
+
+void Vec3::sub_inplace(f32 rhs)
+{
+#ifdef RG_FEATURE_SIMD_128
+    __m128 a = _mm_load_ps(this->arr);
+    __m128 b = _mm_set1_ps(rhs);
+    __m128 sub_res = _mm_sub_ps(a, b);
+    _mm_store_ps(this->arr, sub_res);
+#else
+    this->x -= rhs.x;
+    this->y -= rhs.y;
+    this->z -= rhs.z;
+#endif
+}
+
+void Vec3::mul_inplace(f32 rhs)
+{
+#ifdef RG_FEATURE_SIMD_128
+    __m128 a = _mm_load_ps(this->arr);
+    __m128 b = _mm_set1_ps(rhs);
+    __m128 mul_res = _mm_mul_ps(a, b);
+    _mm_store_ps(this->arr, mul_res);
+#else
+    this->x *= rhs.x;
+    this->y *= rhs.y;
+    this->z *= rhs.z;
+#endif
+}
+
+void Vec3::div_inplace(f32 rhs)
+{
+#ifdef RG_FEATURE_SIMD_128
+    __m128 a = _mm_load_ps(this->arr);
+    __m128 b = _mm_set1_ps(rhs);
+    __m128 div_res = _mm_div_ps(a, b);
+    _mm_store_ps(this->arr, div_res);
+#else
+    this->x /= rhs.x;
+    this->y /= rhs.y;
+    this->z /= rhs.z;
+#endif
+}
+
+void Vec3::negate_inplace()
 {
 #ifdef RG_FEATURE_SIMD_128
     __m128 a = _mm_load_ps(this->arr);
@@ -219,7 +414,7 @@ void Vec3::negate()
 #endif
 }
 
-void Vec3::normalize()
+void Vec3::normalize_inplace()
 {
     f32 mag_inv = 1 / this->magninute();
 #ifdef RG_FEATURE_SIMD_128
@@ -234,7 +429,21 @@ void Vec3::normalize()
 #endif
 }
 
-f32 vec3_dot(Vec3 lhs, Vec3 rhs)
+Vec3 Vec3::negate()
+{
+    Vec3 res;
+    res.negate_inplace();
+    return res;
+}
+
+Vec3 Vec3::normalize()
+{
+    Vec3 res;
+    res.normalize_inplace();
+    return res;
+}
+
+f32 vec_dot(Vec3 lhs, Vec3 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
     __m128 a = _mm_load_ps(lhs.arr);
@@ -245,7 +454,7 @@ f32 vec3_dot(Vec3 lhs, Vec3 rhs)
 #endif
 }
 
-Vec3 vec3_cross(Vec3 lhs, Vec3 rhs)
+Vec3 vec_cross(Vec3 lhs, Vec3 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
     Vec3 res;
@@ -265,7 +474,7 @@ Vec3 vec3_cross(Vec3 lhs, Vec3 rhs)
 
 f32 Vec3::magninute()
 {
-    return std::sqrt(this->magninute_square());
+    return sqrt(this->magninute_square());
 }
 
 f32 Vec3::magninute_square()
@@ -282,7 +491,7 @@ f32 Vec3::magninute_square()
 #endif
 }
 
-Vec3 vec3_direction(Vec3 lhs, Vec3 rhs)
+Vec3 vec_direction(Vec3 lhs, Vec3 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
     Vec3 res;
@@ -296,19 +505,29 @@ Vec3 vec3_direction(Vec3 lhs, Vec3 rhs)
 #endif
 }
 
-f32 vec3_dist(Vec3 a, Vec3 b)
+f32 vec_dist(Vec3 a, Vec3 b)
 {
-    return vec3_direction(a, b).magninute();
+    return vec_direction(a, b).magninute();
 }
 
-Vec3 operator+(Vec3 a, Vec3 b) { return vec3_add(a, b); }
-Vec3 operator-(Vec3 a, Vec3 b) { return vec3_sub(a, b); }
-Vec3 operator*(Vec3 a, Vec3 b) { return vec3_mul(a, b); }
-Vec3 operator/(Vec3 a, Vec3 b) { return vec3_div(a, b); }
+Vec3 operator+(Vec3 a, Vec3 b) { return vec_add(a, b); }
+Vec3 operator-(Vec3 a, Vec3 b) { return vec_sub(a, b); }
+Vec3 operator*(Vec3 a, Vec3 b) { return vec_mul(a, b); }
+Vec3 operator/(Vec3 a, Vec3 b) { return vec_div(a, b); }
+
+Vec3 operator+(Vec3 a, f32 b) { return vec_add(a, b); }
+Vec3 operator-(Vec3 a, f32 b) { return vec_sub(a, b); }
+Vec3 operator*(Vec3 a, f32 b) { return vec_mul(a, b); }
+Vec3 operator/(Vec3 a, f32 b) { return vec_div(a, b); }
+
+Vec3 operator+(f32 a, Vec3 b) { return vec_add(b, a); }
+Vec3 operator-(f32 a, Vec3 b) { return vec_sub(b, a); }
+Vec3 operator*(f32 a, Vec3 b) { return vec_mul(b, a); }
+Vec3 operator/(f32 a, Vec3 b) { return vec_div(b, a); }
 
 // Vec4.
 
-Vec4 vec4_add(Vec4 lhs, Vec4 rhs)
+Vec4 vec_add(Vec4 lhs, Vec4 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
     Vec4 res;
@@ -322,7 +541,7 @@ Vec4 vec4_add(Vec4 lhs, Vec4 rhs)
 #endif
 }
 
-Vec4 vec4_sub(Vec4 lhs, Vec4 rhs)
+Vec4 vec_sub(Vec4 lhs, Vec4 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
     __m128 a = _mm_load_ps(lhs.arr);
@@ -336,7 +555,7 @@ Vec4 vec4_sub(Vec4 lhs, Vec4 rhs)
 #endif
 }
 
-Vec4 vec4_mul(Vec4 lhs, Vec4 rhs)
+Vec4 vec_mul(Vec4 lhs, Vec4 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
     __m128 a = _mm_load_ps(lhs.arr);
@@ -350,7 +569,7 @@ Vec4 vec4_mul(Vec4 lhs, Vec4 rhs)
 #endif
 }
 
-Vec4 vec4_div(Vec4 lhs, Vec4 rhs)
+Vec4 vec_div(Vec4 lhs, Vec4 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
     __m128 a = _mm_load_ps(lhs.arr);
@@ -361,35 +580,6 @@ Vec4 vec4_div(Vec4 lhs, Vec4 rhs)
     return res;
 #else
     return { this->x / rhs.x, this->y / rhs.y, this->z / rhs.z };
-#endif
-}
-
-f32 vec4_dot(Vec4 lhs, Vec4 rhs)
-{
-#ifdef RG_FEATURE_SIMD_128
-    __m128 a = _mm_load_ps(lhs.arr);
-    __m128 b = _mm_load_ps(rhs.arr);
-    return dot_f128(a, b);
-#else
-    return this->x * rhs.x + this->y * rhs.y + this->z * rhs.z;
-#endif
-}
-
-Vec4 vec4_cross(Vec4 lhs, Vec4 rhs)
-{
-#ifdef RG_FEATURE_SIMD_128
-    Vec4 res;
-    __m128 a = _mm_load_ps(lhs.arr);
-    __m128 b = _mm_load_ps(rhs.arr);
-    __m128 cross_res = cross_f128(a, b);
-    _mm_store_ps(res.arr, cross_res);
-    return res;
-#else
-    return {
-        this->y * rhs.z - this->z * rhs.y,
-        this->z * rhs.x - this->x * rhs.z,
-        this->x * rhs.y - this->y * rhs.x,
-    };
 #endif
 }
 
@@ -449,7 +639,156 @@ void Vec4::div_inplace(Vec4 rhs)
 #endif
 }
 
-void Vec4::negate()
+void Vec4::print(LogLevel level)
+{
+    ScopedLogger lg(level);
+    LOG_SCOPED("{ %f %f %f %f }\n", x, y, z, w);
+}
+
+// Math on primitives.
+
+Vec4 vec_add(Vec4 lhs, f32 rhs)
+{
+#ifdef RG_FEATURE_SIMD_128
+    Vec4 res;
+    __m128 a = _mm_load_ps(lhs.arr);
+    __m128 b = _mm_set1_ps(rhs);
+    __m128 add_res = _mm_add_ps(a, b);
+    _mm_store_ps(res.arr, add_res);
+    return res;
+#else
+    return { this->x + rhs.x, this->y + rhs.y, this->z + rhs.z };
+#endif
+}
+
+Vec4 vec_sub(Vec4 lhs, f32 rhs)
+{
+#ifdef RG_FEATURE_SIMD_128
+    __m128 a = _mm_load_ps(lhs.arr);
+    __m128 b = _mm_set1_ps(rhs);
+    __m128 add_res = _mm_sub_ps(a, b);
+    Vec4 res;
+    _mm_store_ps(res.arr, add_res);
+    return res;
+#else
+    return { this->x - rhs.x, this->y - rhs.y, this->z - rhs.z };
+#endif
+}
+
+Vec4 vec_mul(Vec4 lhs, f32 rhs)
+{
+#ifdef RG_FEATURE_SIMD_128
+    __m128 a = _mm_load_ps(lhs.arr);
+    __m128 b = _mm_set1_ps(rhs);
+    __m128 add_res = _mm_mul_ps(a, b);
+    Vec4 res;
+    _mm_store_ps(res.arr, add_res);
+    return res;
+#else
+    return { this->x * rhs.x, this->y * rhs.y, this->z * rhs.z };
+#endif
+}
+
+Vec4 vec_div(Vec4 lhs, f32 rhs)
+{
+#ifdef RG_FEATURE_SIMD_128
+    __m128 a = _mm_load_ps(lhs.arr);
+    __m128 b = _mm_set1_ps(rhs);
+    __m128 add_res = _mm_div_ps(a, b);
+    Vec4 res;
+    _mm_store_ps(res.arr, add_res);
+    return res;
+#else
+    return { this->x / rhs.x, this->y / rhs.y, this->z / rhs.z };
+#endif
+}
+
+void Vec4::add_inplace(f32 rhs)
+{
+#ifdef RG_FEATURE_SIMD_128
+    __m128 a = _mm_load_ps(this->arr);
+    __m128 b = _mm_set1_ps(rhs);
+    __m128 add_res = _mm_add_ps(a, b);
+    _mm_store_ps(this->arr, add_res);
+#else
+    this->x += rhs.x;
+    this->y += rhs.y;
+    this->z += rhs.z;
+#endif
+}
+
+void Vec4::sub_inplace(f32 rhs)
+{
+#ifdef RG_FEATURE_SIMD_128
+    __m128 a = _mm_load_ps(this->arr);
+    __m128 b = _mm_set1_ps(rhs);
+    __m128 sub_res = _mm_sub_ps(a, b);
+    _mm_store_ps(this->arr, sub_res);
+#else
+    this->x -= rhs.x;
+    this->y -= rhs.y;
+    this->z -= rhs.z;
+#endif
+}
+
+void Vec4::mul_inplace(f32 rhs)
+{
+#ifdef RG_FEATURE_SIMD_128
+    __m128 a = _mm_load_ps(this->arr);
+    __m128 b = _mm_set1_ps(rhs);
+    __m128 mul_res = _mm_mul_ps(a, b);
+    _mm_store_ps(this->arr, mul_res);
+#else
+    this->x *= rhs.x;
+    this->y *= rhs.y;
+    this->z *= rhs.z;
+#endif
+}
+
+void Vec4::div_inplace(f32 rhs)
+{
+#ifdef RG_FEATURE_SIMD_128
+    __m128 a = _mm_load_ps(this->arr);
+    __m128 b = _mm_set1_ps(rhs);
+    __m128 div_res = _mm_div_ps(a, b);
+    _mm_store_ps(this->arr, div_res);
+#else
+    this->x /= rhs.x;
+    this->y /= rhs.y;
+    this->z /= rhs.z;
+#endif
+}
+
+f32 vec_dot(Vec4 lhs, Vec4 rhs)
+{
+#ifdef RG_FEATURE_SIMD_128
+    __m128 a = _mm_load_ps(lhs.arr);
+    __m128 b = _mm_load_ps(rhs.arr);
+    return dot_f128(a, b);
+#else
+    return this->x * rhs.x + this->y * rhs.y + this->z * rhs.z;
+#endif
+}
+
+Vec4 vec_cross(Vec4 lhs, Vec4 rhs)
+{
+#ifdef RG_FEATURE_SIMD_128
+    Vec4 res;
+    __m128 a = _mm_load_ps(lhs.arr);
+    __m128 b = _mm_load_ps(rhs.arr);
+    __m128 cross_res = cross_f128(a, b);
+    _mm_store_ps(res.arr, cross_res);
+    return res;
+#else
+    return {
+        this->y * rhs.z - this->z * rhs.y,
+        this->z * rhs.x - this->x * rhs.z,
+        this->x * rhs.y - this->y * rhs.x,
+    };
+#endif
+}
+
+void Vec4::negate_inplace()
 {
 #ifdef RG_FEATURE_SIMD_128
     __m128 a = _mm_load_ps(this->arr);
@@ -463,7 +802,7 @@ void Vec4::negate()
 #endif
 }
 
-void Vec4::normalize()
+void Vec4::normalize_inplace()
 {
     f32 mag_inv = 1 / this->magninute();
 #ifdef RG_FEATURE_SIMD_128
@@ -478,9 +817,23 @@ void Vec4::normalize()
 #endif
 }
 
+Vec4 Vec4::negate()
+{
+    Vec4 res;
+    res.negate_inplace();
+    return res;
+}
+
+Vec4 Vec4::normalize()
+{
+    Vec4 res;
+    res.normalize_inplace();
+    return res;
+}
+
 f32 Vec4::magninute()
 {
-    return std::sqrt(this->magninute_square());
+    return sqrt(this->magninute_square());
 }
 
 f32 Vec4::magninute_square()
@@ -499,7 +852,7 @@ f32 Vec4::magninute_square()
 #endif
 }
 
-Vec4 vec4_direction(Vec4 a, Vec4 b)
+Vec4 vec_direction(Vec4 a, Vec4 b)
 {
     Vec4 res;
 #ifdef RG_FEATURE_SIMD_128
@@ -513,15 +866,25 @@ Vec4 vec4_direction(Vec4 a, Vec4 b)
 #endif
 }
 
-f32 vec4_dist(Vec4 a, Vec4 b)
+f32 vec_dist(Vec4 a, Vec4 b)
 {
-    return vec4_direction(a, b).magninute();
+    return vec_direction(a, b).magninute();
 }
 
-Vec4 operator+(Vec4 a, Vec4 b) { return vec4_add(a, b); }
-Vec4 operator-(Vec4 a, Vec4 b) { return vec4_sub(a, b); }
-Vec4 operator*(Vec4 a, Vec4 b) { return vec4_mul(a, b); }
-Vec4 operator/(Vec4 a, Vec4 b) { return vec4_div(a, b); }
+Vec4 operator+(Vec4 a, Vec4 b) { return vec_add(a, b); }
+Vec4 operator-(Vec4 a, Vec4 b) { return vec_sub(a, b); }
+Vec4 operator*(Vec4 a, Vec4 b) { return vec_mul(a, b); }
+Vec4 operator/(Vec4 a, Vec4 b) { return vec_div(a, b); }
+
+Vec4 operator+(Vec4 a, f32 b) { return vec_add(a, b); }
+Vec4 operator-(Vec4 a, f32 b) { return vec_sub(a, b); }
+Vec4 operator*(Vec4 a, f32 b) { return vec_mul(a, b); }
+Vec4 operator/(Vec4 a, f32 b) { return vec_div(a, b); }
+
+Vec4 operator+(f32 a, Vec4 b) { return vec_add(b, a); }
+Vec4 operator-(f32 a, Vec4 b) { return vec_sub(b, a); }
+Vec4 operator*(f32 a, Vec4 b) { return vec_mul(b, a); }
+Vec4 operator/(f32 a, Vec4 b) { return vec_div(b, a); }
 
 // Mat4.
 
@@ -574,14 +937,14 @@ void Mat4::translate_inplace(Vec3 v)
         _mm_add_ps(_mm_mul_ps(r2, vz), r3)
     );
 
-    _mm_storeu_ps(&m[12], r3_new);
+    _mm_store_ps(&m[12], r3_new);
 #else
     f32* m = this->data;
 	m[12] = m[0] * v.x + m[4] * v.y + m[8]  * v.z + m[12];
 	m[13] = m[1] * v.x + m[5] * v.y + m[9]  * v.z + m[13];
 	m[14] = m[2] * v.x + m[6] * v.y + m[10] * v.z + m[14];
-	m[15] = m[3] * v.x + m[7] * v.y + m[11] * v.z + m[15];
 #endif
+	m[15] = 1.0f;
 }
 
 void Mat4::scale_inplace(Vec3 v)
@@ -601,12 +964,14 @@ void Mat4::scale_inplace(Vec3 v)
     r1 = _mm_mul_ps(r1, vy);
     r2 = _mm_mul_ps(r2, vz);
 
-    _mm_storeu_ps(&m[0], r0);
-    _mm_storeu_ps(&m[4], r1);
-    _mm_storeu_ps(&m[8], r2);
+    _mm_store_ps(&m[0], r0);
+    _mm_store_ps(&m[4], r1);
+    _mm_store_ps(&m[8], r2);
 #else
-    Mat4 rhs = { v.x, v.x, v.x, v.x, v.y, v.y, v.y, v.y, v.z, v.z, v.z, v.z, 1, 1, 1, 1 };
-    this->mul_inplace(rhs);
+    f32* m = this->data;
+    m[0] *= v.x; m[1] *= v.x; m[2] *= v.x; m[3] *= v.x;
+    m[4] *= v.y; m[5] *= v.y; m[6] *= v.y; m[7] *= v.y;
+    m[8] *= v.z; m[9] *= v.z; m[10] *= v.z; m[11] *= v.z;
 #endif
 }
 
@@ -622,6 +987,86 @@ Mat4 Mat4::scale(Vec3 v) const
     Mat4 res = *this;
     res.scale_inplace(v);
     return res;
+}
+
+// Mat4 Mat4::look_at(Vec3 eye, Vec3 target, Vec3 up)
+// {
+// 	Vec3 vz = (eye - target).normalize();
+// 	Vec3 vx = vec_cross(up, vz).normalize();
+// 	Vec3 vy = vec_cross(vz, vx);
+
+// 	return {
+// 		vx.x, vx.y, vx.z, 0,
+// 		vy.x, vy.y, vy.z, 0,
+// 		vz.x, vz.y, vz.z, 0,
+// 		vec_dot(-vx, eye), vec_dot(-vy, eye), vec_dot(-vz, eye), 1
+// 	};
+// }
+
+// NOTE: glm version
+
+Mat4 Mat4::look_at(Vec3 eye, Vec3 target, Vec3 up)
+{
+	Vec3 f = (target - eye).normalize();
+	Vec3 s = vec_cross(f, up).normalize();
+	Vec3 u = vec_cross(s, f);
+
+	Mat4 res = Mat4::identity();
+	res[0] = s.x;
+	res[4] = s.y;
+	res[8] = s.z;
+	res[1] = u.x;
+	res[5] = u.y;
+	res[9] = u.z;
+	res[2] = -f.x;
+	res[6] = -f.y;
+	res[10] = -f.z;
+	res[12] = -vec_dot(s, eye);
+	res[13] = -vec_dot(u, eye);
+	res[14] = vec_dot(f, eye);
+	return res;
+}
+
+Mat4 Mat4::ortho(f32 left, f32 right, f32 bottom, f32 top, f32 z_near, f32 z_far)
+{
+	Mat4 res = Mat4::identity();
+	res[0] = 2.0f / (right - left);
+	res[5] = 2.0f / (top - bottom);
+	res[10] = - 1.0f / (z_far - z_near);
+	res[12] = - (right + left) / (right - left);
+	res[13] = - (top + bottom) / (top - bottom);
+	res[14] = - z_near / (z_far - z_near);
+	return res;
+}
+
+// Implements right-handed [0, 1] perspective
+Mat4 Mat4::perspective(f32 fovy, f32 aspect, f32 z_near, f32 z_far)
+{
+	f32 tanHalfFovy = tan(fovy / (f32)(2));
+	Mat4 res = {};
+	res[0] = (f32)(1) / (aspect * tanHalfFovy);
+	res[5] = (f32)(1) / (tanHalfFovy);
+	res[10] = - (z_far + z_near) / (z_far - z_near);
+	res[11] = - (f32)(1);
+	res[14] = - ((f32)(2) * z_far * z_near) / (z_far - z_near);
+	return res;
+}
+
+Mat4 Mat4::frustum(f32 left, f32 right, f32 bottom, f32 top, f32 z_near, f32 z_far)
+{
+	f32 fn_scale = 1 / (z_near - z_far);
+	f32 rl_scale = 1 / (right - left);
+	f32 tb_scale = 1 / (top - bottom);
+
+	Mat4 res = {};
+	res[0] = (2 * z_near) * rl_scale;
+	res[5] = (2 * z_near) * tb_scale;
+	res[8] = (right + left) * rl_scale;
+	res[9] = (top + bottom) * tb_scale;
+	res[10] = z_far * fn_scale;
+	res[11] = -1;
+	res[14] = z_far * z_near * fn_scale;
+	return res;
 }
 
 void Mat4::mul_inplace(const Mat4& rhs)
@@ -647,7 +1092,7 @@ void Mat4::mul_inplace(const Mat4& rhs)
             _mm_add_ps(_mm_mul_ps(a2, b2), _mm_mul_ps(a3, b3))
         );
 
-        _mm_storeu_ps(&src[i], r);
+        _mm_store_ps(&src[i], r);
     }
 #else
     Array<f32, 16>& src = *this;
@@ -684,6 +1129,11 @@ Mat4 mat4_mul(const Mat4& lhs, const Mat4& rhs)
     return res;
 }
 
+Mat4 operator*(const Mat4& a, const Mat4& b)
+{
+    return mat4_mul(a, b);
+}
+
 void Mat4::transpose_inplace()
 {
     f32* m = this->data;
@@ -703,10 +1153,10 @@ void Mat4::transpose_inplace()
     r2 = _mm_movelh_ps(t1, t3); 
     r3 = _mm_movehl_ps(t3, t1); 
 
-    _mm_storeu_ps(&m[0],  r0);
-    _mm_storeu_ps(&m[4],  r1);
-    _mm_storeu_ps(&m[8],  r2);
-    _mm_storeu_ps(&m[12], r3);
+    _mm_store_ps(&m[0],  r0);
+    _mm_store_ps(&m[4],  r1);
+    _mm_store_ps(&m[8],  r2);
+    _mm_store_ps(&m[12], r3);
 #else
     rg::swap(&m[1],  &m[4]);
     rg::swap(&m[2],  &m[8]);
@@ -757,14 +1207,14 @@ void Mat4::invert_affine()
     );
     r3_new = _mm_sub_ps(_mm_setzero_ps(), r3_new); // Negate 
 
-    alignas(16) float final_row[4];
+    alignas(16) f32 final_row[4];
     _mm_store_ps(final_row, r3_new);
     final_row[3] = 1.0f;
 
-    _mm_storeu_ps(&m[0], r0_new);
-    _mm_storeu_ps(&m[4], r1_new);
-    _mm_storeu_ps(&m[8], r2_new);
-    _mm_storeu_ps(&m[12], _mm_load_ps(final_row));
+    _mm_store_ps(&m[0], r0_new);
+    _mm_store_ps(&m[4], r1_new);
+    _mm_store_ps(&m[8], r2_new);
+    _mm_store_ps(&m[12], _mm_load_ps(final_row));
 #else
     rg::swap(&m[1], &m[4]);
     rg::swap(&m[2], &m[8]);
@@ -861,10 +1311,10 @@ void Mat4::invert_general()
     // --- 6. Apply Reciprocal Determinant and Store ---
     __m128 rcp = _mm_div_ps(_mm_set1_ps(1.0f), det);
     
-    _mm_storeu_ps(&m[0],  _mm_mul_ps(dst0, rcp));
-    _mm_storeu_ps(&m[4],  _mm_mul_ps(dst1, rcp));
-    _mm_storeu_ps(&m[8],  _mm_mul_ps(dst2, rcp));
-    _mm_storeu_ps(&m[12], _mm_mul_ps(dst3, rcp));
+    _mm_store_ps(&m[0],  _mm_mul_ps(dst0, rcp));
+    _mm_store_ps(&m[4],  _mm_mul_ps(dst1, rcp));
+    _mm_store_ps(&m[8],  _mm_mul_ps(dst2, rcp));
+    _mm_store_ps(&m[12], _mm_mul_ps(dst3, rcp));
 #else
     // --- Scalar Cramer's Rule for Row-Major Matrix ---
     // Compute 2x2 sub-determinants of the bottom two rows
@@ -925,6 +1375,21 @@ void Mat4::invert_general()
     m[14] = (-m12* c3 + m13* c1 - m14* c0) * inv_det;
     m[15] = ( m8 * c3 - m9 * c1 + m10* c0) * inv_det;
 #endif
+}
+
+void Mat4::print(LogLevel level)
+{
+    const Mat4& m = *this;
+    ScopedLogger lg(level);
+
+    LOG_SCOPED("[\n");
+
+    for (sz i = 0; i < 16; i += 4)
+    {
+        LOG_SCOPED("\t%f %f %f %f\n", m[i+0], m[i+1], m[i+2], m[i+3]);
+    }
+
+    LOG_SCOPED("]");
 }
 
 // Quaternion.
@@ -1005,19 +1470,19 @@ Mat4 Quat::to_matrix() const
 
     // Row 0
     m[0] = 1.0f - 2.0f * (yy + zz);
-    m[1] = 2.0f * (xy + zw_val);
-    m[2] = 2.0f * (xz - yw);
+    m[1] = 2.0f * (xy - zw_val);
+    m[2] = 2.0f * (xz + yw);
     m[3] = 0.0f;
 
     // Row 1
-    m[4] = 2.0f * (xy - zw_val);
+    m[4] = 2.0f * (xy + zw_val);
     m[5] = 1.0f - 2.0f * (xx + zz);
-    m[6] = 2.0f * (yz + xw);
+    m[6] = 2.0f * (yz - xw);
     m[7] = 0.0f;
 
     // Row 2
-    m[8]  = 2.0f * (xz + yw);
-    m[9]  = 2.0f * (yz - xw);
+    m[8]  = 2.0f * (xz - yw);
+    m[9]  = 2.0f * (yz + xw);
     m[10] = 1.0f - 2.0f * (xx + yy);
     m[11] = 0.0f;
 
@@ -1031,18 +1496,18 @@ Mat4 Quat::to_matrix() const
 }
 
 // --- 4. Construct from Euler Angles (YXZ/Yaw-Pitch-Roll order) ---
-Quat Quat::create_from_euler(f32 pitch, f32 yaw, f32 roll) 
+Quat Quat::from_euler(f32 pitch_deg, f32 yaw_deg, f32 roll_deg) 
 {
-    f32 heading = yaw;
-    f32 attitude = pitch;
-    f32 bank = roll;
+    f32 heading = rg::deg_to_rad(yaw_deg);
+    f32 attitude = rg::deg_to_rad(pitch_deg);
+    f32 bank = rg::deg_to_rad(roll_deg);
 
-    f32 c1 = std::cos(heading / 2.0f);
-    f32 s1 = std::sin(heading / 2.0f);
-    f32 c2 = std::cos(attitude / 2.0f);
-    f32 s2 = std::sin(attitude / 2.0f);
-    f32 c3 = std::cos(bank / 2.0f);
-    f32 s3 = std::sin(bank / 2.0f);
+    f32 c1 = cos(heading / 2.0f);
+    f32 s1 = sin(heading / 2.0f);
+    f32 c2 = cos(attitude / 2.0f);
+    f32 s2 = sin(attitude / 2.0f);
+    f32 c3 = cos(bank / 2.0f);
+    f32 s3 = sin(bank / 2.0f);
 
     // Combines components into a single step without matrix overhead
     return {
