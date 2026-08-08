@@ -16,31 +16,40 @@ const char* SHADERS_BUILD_DIR = "shaders/build";
 const StrView RELEASE_INPUT_OPT = "release";
 const StrView WARNING_INPUT_OPT = "warn";
 const StrView COPY_ASSETS_OPT = "shaders";
+const StrView SANITIZER_OPT = "san";
+const StrView FORCE_REBUILD_OPT = "rebuild";
+const StrView HIDE_CURSOR_OPT = "no_cursor";
 
 int main(int argc, char **argv)
 {
     bool is_release = false;
     bool include_warnings = false;
     bool compile_shaders = false;
+    bool use_sanitizer = false;
+    bool force_rebuild = false;
+    bool hide_cursor = false;
 
     if (argc > 1)
     {
         is_release = is_argument_set(RELEASE_INPUT_OPT, argc, argv);
         include_warnings = is_argument_set(WARNING_INPUT_OPT, argc, argv);
         compile_shaders = is_argument_set(COPY_ASSETS_OPT, argc, argv);
+        use_sanitizer = is_argument_set(SANITIZER_OPT, argc, argv);
+        force_rebuild = is_argument_set(FORCE_REBUILD_OPT, argc, argv);
+        hide_cursor = is_argument_set(HIDE_CURSOR_OPT, argc, argv);
     }
 
     if (!is_release) log_info("Starting debug build...\n");
     else log_info("Starting release build...\n");
 
-    FlagsOptimization optimization = is_release ? FlagsOptimization::SPEED : FlagsOptimization::NONE;
+    FlagsOptimization optimization = is_release ? FlagsOptimization::ALL : FlagsOptimization::NONE;
     FlagsSTD std = FlagsSTD::CPP20;
 
     rebuild_itself((ExecutableOptions{ .debug = !is_release, .optimize = optimization, .std = std }),
                     argc, argv, "deps/ezbuild/ezbuild.hpp");
 
     // Check if this build.cpp script was rebuilt.
-    bool force_rebuilt = was_script_rebuilt(argc, argv);
+    bool do_rebuild = force_rebuild || was_script_rebuilt(argc, argv);
 
     // Create cmd object in which we gonna configure our build...
     Cmd cmd {};
@@ -62,6 +71,15 @@ int main(int argc, char **argv)
     shared_flags.push("-march=native");
     shared_flags.push("-fno-rtti");
     shared_flags.push("-fno-exceptions");
+    shared_flags.push("-fno-math-errno");
+    shared_flags.push("-fstrict-aliasing");
+    // shared_flags.push("-fno-strict-aliasing");
+
+    if (use_sanitizer)
+    {
+        log_info("Using sanitizer");
+        shared_flags.push("-fsanitize=address");
+    }
 
     if (include_warnings)
     {
@@ -78,6 +96,7 @@ int main(int argc, char **argv)
 
     LocalArray<StrView> release_flags;
     release_flags.push("-flto");
+    release_flags.push("-ffast-math");
 
     // Defines.
 
@@ -92,6 +111,11 @@ int main(int argc, char **argv)
     // shared defines.
     cmd.add_define(thread_count_define.to_string_view());
     cmd.add_define(page_size_define.to_string_view());
+
+    if (hide_cursor) {
+        log_info("**hiding cursor**");
+        cmd.add_define("RG_HIDE_CURSOR");
+    }
 
     LocalArray<StrView> debug_defines;
     debug_defines.push("RG_DEBUG");
@@ -145,7 +169,7 @@ int main(int argc, char **argv)
     else cmd.output_folder(DEBUG_OUTPUT_DIR);
 
     bool run = false;
-    if (!cmd.end_build(run, force_rebuilt))
+    if (!cmd.end_build(run, do_rebuild))
         return EXIT_FAILURE;
 
     if (compile_shaders)
