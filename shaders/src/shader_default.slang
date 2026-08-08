@@ -36,9 +36,10 @@ VSOutput vertMain(VSInput input)
 float4 fragMain(VSOutput input) : SV_Target
 {
     float4 diffuse_sample = diffuse.Sample(input.tex_coord);
-    float3 ambient = float3(0.1, 0.1, 0.1); // or from environment
+    float3 ambient = float3(0.5, 0.5, 0.5); // or from environment
     float3 diffuse_light = diffuse_sample.rgb * ambient;
     return float4(diffuse_light, diffuse_sample.a);
+    // return float4(0, 1.0f, 0, 1.0f);
 }
 
 // TODO:
