@@ -36,6 +36,8 @@ struct RingBuffer
     Type pop();
     // Checks if queue is empty, returns empty result if it is.
     Maybe<Type> pop_safe();
+    void foreach(void(*)(const Type& val));
+    void foreach_ref(void(*)(Type* val));
 
     sz count() const;
     void clear()
@@ -125,6 +127,34 @@ sz RingBuffer<Type, CAPACITY>::count() const
         return write + CAPACITY - read;
     }
     else return write - read;
+}
+
+template<typename Type, sz CAPACITY>
+void RingBuffer<Type, CAPACITY>::foreach(void(*fn)(const Type& val))
+{
+    sz count = this->count();
+    Type val;
+    
+    while (count > 0)
+    {
+        val = this->pop();
+        fn(val);
+        count--;
+    }
+}
+
+template<typename Type, sz CAPACITY>
+void RingBuffer<Type, CAPACITY>::foreach_ref(void(*fn)(Type* val))
+{
+    sz count = this->count();
+    Type val;
+    
+    while (count > 0)
+    {
+        val = this->pop();
+        fn(&val);
+        count--;
+    }
 }
 
 // Thread safe implementation (atomics).

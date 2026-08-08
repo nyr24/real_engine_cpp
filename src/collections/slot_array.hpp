@@ -35,20 +35,21 @@ struct SlotArray
     Allocator* alloc;
 
     SlotArray();
-    void init(Allocator* alloc);
-    void init_capacity(Allocator* alloc, sz init_capacity = DEFAULT_CAPACITY);
+    void init(Allocator* alloc, sz init_capacity = DEFAULT_CAPACITY);
     void add(const Type& val);
     void add(Slice<Type> vals);
     void remove(sz idx);
     Type* get_free_slot();
     sz get_free_slot_idx();
+    Pair<Type*, sz> get_free_slot_and_idx();
     Slice<Type*> get_free_slots(Allocator* alloc, sz count);
     Slice<sz> get_free_slot_idxs(Allocator* alloc, sz count);
     void resize(sz need_capacity);
     Iter get_active_slot_iter();
     void destroy();
 
-    bool is_empty() { return this->bits.count_trailing_zeroes() == 0; }
+    bool is_empty() { return this->bits.is_nothing_set(); }
+    bool is_full() { return this->bits.is_all_set(); }
     bool is_initialized() { return this->alloc != null; }
     Type& operator[](sz idx) { return this->data[idx]; }
     Type* begin() { return this->data; };
@@ -59,29 +60,23 @@ template<typename Type>
 SlotArray<Type>::SlotArray()
     : data{null}, capacity{}, alloc{null}
 {
-    this->bits.unset_all();
 }
 
 template<typename Type>
-void SlotArray<Type>::init(Allocator* alloc)
-{
-    this->alloc = alloc;
-}
-
-template<typename Type>
-void SlotArray<Type>::init_capacity(Allocator* alloc, sz init_capacity)
+void SlotArray<Type>::init(Allocator* alloc, sz init_capacity)
 {
     ASSERT_GREATER_ZERO(init_capacity);
-    this->data = (Type*)allocator_allocate(alloc, init_capacity * sizeof(Type));
+    this->data = (Type*)allocator_allocate(alloc, init_capacity * sizeof(Type), alignof(Type));
     this->bits.init(alloc, init_capacity);
     this->capacity = init_capacity;
     this->alloc = alloc;
+    this->bits.clear();
 }
 
 template<typename Type>
 void SlotArray<Type>::add(const Type& val)
 {
-    if (this->is_empty())
+    if (this->is_full())
     {
         sz free_slot = this->capacity;
         this->resize(1);
@@ -90,9 +85,9 @@ void SlotArray<Type>::add(const Type& val)
         return;
     }
 
-    sz ctz = this->bits.count_trailing_zeroes(true);
-    ASSERT_GREATER_ZERO(ctz);
-    this->data[ctz - 1] = val;
+    auto [idx, is_found] = this->bits.find_first_zero_bit(true);
+    ASSERT(is_found);
+    this->data[idx] = val;
 }
 
 template<typename Type>
@@ -103,23 +98,29 @@ void SlotArray<Type>::remove(sz idx)
 }
 
 template<typename Type>
-Type* SlotArray<Type>::get_free_slot()
+sz SlotArray<Type>::get_free_slot_idx()
 {
-    sz ctz = this->bits.count_trailing_zeroes(true);
-    if (ctz != 0) return &this->data[ctz - 1];
+    auto [idx, is_found] = this->bits.find_first_zero_bit(true);
+    if (is_found) return idx;
+
     sz old_capacity = this->capacity;
     this->resize(old_capacity * 2);
-    return &this->data[old_capacity];
+    this->bits.set(old_capacity);
+    return old_capacity;
 }
 
 template<typename Type>
-sz SlotArray<Type>::get_free_slot_idx()
+Type* SlotArray<Type>::get_free_slot()
 {
-    sz ctz = this->bits.count_trailing_zeroes(true);
-    if (ctz != 0) return ctz - 1;
-    sz old_capacity = this->capacity;
-    this->resize(old_capacity * 2);
-    return old_capacity;
+    sz idx = this->get_free_slot_idx();
+    return this->data[idx];
+}
+
+template<typename Type>
+Pair<Type*, sz> SlotArray<Type>::get_free_slot_and_idx()
+{
+    sz idx = this->get_free_slot_idx();
+    return Pair{ &this->data[idx], idx };
 }
 
 template<typename Type>
@@ -162,7 +163,7 @@ void SlotArray<Type>::resize(sz needed)
     }
     
     if (this->data) this->data = (Type*)allocator_reallocate(this->alloc, this->data, sizeof(Type) * new_capacity);
-    else this->data = (Type*)allocator_allocate(this->alloc, sizeof(Type) * new_capacity);
+    else this->data = (Type*)allocator_allocate(this->alloc, sizeof(Type) * new_capacity, alignof(Type));
 
     this->bits.resize(new_capacity - old_capacity);
     this->capacity = new_capacity;
@@ -184,7 +185,7 @@ Maybe<Type*> SlotArray<Type>::Iter::next()
     Maybe<Type*> res;
     if (this->at_end()) return res;
     // We need the opposite of ctz.
-    sz cto = this->bits->count_trailing_ones(this->pos);
+    sz cto = this->bits->count_trailing_zeroes(this->pos);
     this->pos = cto;
     res.set_val(this->data_view[cto - 1]);
     return res;

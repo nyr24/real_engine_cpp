@@ -368,8 +368,8 @@ template<typename Key, typename Value>
 inline Pair<Key*, Value*> HashMap<Key, Value>::keys_values_begin(u64* data, sz capacity)
 {
     Pair<Key*, Value*> res;
-    res.first = align_ptr((Key*)(data + capacity));
-    res.second = align_ptr((Value*)(res.first + capacity));
+    res.first = align_ptr((Key*)(data + capacity), alignof(Key));
+    res.second = align_ptr((Value*)(res.first + capacity), alignof(Value));
     return res;
 }
 

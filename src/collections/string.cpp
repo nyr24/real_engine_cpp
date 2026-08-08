@@ -28,7 +28,7 @@ StrView::StrView(CString cstr, sz count, bool is_wide)
 void StrView::init(CString cstr, bool preserve_null_term)
 {
     this->ptr = cstr;
-    this->count = strlen(cstr);
+    this->count = ::strlen(cstr);
     if (preserve_null_term) this->count++;
 }
 
@@ -122,7 +122,7 @@ void trim_space_both(const char** start, sz* count)
 
 void DString::init_cstr(Allocator* alloc, CString cstr, bool preserve_null_term)
 {
-    sz len = strlen(cstr);
+    sz len = ::strlen(cstr);
     sz init_cap = rg::max(DEFAULT_CAPACITY, len + 1);
     this->data = (char*)allocator_allocate(alloc, init_cap * sizeof(char));
     if (preserve_null_term) len += 1;

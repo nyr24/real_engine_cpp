@@ -39,9 +39,9 @@ struct DArray
     void push(Slice<Type> values);
     void push_and_move_ownership(Type&& value);
     void push_and_move_ownership(Slice<Type> values);
-    void pop(Type* out_val);
+    Type pop();
     void pop(Slice<Type> out_vals);
-    void pop_and_move_ownership(Type* out_val);
+    Type pop_and_move_ownership();
     void pop_and_move_ownership(Slice<Type> out_vals);
     void remove_unordered_at(sz idx);
     void reserve(sz needed);
@@ -143,7 +143,7 @@ void DArray<Type>::init_capacity(Allocator* alloc, sz init_capacity)
 {
     ASSERT_GREATER_EQ_ZERO(init_capacity);
     init_capacity = rg::max(DEFAULT_CAPACITY, init_capacity);
-    this->data = (Type*)allocator_allocate(alloc, init_capacity * sizeof(Type));
+    this->data = (Type*)allocator_allocate(alloc, init_capacity * sizeof(Type), alignof(Type));
     this->capacity = init_capacity;
     this->alloc = alloc;
 }
@@ -153,7 +153,7 @@ void DArray<Type>::init_slice(Allocator* alloc, Slice<Type> values, sz additiona
 {
     ASSERT_NON_EMPTY_VAL(values);
     sz init_cap = rg::max(DEFAULT_CAPACITY, values.count + additional_capacity);
-    this->data = (Type*)allocator_allocate(alloc, init_cap * sizeof(Type));
+    this->data = (Type*)allocator_allocate(alloc, init_cap * sizeof(Type), alignof(Type));
     this->capacity = init_cap;
     this->alloc = alloc;
     if (values.count)
@@ -175,7 +175,7 @@ void DArray<Type>::tinit_capacity(sz init_capacity)
     ASSERT_GREATER_EQ_ZERO(init_capacity);
     Allocator* temp_alloc = get_temp_allocator();
     init_capacity = rg::max(DEFAULT_CAPACITY, init_capacity);
-    this->data = (Type*)allocator_allocate(temp_alloc, init_capacity * sizeof(Type));
+    this->data = (Type*)allocator_allocate(temp_alloc, init_capacity * sizeof(Type), alignof(Type));
     this->capacity = init_capacity;
     this->alloc = temp_alloc;
 }
@@ -186,7 +186,7 @@ void DArray<Type>::tinit_slice(Slice<Type> values, sz additional_capacity)
     ASSERT_NON_EMPTY_VAL(values);
     Allocator* temp_alloc = get_temp_allocator();
     sz init_cap = rg::max(DEFAULT_CAPACITY, values.count + additional_capacity);
-    this->data = (Type*)allocator_allocate(temp_alloc, init_cap * sizeof(Type));
+    this->data = (Type*)allocator_allocate(temp_alloc, init_cap * sizeof(Type), alignof(Type));
     this->capacity = init_cap;
     this->alloc = temp_alloc;
     if (values.count)
@@ -225,11 +225,12 @@ void DArray<Type>::push_and_move_ownership(Type&& value)
 }
 
 template<typename Type>
-void DArray<Type>::pop(Type* out_val)
+Type DArray<Type>::pop()
 {
     ASSERT_GREATER_ZERO(this->count);
-    if (out_val) *out_val = this->last();
+    Type res = this->last();
     this->count--;
+    return res;
 }
 
 template<typename Type>
@@ -250,11 +251,12 @@ void DArray<Type>::pop(Slice<Type> out_vals)
 }
 
 template<typename Type>
-void DArray<Type>::pop_and_move_ownership(Type* out_val)
+Type DArray<Type>::pop_and_move_ownership()
 {
     ASSERT_GREATER_ZERO(this->count);
-    if (out_val) *out_val = rg::move(*this->last_ref());
+    Type res = rg::move(*this->last_ref());
     this->count--;
+    return res;
 }
 
 template<typename Type>
@@ -346,8 +348,8 @@ void DArray<Type>::reserve(sz needed)
         new_capacity *= 2;
     }
     
-    if (this->data) this->data = (Type*)allocator_reallocate(this->alloc, this->data, sizeof(Type) * new_capacity);
-    else this->data = (Type*)allocator_allocate(this->alloc, sizeof(Type) * new_capacity);
+    if (this->data) this->data = (Type*)allocator_reallocate(this->alloc, this->data, sizeof(Type) * new_capacity, alignof(Type));
+    else this->data = (Type*)allocator_allocate(this->alloc, sizeof(Type) * new_capacity, alignof(Type));
 
     this->capacity = new_capacity;
 }
@@ -437,7 +439,7 @@ DArray<Type> DArray<Type>::clone()
 
     DArray<Type> res; 
     sz allocated = this->byte_size_allocated();
-    res.data = (Type*)allocator_allocate(this->alloc, allocated);
+    res.data = (Type*)allocator_allocate(this->alloc, allocated, alignof(Type));
     mem_copy(res.data, this->data, allocated);
     res.count = this->count;
     res.capacity = this->capacity;

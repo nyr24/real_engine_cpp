@@ -18,7 +18,7 @@ constexpr sz FARRAY_DEFAULT_CAPACITY = 16;
 template<typename Type, sz CAPACITY = FARRAY_DEFAULT_CAPACITY>
 struct FArray
 {
-    Type data[CAPACITY];
+    alignas(Type) Type data[CAPACITY];
     sz count;
 
     constexpr FArray(): count{0} {}
@@ -382,7 +382,7 @@ void FArray<Type, CAPACITY>::foreach_split(const Type& splitter, void(*fn)(Slice
 template<typename Type, sz CAPACITY = FARRAY_DEFAULT_CAPACITY>
 struct Array
 {
-    Type data[CAPACITY];
+    alignas(Type) Type data[CAPACITY];
 
     constexpr Array() = default;
     constexpr Array(std::initializer_list<Type> init_list);

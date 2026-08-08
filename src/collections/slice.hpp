@@ -46,6 +46,7 @@ struct Slice
     bool has(Slice<Type> val) const;
     void replace(Type find, Type replace);
     u64 hash() const;
+    Slice<u8> to_byte_slice();
 
     Type at(sz idx) const;
     Type* at_ref(sz idx);
@@ -65,6 +66,12 @@ struct Slice
     bool is_empty() const { return this->ptr == null && this->count == 0; }
     sz byte_size() const { return sizeof(Type) * this->count; }
     operator bool() const { return this->ptr && this->count; }
+};
+
+template<typename Type>
+struct View : Slice<const Type>
+{
+    using Slice<Type>::Slice;
 };
 
 // For printf formatting with length (%.*s).
@@ -276,6 +283,12 @@ inline void Slice<Type>::set(Type val, sz idx)
 {
     Type* target = this->at_ref(idx);
     *target = val;
+}
+
+template<typename Type>
+Slice<u8> Slice<Type>::to_byte_slice()
+{
+    return Slice<u8>{ (u8*)this->ptr, this->count * sizeof(Type) };
 }
 
 template<typename Type>
@@ -503,13 +516,15 @@ Maybe<sz> common_last_index_of(const Type* start, sz count, Slice<Type> seq)
 template<typename Type>
 bool common_has(Type* start, sz count, Type search)
 {
-    return (bool)common_index_of(start, count, search);
+    auto [_, has] = common_index_of(start, count, search);
+    return has;
 }
 
 template<typename Type>
 bool common_has(Type* start, sz count, Slice<Type> slice)
 {
-    return (bool)(common_index_of(start, count, slice));
+    auto [_, has] = common_index_of(start, count, slice);
+    return has;
 }
 
 } // rg

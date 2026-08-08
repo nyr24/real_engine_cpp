@@ -33,6 +33,9 @@ struct WorkerInput
 template<sz THREAD_COUNT, sz MAX_TASKS>
 struct ThreadPool
 {
+    static constexpr sz MAX_THREAD_COUNT = 32;
+    static_assert(THREAD_COUNT <= MAX_THREAD_COUNT, "Can't exceed max thread count");
+
     static constexpr u32 INIT_BIT = 1 << 0;
     static constexpr u32 STOP_BIT = 1 << 1;
 
@@ -86,7 +89,7 @@ intern s32 worker(void* arg)
 
     for (;;)
     {
-        if (tpool->task_queue.is_empty())
+        while (tpool->task_queue.is_empty())
         {
             tpool->work_acquired.wait(&tpool->mutex);
         }
@@ -131,11 +134,15 @@ void ThreadPool<THREAD_COUNT, MAX_TASKS>::init()
         t.start(worker<THREAD_COUNT, MAX_TASKS>, &this->worker_inputs[i]);
         t.detach();
     }
+
+    this->set_is_initialized();
 }
 
 template<sz THREAD_COUNT, sz MAX_TASKS>
 void ThreadPool<THREAD_COUNT, MAX_TASKS>::submit_task(const ThreadTask& task)
 {
+    ASSERT_INITIALIZED(this);
+
     this->mutex.lock();
     defer(this->mutex.unlock());
     this->task_queue.push(task);
@@ -145,6 +152,8 @@ void ThreadPool<THREAD_COUNT, MAX_TASKS>::submit_task(const ThreadTask& task)
 template<sz THREAD_COUNT, sz MAX_TASKS>
 void ThreadPool<THREAD_COUNT, MAX_TASKS>::submit_task_many(Slice<ThreadTask> tasks)
 {
+    ASSERT_INITIALIZED(this);
+
     this->mutex.lock();
     defer(this->mutex.unlock());
     this->task_queue.push(tasks);
@@ -185,6 +194,22 @@ void ThreadPool<THREAD_COUNT, MAX_TASKS>::destroy()
     this->thread_died.destroy();
     this->tasks_in_progress = 0;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // thread pool version 2: atomic + semaphores
 #else
@@ -238,8 +263,8 @@ intern s32 worker(void* arg)
     ThreadPool<THREAD_COUNT, MAX_TASKS>* tpool = worker_input->tpool;
     sz thread_idx = worker_input->idx;
 
-    Context& ctx = get_context();
-    init_temp_allocator(ctx.persistent_alloc);
+    Context* ctx = get_context();
+    init_temp_allocator(ctx->allocator);
 
     for (;;)
     {
@@ -303,7 +328,6 @@ void ThreadPool<THREAD_COUNT, MAX_TASKS>::submit_task_many(Slice<ThreadTask> tas
 template<sz THREAD_COUNT, sz MAX_TASKS>
 void ThreadPool<THREAD_COUNT, MAX_TASKS>::await()
 {
-    // TODO: Context->thread_id
     while (this->tasks_in_progress.load() > 0 || !this->task_queue.is_empty())
     {
         this->work_finished_sem.wait();
@@ -313,7 +337,6 @@ void ThreadPool<THREAD_COUNT, MAX_TASKS>::await()
 template<sz THREAD_COUNT, sz MAX_TASKS>
 void ThreadPool<THREAD_COUNT, MAX_TASKS>::destroy()
 {
-    // TODO: Context->thread_id
     this->set_stop();
     this->work_acquired_sem.increment(THREAD_COUNT);
 
