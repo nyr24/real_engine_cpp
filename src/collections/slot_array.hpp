@@ -36,7 +36,7 @@ struct SlotArray
 
     SlotArray();
     void init(Allocator* alloc, sz init_capacity = DEFAULT_CAPACITY);
-    void add(const Type& val);
+    sz add(const Type& val);
     void add(Slice<Type> vals);
     void remove(sz idx);
     Type* get_free_slot();
@@ -74,7 +74,7 @@ void SlotArray<Type>::init(Allocator* alloc, sz init_capacity)
 }
 
 template<typename Type>
-void SlotArray<Type>::add(const Type& val)
+sz SlotArray<Type>::add(const Type& val)
 {
     if (this->is_full())
     {
@@ -82,12 +82,13 @@ void SlotArray<Type>::add(const Type& val)
         this->resize(1);
         this->data[free_slot] = val;
         this->bits.set(free_slot);
-        return;
+        return free_slot;
     }
 
     auto [idx, is_found] = this->bits.find_first_zero_bit(true);
-    ASSERT(is_found);
+    ASSERT_MSG(is_found, "Slot wasn't found after check on fullness");
     this->data[idx] = val;
+    return idx;
 }
 
 template<typename Type>

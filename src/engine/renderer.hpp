@@ -179,12 +179,14 @@ struct EntityTransformsTagged
 	{
 		struct
 		{
+			Vec3 translation;
 			Quat rotation;
 			Vec3 scale;
-			Vec3 translation;
 		};
 		Mat4 matrix;
 	};
+	Vec3 velocity;
+	Vec3 rotation_update;
 	bool has_matrix;
 
 	EntityTransformsTagged() = default;
@@ -199,26 +201,28 @@ struct EntityTransformsTagged
 		return *this;
 	}
 
-	static EntityTransformsTagged create(Vec3 translation, Vec3 scale, Quat rotation);
+	static EntityTransformsTagged create(Vec3 translation, Vec3 velocity, Vec3 scale, Quat rotation, Vec3 rotation_update);
 	static EntityTransformsTagged create_matrix(const Mat4& matrix);
 };
+
+struct EntitySystem;
 
 struct Entity
 {
 	GeometryView geometry;
 	EntityShaderState shader_state;
-	EntityTransforms transforms;
-	// // There are 2 ways of storing textures:
-	// // 1. - store indices - less memory usage. (choosen)
-	// // 2. - store pointers - direct references - don't need to lookup stuff (but lookup into arr is fast).
-	struct
-	{
-		TextureIdx diffuse_tex;
-		TextureIdx normal_tex;
-		TextureIdx occlussion_tex;
-		TextureIdx emissive_tex;
-		TextureIdx metallic_roughness_tex;
-	};
+	// EntityTransforms transforms;
+
+	u32 position_idx;
+	u32 velocity_idx;
+	u32 scale_idx;
+	u32 rotation_idx;
+
+	TextureIdx diffuse_tex;
+	TextureIdx normal_tex;
+	TextureIdx occlussion_tex;
+	TextureIdx emissive_tex;
+	TextureIdx metallic_roughness_tex;
 
 	static Entity create(
 		EngineContext* engine_ctx,
@@ -232,7 +236,7 @@ struct Entity
 		Slice<TextureCreateConfig> tex_configs,
 		const EntityTransformsTagged& transforms
 	);
-	Mat4 get_model(Slice<TransformType> transform_order);
+	Mat4 get_model(const EntitySystem& en_sys, Slice<TransformType> transform_order);
 	void write_updates_for_shader(TextureSystem* tex_sys, FArray<DescriptorUpdateInfo, MAX_DESCRIPTOR_BINDING_COUNT>* out_update_infos);
 	void destroy(EngineContext* engine_ctx, VulkanShader* shader);
 
@@ -240,6 +244,36 @@ struct Entity
 	{
 		return { &diffuse_tex, 5 };
 	}
+};
+
+struct EntitySystem
+{
+	static constexpr sz DEFAULT_CAPACITY = 128;
+	static constexpr sz COMPONENTS_COUNT = 4;
+	
+	DArrayUnmanaged<Vec3> positions;
+	DArrayUnmanaged<Vec3> velocities;
+	DArrayUnmanaged<Quat> rotations;
+	DArrayUnmanaged<Vec3> rotation_updates;
+	DArrayUnmanaged<Vec3> scales;
+	Allocator* alloc;
+
+	// Capacity in elements.
+	void init(Allocator* alloc, sz init_capacity = DEFAULT_CAPACITY);
+	void apply_velocities();
+	void apply_rotations();
+	// Capacity in elements.
+	void realloc(sz need_capacity);
+	void destroy();
+
+	u32 add_position_and_velocity(Vec3 pos, Vec3 vel);
+	u32 add_rotation_and_update(Quat rotation, Vec3 update);
+	u32 add_scale(Vec3 scale);
+
+	Vec3 get_position(u32 idx) const;
+	Vec3 get_velocity(u32 idx) const;
+	Vec3 get_scale(u32 idx) const;
+	Quat get_rotation(u32 idx) const;
 };
 
 // Renderer.

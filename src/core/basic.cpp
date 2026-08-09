@@ -265,8 +265,8 @@ ScopeBencher::ScopeBencher(CString name)
 ScopeBencher::~ScopeBencher()
 {
 	Nanoseconds scope_time_ns = get_current_time_ns() - this->init_timestamp;
-	printfn("%s took %ldns %ldms %ldsec",
-		this->name, scope_time_ns, ns_to_ms(scope_time_ns), ns_to_sec(scope_time_ns));
+	printfn("%s took %ldns %ldmis %ldms %ldsec",
+		this->name, scope_time_ns, ns_to_microsec(scope_time_ns), ns_to_ms(scope_time_ns), ns_to_sec(scope_time_ns));
 }
 
 } // rg

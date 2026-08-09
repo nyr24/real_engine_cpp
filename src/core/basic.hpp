@@ -536,7 +536,7 @@ struct Pair
 };
 
 template<typename First, typename Second, typename Third>
-struct Triplet
+struct Triple
 {
 	First first;
 	Second second;
@@ -544,7 +544,7 @@ struct Triplet
 };
 
 template<typename First, typename Second, typename Third, typename Fourth>
-struct Quadriplet
+struct Quadr
 {
 	First first;
 	Second second;
@@ -573,6 +573,7 @@ constexpr u64 FNV_OFFSET_BASIS = 14695981039346656037ull;
 u64 hash_fnv(char* bytes, sz count);
 bool is_space(char c);
 
+// TODO: change to overload
 // Should only be used for wrappping primitive types.
 // Other types of keys should implement 'hash' method.
 template<typename Type>
@@ -644,10 +645,13 @@ alias Seconds = sz;
 
 Nanoseconds get_current_time_ns();
 constexpr Milliseconds ns_to_ms(Nanoseconds ns) { return ns * MILLI_SEC / NANO_SEC; }
+constexpr Microseconds ns_to_microsec(Nanoseconds ns) { return ns * MICRO_SEC / NANO_SEC; }
 constexpr Seconds ns_to_sec(Nanoseconds ns) { return ns * 1 / NANO_SEC; }
 constexpr Milliseconds sec_to_ms(Seconds sec) { return sec * MILLI_SEC; }
+constexpr Microseconds sec_to_microsec(Seconds sec) { return sec * MICRO_SEC; }
 constexpr Nanoseconds sec_to_ns(Seconds sec) { return sec * NANO_SEC; }
 constexpr Nanoseconds ms_to_ns(Milliseconds ms) { return ms * NANO_SEC / MILLI_SEC; }
+constexpr Microseconds ms_to_microsec(Milliseconds ms) { return ms * MICRO_SEC / MILLI_SEC; }
 constexpr Nanoseconds ms_to_sec(Milliseconds ms) { return ms * 1 / MILLI_SEC; }
 
 // ScopeBencher

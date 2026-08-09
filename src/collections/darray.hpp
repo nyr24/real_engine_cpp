@@ -4,7 +4,6 @@
 #include "core/basic.hpp"
 #include "collections/slice.hpp"
 #include "collections/split_iterator.hpp"
-#include "core/context.hpp"
 
 // Darray - dynamic array type.
 
@@ -29,12 +28,8 @@ struct DArray
     // Performs shallow copy (use clone() for deep).
     DArray& operator=(const DArray& rhs);
 
-    void init(Allocator* alloc);
-    void init_capacity(Allocator* alloc, sz init_capacity = DEFAULT_CAPACITY);
-    void init_slice(Allocator* alloc, Slice<Type> values, sz additional_capacity = 0);
-    void tinit();
-    void tinit_capacity(sz init_capacity = DEFAULT_CAPACITY);
-    void tinit_slice(Slice<Type> values, sz additional_capacity = 0);
+    void init(Allocator* alloc, sz init_capacity = DEFAULT_CAPACITY);
+    void init_with_items(Allocator* alloc, Slice<Type> values, sz additional_capacity = 0);
     void push(const Type& value);
     void push(Slice<Type> values);
     void push_and_move_ownership(Type&& value);
@@ -48,6 +43,7 @@ struct DArray
     void resize(sz new_size);
     void resize_to_capacity();
     void fill(const Type& with);
+    void set_alloc(Allocator* alloc);
     void destroy();
     DArray<Type> clone();
     Slice<Type> slice(sz start = 0, sz offset = -1) const;
@@ -77,7 +73,7 @@ struct DArray
     const Type& last() const { return *(this->data + this->count - 1); }
     Type* last_ref() { return this->data + this->count - 1; }
     bool is_empty() const { return this->count == 0; }
-    bool is_initialized() const { return this->alloc != null; }
+    bool is_initialized() const { return this->alloc != null && this->data != null; }
     void clear() { this->count = 0; }
     sz byte_size_used() const { return this->count * sizeof(Type); }
     sz byte_size_allocated() const { return this->capacity * sizeof(Type); }
@@ -133,13 +129,7 @@ DArray<Type>& DArray<Type>::operator=(DArray&& rhs)
 }
 
 template<typename Type>
-void DArray<Type>::init(Allocator* alloc)
-{
-    this->alloc = alloc;
-}
-
-template<typename Type>
-void DArray<Type>::init_capacity(Allocator* alloc, sz init_capacity)
+void DArray<Type>::init(Allocator* alloc, sz init_capacity)
 {
     ASSERT_GREATER_EQ_ZERO(init_capacity);
     init_capacity = rg::max(DEFAULT_CAPACITY, init_capacity);
@@ -149,50 +139,14 @@ void DArray<Type>::init_capacity(Allocator* alloc, sz init_capacity)
 }
 
 template<typename Type>
-void DArray<Type>::init_slice(Allocator* alloc, Slice<Type> values, sz additional_capacity)
+void DArray<Type>::init_with_items(Allocator* alloc, Slice<Type> values, sz additional_capacity)
 {
     ASSERT_NON_EMPTY_VAL(values);
     sz init_cap = rg::max(DEFAULT_CAPACITY, values.count + additional_capacity);
     this->data = (Type*)allocator_allocate(alloc, init_cap * sizeof(Type), alignof(Type));
     this->capacity = init_cap;
     this->alloc = alloc;
-    if (values.count)
-    {
-        this->push(values);
-    }
-}
-
-template<typename Type>
-void DArray<Type>::tinit()
-{
-    Allocator* temp_alloc = get_temp_allocator();
-    this->alloc = temp_alloc;
-}
-
-template<typename Type>
-void DArray<Type>::tinit_capacity(sz init_capacity)
-{
-    ASSERT_GREATER_EQ_ZERO(init_capacity);
-    Allocator* temp_alloc = get_temp_allocator();
-    init_capacity = rg::max(DEFAULT_CAPACITY, init_capacity);
-    this->data = (Type*)allocator_allocate(temp_alloc, init_capacity * sizeof(Type), alignof(Type));
-    this->capacity = init_capacity;
-    this->alloc = temp_alloc;
-}
-
-template<typename Type>
-void DArray<Type>::tinit_slice(Slice<Type> values, sz additional_capacity)
-{
-    ASSERT_NON_EMPTY_VAL(values);
-    Allocator* temp_alloc = get_temp_allocator();
-    sz init_cap = rg::max(DEFAULT_CAPACITY, values.count + additional_capacity);
-    this->data = (Type*)allocator_allocate(temp_alloc, init_cap * sizeof(Type), alignof(Type));
-    this->capacity = init_cap;
-    this->alloc = temp_alloc;
-    if (values.count)
-    {
-        this->push(values);
-    }
+    this->push(values);
 }
 
 template<typename Type>
@@ -318,6 +272,12 @@ inline void DArray<Type>::swap(sz idx1, sz idx2)
     ASSERT_IN_BOUNDS(idx1 >= 0 && idx1 < this->count);
     ASSERT_IN_BOUNDS(idx2 >= 0 && idx2 < this->count);
     rg::swap(this->at_ref(idx1), this->at_ref(idx2));
+}
+
+template<typename Type>
+void DArray<Type>::set_alloc(Allocator* alloc)
+{
+    this->alloc = alloc;
 }
 
 template<typename Type>
@@ -493,6 +453,443 @@ void DArray<Type>::destroy()
         this->count = 0;
         this->capacity = 0;
         allocator_free(this->alloc, this->data);
+        this->data = null;
+    }
+}
+
+// Unmanaged version.
+
+template<typename Type>
+struct DArrayUnmanaged
+{
+    static constexpr sz DEFAULT_CAPACITY = 16;
+
+    Type* data;
+    sz count;
+    sz capacity;
+
+    DArrayUnmanaged();
+    // Performs shallow copy (use clone() for deep).
+    DArrayUnmanaged(const DArrayUnmanaged& rhs);
+    DArrayUnmanaged(DArrayUnmanaged&& rhs);
+    DArrayUnmanaged& operator=(DArrayUnmanaged&& rhs);
+    // Performs shallow copy (use clone() for deep).
+    DArrayUnmanaged& operator=(const DArrayUnmanaged& rhs);
+
+    void init(Allocator* alloc, sz init_capacity = DEFAULT_CAPACITY);
+    void init_with_items(Allocator* alloc, Slice<Type> values, sz additional_capacity = 0);
+    void push(Allocator* alloc, const Type& value);
+    void push(Allocator* alloc, Slice<Type> values);
+    void push_and_move_ownership(Allocator* alloc, Type&& value);
+    void push_and_move_ownership(Allocator* alloc, Slice<Type> values);
+    Type pop();
+    void pop(Slice<Type> out_vals);
+    Type pop_and_move_ownership();
+    void pop_and_move_ownership(Slice<Type> out_vals);
+    void remove_unordered_at(sz idx);
+    void reserve(Allocator* alloc, sz needed);
+    void resize(Allocator* alloc, sz new_size);
+    void resize_to_capacity();
+    void fill(const Type& with);
+    void destroy(Allocator* alloc);
+    DArrayUnmanaged<Type> clone(Allocator* alloc);
+    Slice<Type> slice(sz start = 0, sz offset = -1) const;
+    Slice<Type> slice_idx(sz start = 0, sz end = -1) const;
+    Maybe<sz> index_of(const Type& val) const;
+    Maybe<sz> index_of(Slice<Type> slice) const;
+    Maybe<sz> last_index_of(const Type& val) const;
+    Maybe<sz> last_index_of(Slice<Type> slice) const;
+    bool has(const Type& val) const;
+    bool has(Slice<Type> val) const;
+    void foreach(void(*fn)(Type));
+    void foreach_ref(void(*fn)(Type*));
+    SplitIterator<Type> get_split_iter(const Type& splitter);
+    void foreach_split(const Type& splitter, void(*fn)(Slice<Type>));
+
+    Type at(sz idx) const;
+    Type* at_ref(sz idx);
+    void set(const Type& val, sz idx);
+    void swap(sz idx1, sz idx2);
+    Type& operator[](sz idx);
+    const Type& operator[](sz idx) const;
+    sz len() const { return this->count; }
+    Type* begin() { return this->data; }
+    Type* end() { return this->data + this->count; }
+    const Type& first() const { return *this->data; }
+    Type* first_ref() { return this->data; }
+    const Type& last() const { return *(this->data + this->count - 1); }
+    Type* last_ref() { return this->data + this->count - 1; }
+    bool is_empty() const { return this->count == 0; }
+    bool is_initialized() const { return this->data != null; }
+    void clear() { this->count = 0; }
+    sz byte_size_used() const { return this->count * sizeof(Type); }
+    sz byte_size_allocated() const { return this->capacity * sizeof(Type); }
+};
+
+template<typename Type>
+DArrayUnmanaged<Type>::DArrayUnmanaged()
+    : data{null}, count{0}, capacity{0}
+{
+}
+
+template<typename Type>
+DArrayUnmanaged<Type>::DArrayUnmanaged(DArrayUnmanaged&& rhs)
+    : data{rhs.data}, count{rhs.count}, capacity{rhs.capacity}
+{
+    rhs.data = null;
+    rhs.count = 0;
+    rhs.capacity = 0;
+}
+
+template<typename Type>
+DArrayUnmanaged<Type>::DArrayUnmanaged(const DArrayUnmanaged& rhs)
+    : data{rhs.data}, count{rhs.count}, capacity{rhs.capacity}
+{
+}
+
+template<typename Type>
+DArrayUnmanaged<Type>& DArrayUnmanaged<Type>::operator=(const DArrayUnmanaged& rhs)
+{
+    ASSERT_MSG(this != &rhs, "You mustn't be an idiot");
+    this->data = rhs.data;
+    this->count = rhs.count;
+    this->capacity = rhs.capacity;
+    return *this;
+}
+
+template<typename Type>
+DArrayUnmanaged<Type>& DArrayUnmanaged<Type>::operator=(DArrayUnmanaged&& rhs)
+{
+    ASSERT_MSG(this != &rhs, "You mustn't be an idiot");
+    this->data = rhs.data;
+    this->count = rhs.count;
+    this->capacity = rhs.capacity;
+
+    rhs.data = null;
+    rhs.count = 0;
+    rhs.capacity = 0;
+    return *this;
+}
+
+template<typename Type>
+void DArrayUnmanaged<Type>::init(Allocator* alloc, sz init_capacity)
+{
+    ASSERT_GREATER_EQ_ZERO(init_capacity);
+    init_capacity = rg::max(DEFAULT_CAPACITY, init_capacity);
+    this->data = (Type*)allocator_allocate(alloc, init_capacity * sizeof(Type), alignof(Type));
+    this->capacity = init_capacity;
+}
+
+template<typename Type>
+void DArrayUnmanaged<Type>::init_with_items(Allocator* alloc, Slice<Type> values, sz additional_capacity)
+{
+    ASSERT_NON_EMPTY_VAL(values);
+    sz init_cap = rg::max(DEFAULT_CAPACITY, values.count + additional_capacity);
+    this->data = (Type*)allocator_allocate(alloc, init_cap * sizeof(Type), alignof(Type));
+    this->capacity = init_cap;
+    if (values.count)
+    {
+        this->push(values);
+    }
+}
+
+template<typename Type>
+void DArrayUnmanaged<Type>::push(Allocator* alloc, const Type& value)
+{
+    ASSERT_INITIALIZED(this);
+    this->reserve(alloc, 1);
+    *this->end() = value;
+    this->count++;
+}
+
+template<typename Type>
+void DArrayUnmanaged<Type>::push(Allocator* alloc, Slice<Type> input)
+{
+    ASSERT_INITIALIZED(this);
+    this->reserve(alloc, input.count);
+    Type* curr = this->end();
+    Type* inp_curr = input.ptr;
+    mem_copy(curr, inp_curr, input.byte_size());
+    this->count += input.count;
+}
+
+template<typename Type>
+void DArrayUnmanaged<Type>::push_and_move_ownership(Allocator* alloc, Type&& value)
+{
+    ASSERT_INITIALIZED(this);
+    this->reserve(alloc, 1);
+    *this->end() = rg::move(value);
+    this->count++;
+}
+
+template<typename Type>
+Type DArrayUnmanaged<Type>::pop()
+{
+    ASSERT_GREATER_ZERO(this->count);
+    Type res = this->last();
+    this->count--;
+    return res;
+}
+
+template<typename Type>
+void DArrayUnmanaged<Type>::pop(Slice<Type> out_vals)
+{
+    ASSERT_MSG(this->count >= out_vals.count, "Count must be greater or equal to pop count");
+    if (out_vals.ptr)
+    {
+        sz write_idx = 0;
+        while (write_idx < out_vals.count)
+        {
+            Type* pop_val = this->data + (this->count - 1) - write_idx;
+            out_vals.ptr[write_idx] = *pop_val;
+            ++write_idx;
+        }
+    }
+    this->count -= out_vals.count;
+}
+
+template<typename Type>
+Type DArrayUnmanaged<Type>::pop_and_move_ownership()
+{
+    ASSERT_GREATER_ZERO(this->count);
+    Type res = rg::move(*this->last_ref());
+    this->count--;
+    return res;
+}
+
+template<typename Type>
+void DArrayUnmanaged<Type>::pop_and_move_ownership(Slice<Type> out_vals)
+{
+    ASSERT_MSG(this->count >= out_vals.count, "Count must be greater or equal to pop count");
+    if (out_vals.ptr)
+    {
+        sz write_idx = 0;
+        while (write_idx < out_vals.count)
+        {
+            Type* pop_val = this->data + (this->count - 1) - write_idx;
+            *(out_vals.ptr + write_idx) = rg::move(*pop_val);
+            ++write_idx;
+        }
+    }
+    this->count -= out_vals.count;
+}
+
+template<typename Type>
+void DArrayUnmanaged<Type>::remove_unordered_at(sz idx)
+{
+    ASSERT_IN_BOUNDS(idx >= 0 && idx < this->count);
+
+    if (idx == this->count - 1)
+    {
+        this->count--;
+        return;
+    }
+    this->swap(idx, this->count - 1);
+    this->count--;
+}
+
+template<typename Type>
+inline Type DArrayUnmanaged<Type>::at(sz idx) const
+{
+    ASSERT_IN_BOUNDS(idx >= 0 && idx < this->count);
+    return this->data[idx];
+}
+
+template<typename Type>
+inline Type* DArrayUnmanaged<Type>::at_ref(sz idx)
+{
+    ASSERT_IN_BOUNDS(idx >= 0 && idx < this->count);
+    return this->data + idx;
+}
+
+template<typename Type>
+inline void DArrayUnmanaged<Type>::set(const Type& val, sz idx)
+{
+    ASSERT_IN_BOUNDS(idx >= 0 && idx < this->count);
+    Type* place = this->data + idx;
+    *place = val;
+}
+
+template<typename Type>
+inline void DArrayUnmanaged<Type>::swap(sz idx1, sz idx2)
+{
+    ASSERT_IN_BOUNDS(idx1 >= 0 && idx1 < this->count);
+    ASSERT_IN_BOUNDS(idx2 >= 0 && idx2 < this->count);
+    rg::swap(this->at_ref(idx1), this->at_ref(idx2));
+}
+
+template<typename Type>
+inline const Type& DArrayUnmanaged<Type>::operator[](sz idx) const
+{
+    return this->data[idx];
+}
+
+template<typename Type>
+inline Type& DArrayUnmanaged<Type>::operator[](sz idx)
+{
+    return this->data[idx];
+}
+
+template<typename Type>
+void DArrayUnmanaged<Type>::reserve(Allocator* alloc, sz needed)
+{
+    sz remain = this->capacity - this->count;
+    if (remain >= needed) return;
+
+    sz old_capacity = this->capacity;
+    sz min_required = old_capacity + needed;
+    sz new_capacity = old_capacity;
+
+    if (new_capacity == 0) new_capacity = DEFAULT_CAPACITY;
+    while (new_capacity < min_required)
+    {
+        new_capacity *= 2;
+    }
+    
+    if (this->data) this->data = (Type*)allocator_reallocate(alloc, this->data, sizeof(Type) * new_capacity, alignof(Type));
+    else this->data = (Type*)allocator_allocate(alloc, sizeof(Type) * new_capacity, alignof(Type));
+
+    this->capacity = new_capacity;
+}
+
+template<typename Type>
+void DArrayUnmanaged<Type>::resize(Allocator* alloc, sz new_size)
+{
+    if (new_size > this->capacity) this->reserve(alloc, new_size - this->count);
+    this->count = new_size;
+}
+
+template<typename Type>
+void DArrayUnmanaged<Type>::resize_to_capacity()
+{
+    this->count = this->capacity;
+}
+
+template<typename Type>
+void DArrayUnmanaged<Type>::fill(const Type& with)
+{
+    for (auto& el : *this) el = with;
+}
+
+template<typename Type>
+Slice<Type> DArrayUnmanaged<Type>::slice(sz start, sz offset) const
+{
+    if (offset == -1) offset = this->count;
+    ASSERT_GREATER_ZERO(offset);
+    ASSERT_MSG(start + offset <= this->count, "Mustn't exceed count");
+    return { this->data + start, offset };
+}
+
+template<typename Type>
+Slice<Type> DArrayUnmanaged<Type>::slice_idx(sz start, sz end) const
+{
+    if (end == -1) end = this->count - 1;
+    sz dist = (end - start) + 1;
+    ASSERT_GREATER_ZERO(dist);
+    ASSERT_MSG(start + dist <= this->count, "Mustn't exceed count");
+    return { this->data + start, dist };
+}
+
+template<typename Type>
+Maybe<sz> DArrayUnmanaged<Type>::index_of(const Type& search) const
+{
+    ASSERT_MSG(this->is_initialized(), "Must be initialized");
+    return common_index_of(this->data, this->count, search);
+}
+
+template<typename Type>
+Maybe<sz> DArrayUnmanaged<Type>::index_of(Slice<Type> slice) const
+{
+    ASSERT_MSG(this->is_initialized(), "Must be initialized");
+    return common_index_of(this->data, this->count, slice);
+}
+
+template<typename Type>
+Maybe<sz> DArrayUnmanaged<Type>::last_index_of(const Type& search) const
+{
+    ASSERT_MSG(this->is_initialized(), "Must be initialized");
+    return common_last_index_of(this->data, this->count, search);
+}
+
+template<typename Type>
+Maybe<sz> DArrayUnmanaged<Type>::last_index_of(Slice<Type> slice) const
+{
+    ASSERT_MSG(this->is_initialized(), "Must be initialized");
+    return common_last_index_of(this->data, this->count, slice);
+}
+
+template<typename Type>
+bool DArrayUnmanaged<Type>::has(const Type& search) const
+{
+    return common_has(&this->data, this->count, search);
+}
+
+template<typename Type>
+bool DArrayUnmanaged<Type>::has(Slice<Type> slice) const
+{
+    return common_has(&this->data, this->count, slice);
+}
+
+template<typename Type>
+DArrayUnmanaged<Type> DArrayUnmanaged<Type>::clone(Allocator* alloc)
+{
+    ASSERT_INITIALIZED(this);
+
+    DArrayUnmanaged<Type> res; 
+    sz allocated = this->byte_size_allocated();
+    res.data = (Type*)allocator_allocate(alloc, allocated, alignof(Type));
+    mem_copy(res.data, this->data, allocated);
+    res.count = this->count;
+    res.capacity = this->capacity;
+    return res;
+}
+
+template<typename Type>
+void DArrayUnmanaged<Type>::foreach(void(*fn)(Type))
+{
+    for (Type* curr = this->begin(); curr != this->end(); ++curr)
+    {
+        fn(*curr);
+    }
+}
+
+template<typename Type>
+void DArrayUnmanaged<Type>::foreach_ref(void(*fn)(Type*))
+{
+    for (Type* curr = this->begin(); curr != this->end(); ++curr)
+    {
+        fn(curr);
+    }
+}
+
+template<typename Type>
+SplitIterator<Type> DArrayUnmanaged<Type>::get_split_iter(const Type& splitter)
+{
+    return { this->slice(), splitter };
+}
+
+template<typename Type>
+void DArrayUnmanaged<Type>::foreach_split(const Type& splitter, void(*fn)(Slice<Type>))
+{
+    SplitIterator<Type> iter = this->get_split_iter(splitter);
+    Slice<Type> seq;
+
+    for (;;)
+    {
+        seq = iter.next();
+        if (seq.is_empty()) return;
+        fn(seq);
+    }
+}
+
+template<typename Type>
+void DArrayUnmanaged<Type>::destroy(Allocator* alloc)
+{
+    if (this->data)
+    {
+        this->count = 0;
+        this->capacity = 0;
+        allocator_free(alloc, this->data);
         this->data = null;
     }
 }

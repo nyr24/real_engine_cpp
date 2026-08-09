@@ -322,18 +322,23 @@ void Entity::init(
 	VulkanShader* shader = engine_ctx->vk_ctx.get_curr_shader();
 	this->geometry = geometry;
 	this->shader_state = shader->allocate_entity_resources(engine_ctx);
+	EntitySystem* en_sys = &engine_ctx->en_sys;
 
 	if (transforms.has_matrix)
 	{
-		this->transforms.matrix = transforms.matrix;
-		this->shader_state.set_has_matrix(true);
+		u32 pos_idx = en_sys->add_position_and_velocity(transforms.matrix.extract_translation(), transforms.velocity);
+		this->position_idx = pos_idx;
+		this->velocity_idx = pos_idx;
+		this->scale_idx = en_sys->add_scale(transforms.matrix.extract_scale());
+		this->rotation_idx = en_sys->add_rotation_and_update(transforms.matrix.extract_rotation(), transforms.rotation_update);
 	}
 	else
 	{
-		this->transforms.rotation = transforms.rotation;
-		this->transforms.scale = transforms.scale;
-		this->transforms.translation = transforms.translation;
-		this->shader_state.set_has_matrix(false);
+		u32 pos_idx = en_sys->add_position_and_velocity(transforms.translation, transforms.velocity);
+		this->position_idx = pos_idx;
+		this->velocity_idx = pos_idx;
+		this->scale_idx = en_sys->add_scale(transforms.scale);
+		this->rotation_idx = en_sys->add_rotation_and_update(transforms.rotation, transforms.rotation_update);
 	}
 
 	// Process textures.
@@ -367,33 +372,26 @@ void Entity::init(
 	}
 }
 
-Mat4 Entity::get_model(Slice<TransformType> transform_order)
+Mat4 Entity::get_model(const EntitySystem& en_sys, Slice<TransformType> transform_order)
 {
-	if (this->shader_state.has_matrix())
+	Mat4 model = Mat4::identity();
+	for (TransformType order : transform_order)
 	{
-		return this->transforms.matrix;
-	}
-	else
-	{
-		Mat4 model = Mat4::identity();
-		for (TransformType order : transform_order)
+		switch (order)
 		{
-			switch (order)
-			{
-				case TransformType::SCALE:
-					model.scale_inplace(this->transforms.scale);
-					break;
-				case TransformType::TRANSLATION:
-					model.translate_inplace(this->transforms.translation);
-					break;
-				case TransformType::ROTATION:
-					model *= this->transforms.rotation.to_matrix();
-					break;
-				default: UNREACHABLE("Unknown transform type");
-			}
+			case TransformType::SCALE:
+				model.scale_inplace(en_sys.get_scale(this->scale_idx));
+				break;
+			case TransformType::TRANSLATION:
+				model.translate_inplace(en_sys.get_position(this->position_idx));
+				break;
+			case TransformType::ROTATION:
+				model *= quat_to_matrix(en_sys.get_rotation(this->rotation_idx));
+				break;
+			default: UNREACHABLE("Unknown transform type");
 		}
-		return model;
 	}
+	return model;
 }
 
 void Entity::write_updates_for_shader(
@@ -433,13 +431,15 @@ void Entity::destroy(EngineContext* engine_ctx, VulkanShader* shader)
 	}
 }
 
-EntityTransformsTagged EntityTransformsTagged::create(Vec3 translation, Vec3 scale, Quat rotation)
+EntityTransformsTagged EntityTransformsTagged::create(Vec3 translation, Vec3 velocity, Vec3 scale, Quat rotation, Vec3 rotation_update)
 {
 	EntityTransformsTagged res;
 	res.has_matrix = false;
+	res.translation = translation;
 	res.rotation = rotation;
 	res.scale = scale;
-	res.translation = translation;
+	res.velocity = velocity;
+	res.rotation_update = rotation_update;
 	return res;
 }
 
@@ -449,6 +449,99 @@ EntityTransformsTagged EntityTransformsTagged::create_matrix(const Mat4& matrix)
 	res.has_matrix = true;
 	res.matrix = matrix;
 	return res;
+}
+
+// Entity System.
+
+void EntitySystem::init(Allocator* alloc, sz init_capacity)
+{
+	this->positions.init(alloc, init_capacity);
+	this->velocities.init(alloc, init_capacity);
+	mem_zero(this->velocities.begin(), this->velocities.byte_size_allocated());
+	this->scales.init(alloc, init_capacity);
+	this->rotations.init(alloc, init_capacity);
+	this->rotation_updates.init(alloc, init_capacity);
+}
+
+u32 EntitySystem::add_position_and_velocity(Vec3 pos, Vec3 vel)
+{
+	u32 idx = (u32)this->positions.count;
+	this->positions.push(this->alloc, pos);
+	this->velocities.push(this->alloc, vel);
+	return idx;
+}
+
+u32 EntitySystem::add_scale(Vec3 scale)
+{
+	u32 idx = (u32)this->scales.count;
+	this->scales.push(this->alloc, scale);
+	return idx;
+}
+
+u32 EntitySystem::add_rotation_and_update(Quat rotation, Vec3 update)
+{
+	u32 idx = (u32)this->rotations.count;
+	this->rotations.push(this->alloc, rotation);
+	this->rotation_updates.push(this->alloc, update);
+	return idx;
+}
+
+void EntitySystem::apply_velocities()
+{
+	ASSERT_MSG(this->positions.count == this->velocities.count, "Should be equal counts");
+
+	Vec3* position = this->positions.begin();
+	Vec3* positions_end = this->positions.end();
+	Vec3* velocity = this->velocities.begin();
+
+	while (position != positions_end)
+	{
+		*position += *velocity;
+		++position;
+		++velocity;
+	}
+}
+
+void EntitySystem::apply_rotations()
+{
+	Quat* rotation = this->rotations.begin();
+	Quat* rotations_end = this->rotations.end();
+	Vec3* rotation_update = this->rotation_updates.end();
+
+	while (rotation != rotations_end)
+	{
+		rotation->rotate(*rotation_update, DEFAULT_ROTATION_ORDER);
+		++rotation;
+		++rotation_update;
+	}
+}
+
+Vec3 EntitySystem::get_position(u32 idx) const
+{
+	return this->positions[idx];
+}
+
+Vec3 EntitySystem::get_velocity(u32 idx) const
+{
+	return this->velocities[idx];
+}
+
+Vec3 EntitySystem::get_scale(u32 idx) const
+{
+	return this->scales[idx];
+}
+
+Quat EntitySystem::get_rotation(u32 idx) const
+{
+	return this->rotations[idx];
+}
+
+void EntitySystem::destroy()
+{
+	this->positions.destroy(alloc);
+	this->velocities.destroy(alloc);
+	this->scales.destroy(alloc);
+	this->rotations.destroy(alloc);
 }
 
 // Renderer.
@@ -501,42 +594,45 @@ void Renderer::init(VkExtent2D init_area, ColorRGBA init_clear_color)
 
 	init_event_handlers(this, &engine_ctx->event_sys);
 
-	this->entities.init_capacity(ctx->allocator, INIT_ENTITY_COUNT);
+	this->entities.init(ctx->allocator, INIT_ENTITY_COUNT);
 
 	perform_startup_load(this);
 }
 
 intern void perform_startup_load(Renderer* renderer)
 {
-	Array<Vertex, CUBE_VERT_COUNT> cube_vertices = get_cube_vertices();
 	IndexBuffer cube_indices = get_cube_indices();
+	Array<Vertex, CUBE_VERT_COUNT> cube_vertices = get_cube_vertices();
 	GeometryView cube_geometry = renderer->elem_buff.append_geometry_indexed(cube_vertices.slice(), cube_indices);
 
 	GltfSampler default_sampler = get_default_gltf_sampler();
 
+	Context* context = get_context();
 	EngineContext* engine_ctx = get_engine_context();
 	VulkanContext* vk_ctx = &engine_ctx->vk_ctx;
 	ThreadArena* persist_alloc = engine_ctx->persist_allocator;
 
-	constexpr sz MAX_LOAD_COUNT = 16;
+	constexpr sz COUNT = 24;
 
-	FArray<Array<StrView, 2>, MAX_LOAD_COUNT> paths_parts;
+	FArray<Array<StrView, 2>, COUNT> paths_parts;
+	paths_parts.push({ TEXTURES_PATH, "painting.jpg" });
+	paths_parts.push({ TEXTURES_PATH, "rock_wall.jpg" });
+	paths_parts.push({ TEXTURES_PATH, "grass.jpg" });
 	paths_parts.push({ TEXTURES_PATH, "soil.jpg" });
 	paths_parts.push({ TEXTURES_PATH, "sand.jpg" });
 	paths_parts.push({ TEXTURES_PATH, "metal.jpg" });
 	paths_parts.push({ TEXTURES_PATH, "water.jpg" });
 	paths_parts.push({ TEXTURES_PATH, "stones.jpg" });
-	paths_parts.push({ TEXTURES_PATH, "grass.jpg" });
+	paths_parts.push({ TEXTURES_PATH, "liquid.jpg" });
+	paths_parts.push({ TEXTURES_PATH, "tree.jpg" });
 
 	// TODO: not effective, we're loading textures 1 by 1, creating threads for that.
 	// We should load them in 1 batch.
-	FArray<TextureCreateConfig, MAX_LOAD_COUNT> tex_configs;
-	tex_configs.push({ Path::create(persist_alloc, paths_parts[0].slice(), true), default_sampler, TEX_INDEX_INVALID, EntityTextureKind::DIFFUSE });
-	tex_configs.push({ Path::create(persist_alloc, paths_parts[1].slice(), true), default_sampler, TEX_INDEX_INVALID, EntityTextureKind::DIFFUSE });
-	tex_configs.push({ Path::create(persist_alloc, paths_parts[2].slice(), true), default_sampler, TEX_INDEX_INVALID, EntityTextureKind::DIFFUSE });
-	tex_configs.push({ Path::create(persist_alloc, paths_parts[3].slice(), true), default_sampler, TEX_INDEX_INVALID, EntityTextureKind::DIFFUSE });
-	tex_configs.push({ Path::create(persist_alloc, paths_parts[4].slice(), true), default_sampler, TEX_INDEX_INVALID, EntityTextureKind::DIFFUSE });
-	tex_configs.push({ Path::create(persist_alloc, paths_parts[5].slice(), true), default_sampler, TEX_INDEX_INVALID, EntityTextureKind::DIFFUSE });
+	FArray<TextureCreateConfig, COUNT> tex_configs;
+	for (auto& parts : paths_parts)
+	{
+		tex_configs.push({ Path::create(persist_alloc, parts.slice(), true), default_sampler, TEX_INDEX_INVALID, EntityTextureKind::DIFFUSE });
+	}
 
 	// NOTE: TEMP
 	for (const auto& conf : tex_configs)
@@ -554,19 +650,61 @@ intern void perform_startup_load(Renderer* renderer)
 
 		engine_ctx->tex_sys.load_new_textures_cpu_and_transfer_to_gpu(tex_configs.slice(), frame->transfer_cmd_buffs.slice());
 
-		const Vec3 SCALE = { 1, 1, 1 };
-		const Quat ROTATION = Quat::identity();
-		const Quat ROTATION_2 = Quat::from_euler(30, 45, 0);
-		const Quat ROTATION_3 = Quat::from_euler(90, 180, 0);
-		const Quat ROTATION_4 = Quat::from_euler(270, -35, 0);
-		const Vec3 TRANSLATE = { 0, 0, -5 };
+		constexpr sz TRANSFORM_COUNT = 5;
 
-		add_entity(cube_geometry, { &tex_configs[0], 1 }, EntityTransformsTagged::create(TRANSLATE, SCALE, ROTATION));
-		add_entity(cube_geometry, { &tex_configs[1], 1 }, EntityTransformsTagged::create({ 2, 3.5, -3 }, { 2, 2, 2 }, ROTATION_2));
-		add_entity(cube_geometry, { &tex_configs[2], 1 }, EntityTransformsTagged::create({ 0.7, -0.1, -3 }, { 2, 0.5, 1 }, ROTATION_3));
-		add_entity(cube_geometry, { &tex_configs[3], 1 }, EntityTransformsTagged::create({ -0.1, 0.8, 2 }, { 3, 0.5, 0.5 }, ROTATION_4));
-		add_entity(cube_geometry, { &tex_configs[4], 1 }, EntityTransformsTagged::create({ 0.4, 0.4, -1 }, SCALE, ROTATION));
-		add_entity(cube_geometry, { &tex_configs[5], 1 }, EntityTransformsTagged::create({ 0.7, 0.7, 1.0 }, { 4, 2, 2 }, ROTATION_4));
+		const Array<Vec3, TRANSFORM_COUNT> SCALES = {
+			{ 1, 1, 1 },
+			{ 2, 3, 1 },
+			{ 1, 3, 2 },
+			{ 4, 1, 3 },
+			{ 0.5, 0.2, 0.2 },
+		};
+
+		const Array<Quat, TRANSFORM_COUNT> ROTATIONS = {
+			Quat::create_euler(30, -45, 0),
+			Quat::create_euler(30, 45, 0),
+			Quat::create_euler(90, 180, 0),
+			Quat::create_euler(-30, -45, 0),
+			Quat::create_euler(-90, -180, 0),
+		};
+
+		const Array<Vec3, TRANSFORM_COUNT> ROTATION_UPDATES = {
+			{ 10, 20, 30 },
+			{ 10, 20, 30 },
+			{ 10, 20, 30 },
+			{ 10, 20, 30 },
+			{ 10, 20, 30 },
+		};
+
+		const Array<Vec3, TRANSFORM_COUNT> TRANSLATIONS = {
+			{ 0, 2, -1 },
+			{ 2, -3, -2 },
+			{ -3, 3, 2 },
+			{ -4, -3, -2 },
+			{ 3, 2, 4 },
+		};
+
+		const Array<Vec3, TRANSFORM_COUNT> VELOCITIES = {
+			{ 0.00002, 0.00001, 0.00001 },
+			{ -0.00004, -0.00001, 0.00002 },
+			{ 0.00008, 0.00003, -0.00005 },
+			{ -0.00003, 0.00001, 0.00008 },
+			{ -0.00002, -0.00007, -0.00007 },
+		};
+
+		constexpr sz ENTITY_COUNT = 32;
+
+		for (sz i = 0; i < ENTITY_COUNT; ++i)
+		{
+			TextureCreateConfig* conf = &tex_configs[context->rng.next_int_in_range(0, tex_configs.count - 1)];
+			Vec3 translation = TRANSLATIONS[context->rng.next_int_in_range(0, TRANSFORM_COUNT - 1)];
+			Vec3 velocity = VELOCITIES[context->rng.next_int_in_range(0, TRANSFORM_COUNT - 1)];
+			Vec3 scale = SCALES[context->rng.next_int_in_range(0, TRANSFORM_COUNT - 1)];
+			Quat rotation = ROTATIONS[context->rng.next_int_in_range(0, TRANSFORM_COUNT - 1)];
+			Vec3 rotation_update = ROTATION_UPDATES[context->rng.next_int_in_range(0, TRANSFORM_COUNT - 1)];
+
+			add_entity(cube_geometry, { conf, 1 }, EntityTransformsTagged::create(translation, velocity, scale, rotation, rotation_update));
+		}
 
 		// NOTE: TEMP -->
 		// Path[] paths    = f_arena.alloc_array(Path, 1);
@@ -610,6 +748,13 @@ void Renderer::draw_frame()
 	VulkanShader* shader     = vk_ctx->get_curr_shader();
 	VulkanPipeline* pipeline = shader->get_curr_pipeline();
 	sz curr_frame            = vk_ctx->curr_frame;
+
+	// Poll for events.
+	glfwPollEvents();
+
+	// Apply physics
+	engine_ctx->en_sys.apply_velocities();
+	engine_ctx->en_sys.apply_rotations();
 
 	// NOTE: temp 0 buffer, maybe should be different.
 	VulkanCmdBuffer* transfer_cmd_buff    = &frame->transfer_cmd_buffs[0];
@@ -675,7 +820,7 @@ void Renderer::draw_frame()
 		cmd_push_mvp(
 			*graphics_cmd_buff,
 			pipeline,
-			entity.get_model(transform_order.slice()),
+			entity.get_model(engine_ctx->en_sys, transform_order.slice()),
 			this->view,
 			this->proj
 		);

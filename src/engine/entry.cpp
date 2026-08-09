@@ -8,8 +8,8 @@ namespace rg
 {
 
 // How much memory application will use.
-intern constexpr sz FRAME_MEMORY_CAPACITY = 128 * MB;
-intern constexpr sz PERSISTENT_MEMORY_CAPACITY = 1024 * MB;
+intern constexpr sz FRAME_MEMORY_CAPACITY = 64 * MB;
+intern constexpr sz PERSISTENT_MEMORY_CAPACITY = 1 * GB;
 intern constexpr sz APP_MEMORY_CAPACITY = PERSISTENT_MEMORY_CAPACITY + FRAME_MEMORY_CAPACITY + DEFAULT_TEMP_STORAGE_CAPACITY * RG_THREAD_COUNT + 128 * MB;
 
 intern Context context;
@@ -79,7 +79,6 @@ void application_run()
 	renderer->start_clock();
 	while (!renderer->should_close() && !engine_ctx->window.should_close())
 	{
-		glfwPollEvents();
 		SwapchainPresentResult res = renderer->begin_frame();
 		if (res != SwapchainPresentResult::NEEDS_RECREATION_CANT_PROCEED)
 		{
@@ -120,6 +119,7 @@ bool engine_context_init(Context* ctx, AppConfig config)
     engine_context->event_sys.init();
     engine_context->input_sys.init();
     engine_context->tex_sys.init(engine_context->persist_allocator);
+    engine_context->en_sys.init(engine_context->persist_allocator);
 
     engine_context->renderer.init({ config.window_width, config.window_height }, COLOR_BLACK_RGBA);
 
@@ -133,7 +133,11 @@ void engine_context_destroy()
     EngineContext* engine_context = get_engine_context();
 
     engine_context->renderer.destroy();
+
+    // Systems.
+    engine_context->en_sys.destroy();
     engine_context->tex_sys.destroy();
+
     engine_context->vk_ctx.destroy();
     engine_context->window.destroy();
     engine_context->thread_pool.destroy();

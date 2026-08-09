@@ -223,8 +223,6 @@ void TextureSystem::load_new_textures_cpu_and_transfer_to_gpu(
 	BENCH_SCOPE(b, "Texture loading");
 	
 	EngineContext* engine_ctx = get_engine_context();
-	// NOTE: TEMP: multi-thread variant
-#if 0
 	Arena* talloc = get_temp_allocator();
 	TEMP_ALLOC_SCOPE(talloc);
 
@@ -257,23 +255,13 @@ void TextureSystem::load_new_textures_cpu_and_transfer_to_gpu(
 		++curr_task;
 		++curr_config;
 		++curr_thread_task;
-		wrap_inc_assume_pow_two(cmd_buff_idx, cmd_buffs.count);
+		// NOTE: its somehow possible to record a single buffer...
+		// wrap_inc_assume_pow_two(cmd_buff_idx, cmd_buffs.count);
 	}
 
 	engine_ctx->thread_pool.submit_task_many(thread_tasks);
 	// TODO: wait from IO thread.
 	engine_ctx->thread_pool.await();
-// NOTE: TEMP - Temporary single-threaded fallback.
-#else
-	VulkanCmdBuffer cmd_buff = cmd_buffs[0];
-	for (auto& conf : configs)
-	{
-		auto [tex, idx] = this->textures.get_free_slot_and_idx();
-		bool load_res = tex->load_cpu_and_transfer_gpu(conf.path, &engine_ctx->vk_ctx, &this->staging_buff, conf.gltf_sampler, cmd_buff);
-		if (!load_res) continue;
-		conf.idx = idx;
-	}
-#endif
 }
 
 inline StrView path_to_key(const Path& path)

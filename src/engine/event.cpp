@@ -9,7 +9,7 @@ void EventSystem::init()
  //    Context* ctx = get_context();
 	// for (auto& event_arr : this->event_arrays)
 	// {
-	// 	event_arr.init_capacity(ctx->allocator, DEFAULT_CAPACITY);
+	// 	event_arr.init(ctx->allocator, DEFAULT_CAPACITY);
 	// }
 }
 

@@ -67,11 +67,7 @@ struct DString : DArray<char>
     static constexpr sz DEFAULT_CAPACITY = 16;
     using DArray<char>::DArray;
     using DArray<char>::init;
-    using DArray<char>::init_capacity;
-    using DArray<char>::init_slice;
-    using DArray<char>::tinit;
-    using DArray<char>::tinit_capacity;
-    using DArray<char>::tinit_slice;
+
     void init_view(Allocator* alloc, StrView str_view, sz additional_capacity = 0);
     void init_cstr(Allocator* alloc, CString cstr, bool preserve_null_term = false);
     void push(char c);

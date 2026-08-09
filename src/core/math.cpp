@@ -1392,10 +1392,180 @@ void Mat4::print(LogLevel level)
     LOG_SCOPED("]");
 }
 
+Vec3 Mat4::extract_translation() const
+{
+    const Mat4& m = *this;
+    return { m[12], m[13], m[14] };
+}
+
+Vec3 Mat4::extract_scale() const
+{
+    const Mat4& m = *this;
+    return { m[0], m[5], m[10] };
+}
+
+Quat Mat4::extract_rotation() const
+{
+    const Mat4& m = *this;
+    Quat res;
+    f32 w = 0.5f * rg::sqrt(rg::max(0.0f, 1.0f + m[0] + m[5] + m[10]));
+    const f32 mul = 0.25f * w;
+    res.x = (m[9] - m[6]) * mul;
+    res.y = (m[2] - m[8]) * mul;
+    res.z = (m[4] - m[1]) * mul;
+    res.w = w;
+    return res;
+}
+
 // Quaternion.
 
-// --- 1. Conjugate ---
-// Inverts the rotation axis (negates X, Y, Z while keeping W positive)
+Quat Quat::create_euler(f32 pitch_deg, f32 yaw_deg, f32 roll_deg) 
+{
+    f32 yaw = rg::deg_to_rad(yaw_deg);
+    f32 pitch = rg::deg_to_rad(pitch_deg);
+    f32 roll = rg::deg_to_rad(roll_deg);
+
+    f32 c1 = cos(yaw / 2.0f);
+    f32 s1 = sin(yaw / 2.0f);
+    f32 c2 = cos(pitch / 2.0f);
+    f32 s2 = sin(pitch / 2.0f);
+    f32 c3 = cos(roll / 2.0f);
+    f32 s3 = sin(roll / 2.0f);
+
+    // return {
+    //     s1 * c2 * c3 + c1 * s2 * s3,
+    //     c1 * s2 * c3 - s1 * c2 * s3,
+    //     c1 * c2 * s3 - s1 * s2 * c3,
+    //     c1 * c2 * c3 + s1 * s2 * s3
+    // };
+
+    // Strictly matches the YXZ evaluation sequence
+    return {
+        c1 * s2 * c3 + s1 * c2 * s3, // x
+        s1 * c2 * c3 - c1 * s2 * s3, // y
+        c1 * c2 * s3 - s1 * s2 * c3, // z
+        c1 * c2 * c3 + s1 * s2 * s3  // w
+    };
+}
+
+Quat Quat::create_pitch(f32 pitch_deg) 
+{
+    f32 pitch = rg::deg_to_rad(pitch_deg);
+    f32 c = cos(pitch / 2.0f);
+    f32 s = sin(pitch / 2.0f);
+    return { s, 0, 0, c };
+}
+
+Quat Quat::create_yaw(f32 yaw_deg) 
+{
+    f32 yaw = rg::deg_to_rad(yaw_deg);
+    f32 c = cos(yaw / 2.0f);
+    f32 s = sin(yaw / 2.0f);
+    return { 0, s, 0, c };
+}
+
+Quat Quat::create_roll(f32 roll_deg) 
+{
+    f32 roll = rg::deg_to_rad(roll_deg);
+    f32 c = cos(roll / 2.0f);
+    f32 s = sin(roll / 2.0f);
+    return { 0, 0, s, c };
+}
+
+Quat Quat::create_from_matrix(const Mat4& m)
+{
+	f32 four_x_squared_minus1 = m[0] - m[5] - m[10];
+	f32 four_y_squared_minus1 = m[5] - m[0] - m[10];
+	f32 four_z_squared_minus1 = m[10] - m[0] - m[5];
+	f32 four_w_squared_minus1 = m[0] + m[5] + m[10];
+
+	s32 biggest_index = 0;
+	f32 four_biggest_squared_minus1 = four_w_squared_minus1;
+
+	if (four_x_squared_minus1 > four_biggest_squared_minus1)
+	{
+		four_biggest_squared_minus1 = four_x_squared_minus1;
+		biggest_index = 1;
+	}
+
+	if (four_y_squared_minus1 > four_biggest_squared_minus1)
+	{
+		four_biggest_squared_minus1 = four_y_squared_minus1;
+		biggest_index = 2;
+	}
+
+	if (four_z_squared_minus1 > four_biggest_squared_minus1)
+	{
+		four_biggest_squared_minus1 = four_z_squared_minus1;
+		biggest_index = 3;
+	}
+
+	f32 biggest_val = rg::sqrt(four_biggest_squared_minus1 + (f32)(1)) * (f32)(0.5);
+	f32 mult = (f32)(0.25) / biggest_val;
+
+	switch (biggest_index)
+	{
+	case 0:
+		return { (m[6] - m[9]) * mult, (m[8] - m[2]) * mult, (m[1] - m[4]) * mult, biggest_val };
+	case 1:
+		return { biggest_val, (m[1] + m[4]) * mult, (m[8] + m[2]) * mult, (m[6] - m[5]) * mult };
+	case 2:
+		return { (m[1] + m[4]) * mult, biggest_val, (m[6] + m[5]) * mult, (m[8] - m[2]) * mult };
+	case 3:
+		return { (m[1] - m[4]) * mult, (m[8] + m[2]) * mult, (m[6] + m[9]) * mult, biggest_val };
+	default: // _silence a -_wswitch-default warning in _g_c_c. _should never actually get here. _assert is just for sanity.
+	    UNREACHABLE("Quat from matrix unknown biggest index");
+	}
+}
+
+/* TODO: test this also
+Quat Quat::create_from_matrix(const Mat4& m)
+{
+    // Fix: Diagonal offsets for Column-Major matrix layout
+    // m[0]=m00, m[5]=m11, m[10]=m22
+    f32 four_x_squared_minus1 = m[0] - m[5] - m[10];
+    f32 four_y_squared_minus1 = m[5] - m[0] - m[10];
+    f32 four_z_squared_minus1 = m[10] - m[0] - m[5];
+    f32 four_w_squared_minus1 = m[0] + m[5] + m[10];
+
+    s32 biggest_index = 0;
+    f32 four_biggest_squared_minus1 = four_w_squared_minus1;
+
+    if (four_x_squared_minus1 > four_biggest_squared_minus1)
+    {
+        four_biggest_squared_minus1 = four_x_squared_minus1;
+        biggest_index = 1;
+    }
+    if (four_y_squared_minus1 > four_biggest_squared_minus1)
+    {
+        four_biggest_squared_minus1 = four_y_squared_minus1;
+        biggest_index = 2;
+    }
+    if (four_z_squared_minus1 > four_biggest_squared_minus1)
+    {
+        four_biggest_squared_minus1 = four_z_squared_minus1;
+        biggest_index = 3;
+    }
+
+    f32 biggest_val = rg::sqrt(four_biggest_squared_minus1 + 1.0f) * 0.5f;
+    f32 mult = 0.25f / biggest_val;
+
+    switch (biggest_index)
+    {
+    case 0: // W is biggest
+        return { (m[6] - m[9]) * mult, (m[8] - m[2]) * mult, (m[1] - m[4]) * mult, biggest_val };
+    case 1: // X is biggest
+        return { biggest_val, (m[1] + m[4]) * mult, (m[8] + m[2]) * mult, (m[6] - m[9]) * mult }; // Fixed indices
+    case 2: // Y is biggest
+        return { (m[1] + m[4]) * mult, biggest_val, (m[6] + m[9]) * mult, (m[8] - m[2]) * mult }; // Fixed indices
+    case 3: // Z is biggest
+        return { (m[8] + m[2]) * mult, (m[6] + m[9]) * mult, biggest_val, (m[1] - m[4]) * mult }; // Fixed signs
+    default:
+        UNREACHABLE("Quat from matrix unknown biggest index");
+    }
+}
+*/
+
 Quat Quat::conjugate() const 
 {
 #ifdef RG_FEATURE_SIMD_128
@@ -1410,8 +1580,56 @@ Quat Quat::conjugate() const
 #endif
 }
 
-// --- 2. Multiplication (operator*) ---
-// Combines two rotations. order matters: lhs * rhs means apply lhs THEN rhs in Row-Major.
+void Quat::rotate(Vec3 angles_deg, Array<RotationAxis, 3> order)
+{
+    auto [pitch, yaw, roll] = angles_deg.arr;
+    pitch = deg_to_rad(pitch);
+    yaw = deg_to_rad(yaw);
+    roll = deg_to_rad(roll);
+
+    Quat x = Quat::create_pitch(pitch);
+    Quat y = Quat::create_yaw(yaw);
+    Quat z = Quat::create_roll(roll);
+
+    for (RotationAxis axis : order)
+    {
+        switch (axis)
+        {
+            case RotationAxis::X:
+                *this *= x;
+                break;
+            case RotationAxis::Y:
+                *this *= y;
+                break;
+            case RotationAxis::Z:
+                *this *= z;
+                break;
+            default: UNREACHABLE("Unknown axis: %d", axis);
+        }
+    }
+}
+
+void Quat::rotate_x(f32 pitch_deg)
+{
+    f32 pitch = deg_to_rad(pitch_deg);
+    Quat x = Quat::create_pitch(pitch);
+    *this *= x;
+}
+
+void Quat::rotate_y(f32 yaw_deg)
+{
+    f32 yaw = deg_to_rad(yaw_deg);
+    Quat y = Quat::create_yaw(yaw);
+    *this *= y;
+}
+
+void Quat::rotate_z(f32 roll_deg)
+{
+    f32 roll = deg_to_rad(roll_deg);
+    Quat z = Quat::create_roll(roll);
+    *this *= z;
+}
+
 Quat operator*(Quat lhs, Quat rhs)
 {
     Quat result;
@@ -1419,7 +1637,6 @@ Quat operator*(Quat lhs, Quat rhs)
     __m128 l = _mm_load_ps(lhs.arr);
     __m128 r = _mm_load_ps(rhs.arr);
 
-    // SIMD horizontal expansion of quaternion multiplication formula
     __m128 l_wwww = _mm_shuffle_ps(l, l, _MM_SHUFFLE(3, 3, 3, 3));
     __m128 l_xxxx = _mm_shuffle_ps(l, l, _MM_SHUFFLE(0, 0, 0, 0));
     __m128 l_yyyy = _mm_shuffle_ps(l, l, _MM_SHUFFLE(1, 1, 1, 1));
@@ -1456,13 +1673,12 @@ Quat operator*(Quat lhs, Quat rhs)
     return result;
 }
 
-// --- 3. Convert to Row-Major Mat4 ---
-Mat4 Quat::to_matrix() const 
+Mat4 quat_to_matrix(Quat quat)
 {
     Mat4 mat;
     f32* m = mat.data;
 
-    f32 x = arr[0], y = arr[1], z = arr[2], w = arr[3];
+    f32 x = quat.arr[0], y = quat.arr[1], z = quat.arr[2], w = quat.arr[3];
     
     f32 xx = x * x, xy = x * y, xz = x * z, xw = x * w;
     f32 yy = y * y, yz = y * z, yw = y * w;
@@ -1493,29 +1709,6 @@ Mat4 Quat::to_matrix() const
     m[15] = 1.0f;
 
     return mat;
-}
-
-// --- 4. Construct from Euler Angles (YXZ/Yaw-Pitch-Roll order) ---
-Quat Quat::from_euler(f32 pitch_deg, f32 yaw_deg, f32 roll_deg) 
-{
-    f32 heading = rg::deg_to_rad(yaw_deg);
-    f32 attitude = rg::deg_to_rad(pitch_deg);
-    f32 bank = rg::deg_to_rad(roll_deg);
-
-    f32 c1 = cos(heading / 2.0f);
-    f32 s1 = sin(heading / 2.0f);
-    f32 c2 = cos(attitude / 2.0f);
-    f32 s2 = sin(attitude / 2.0f);
-    f32 c3 = cos(bank / 2.0f);
-    f32 s3 = sin(bank / 2.0f);
-
-    // Combines components into a single step without matrix overhead
-    return {
-        s1 * c2 * c3 + c1 * s2 * s3,
-        c1 * s2 * c3 - s1 * c2 * s3,
-        c1 * c2 * s3 - s1 * s2 * c3,
-        c1 * c2 * c3 + s1 * s2 * s3
-    };
 }
 
 // Underlying operations.

@@ -447,7 +447,42 @@ Vec4 operator-(f32 a, Vec4 b);
 Vec4 operator*(f32 a, Vec4 b);
 Vec4 operator/(f32 a, Vec4 b);
 
-// Matrix4.
+// Quaternion.
+
+enum RotationAxis
+{
+    X,
+    Y,
+    Z
+};
+
+const Array<RotationAxis, 3> DEFAULT_ROTATION_ORDER = { RotationAxis::X, RotationAxis::Y, RotationAxis::Z };
+
+struct Mat4;
+
+struct Quat : Vec4
+{
+    using Vec4::Vec4;
+
+    static Quat identity()
+    {
+        return { 0, 0, 0, 1 };
+    }
+    static Quat create_euler(f32 pitch_deg, f32 yaw_deg, f32 roll_deg);
+    static Quat create_pitch(f32 pitch_deg);
+    static Quat create_yaw(f32 yaw_deg);
+    static Quat create_roll(f32 roll_deg);
+    static Quat create_from_matrix(const Mat4& mat);
+
+    void rotate(Vec3 angles_deg, Array<RotationAxis, 3> order);
+    void rotate(f32 pitch_deg, f32 yaw_deg, f32 roll_deg, Array<RotationAxis, 3> order);
+    void rotate_x(f32 pitch_deg);
+    void rotate_y(f32 yaw_deg);
+    void rotate_z(f32 roll_deg);
+    Quat conjugate() const; 
+};
+
+// Matrix4x4.
 // Multiplication order with vector: Matrix * Vector. (Row-major)
 // Implements right-handed [0, 1] perspective.
 
@@ -473,35 +508,19 @@ struct alignas(16) Mat4 : Array<f32, 16>
     void transpose_inplace();
     void invert_affine();
     void invert_general();
-
     // If the matrix is orthogonal (90deg between axis, and all axis are normalized)
     // As in camera matrix.
     void invert_orhogonal() { this->transpose_inplace(); }
     void operator*=(const Mat4& rhs) { this->mul_inplace(rhs); }
+    Vec3 extract_translation() const;
+    Vec3 extract_scale() const;
+    Quat extract_rotation() const;
     void print(LogLevel level = LogLevel::DEBUG);
 };
 
+Mat4 quat_to_matrix(Quat q);
+
 Mat4 operator*(const Mat4& a, const Mat4& b);
-
-// Quaternion.
-
-struct Quat : Vec4
-{
-    using Vec4::Vec4;
-
-    static Quat create(f32 x, f32 y, f32 z, f32 w)
-    {
-        return { x, y, z, w }; 
-    }
-    static Quat identity()
-    {
-        return { 0, 0, 0, 1 };
-    }
-
-    static Quat from_euler(f32 pitch_deg, f32 yaw_deg, f32 roll_deg);
-    Quat conjugate() const; 
-    Mat4 to_matrix() const;
-};
 
 // Simd.
 

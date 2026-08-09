@@ -12,43 +12,65 @@ s32 main()
     application_run();
 
 // Bitsets.
-    //  HeapAlloc heap;
-    //  heap.init();
+     // HeapAlloc heap;
+     // heap.init();
+     // Context* ctx = get_context();
 
-    //  DBitSet<u32> bits;
-    //  bits.init(&heap, sizeof(u32) * 4);
-    //  ASSERT(bits.count_trailing_ones() == 0);
-    //  bits.set(0);
-    //  ASSERT(bits.count_trailing_ones() == 1);
-    //  bits.set(1);
-    //  ASSERT(bits.count_trailing_ones() == 2);
-    //  bits.set_all();
-    //  ASSERT(bits.count_trailing_ones() == bits.bit_capacity());
+     // const sz COUNT = 2048;
 
-    //  SlotArray<s32> sarr = {};
-    //  sarr.init(&heap, 100);
+     // SlotArray<s32> sarr;
+     // sarr.init(&heap, COUNT);
 
-    //  for (s32 i = 0; i < 32; ++i)
-    //  {
-    //      sarr.add(i);
-    //      s32 set_count = sarr.bits.set_bit_count();
-    //      ASSERT_MSG(set_count == i + 1, "Should be: %d, actual: %d", i, set_count);
-    //  }
+     // DArray<s32> darr;
+     // darr.init(&heap, COUNT);
 
-    //  for (s32 i = 32; i < 64; ++i)
-    //  {
-    //      sarr.add(i);
-    //      s32 set_count = sarr.bits.set_bit_count();
-    //      ASSERT_MSG(set_count == i + 1, "Should be: %d, actual: %d", i, set_count);
-    //  }
+     // {
+     //     // BENCH_SCOPE(b, "SlotArray push");
+     //     for (sz i = 0; i < COUNT; ++i)
+     //     {
+     //         (void)sarr.add(i);
+     //     }
+     // }
 
-    //  for (s32 i = 64; i < 69; ++i)
-    //  {
-    //      sarr.add(i);
-    //      s32 set_count = sarr.bits.set_bit_count();
-    //      ASSERT_MSG(set_count == i + 1, "Should be: %d, actual: %d", i, set_count);
-    // }
+     // {
+     //     // BENCH_SCOPE(b, "DArray push");
+     //     for (sz i = 0; i < COUNT; ++i)
+     //     {
+     //         (void)darr.push(i);
+     //     }
+     // }
 
+     // {
+     //     BENCH_SCOPE(b, "SlotArray remove");
+     //     for (sz i = 0; i < COUNT / 2; ++i)
+     //     {
+     //         (void)sarr.remove(i);
+     //     }
+     // }
+
+     // {
+     //     // BENCH_SCOPE(b, "DArray pop");
+     //     for (sz i = 0; i < COUNT / 2; ++i)
+     //     {
+     //         (void)darr.pop();
+     //     }
+     // }
+
+     // {
+     //     BENCH_SCOPE(b, "SlotArray add");
+     //     for (sz i = 0; i < COUNT / 2; ++i)
+     //     {
+     //         (void)sarr.add(i);
+     //     }
+     // }
+
+     // {
+     //     BENCH_SCOPE(b, "DArray push");
+     //     for (sz i = 0; i < COUNT / 2; ++i)
+     //     {
+     //         (void)darr.push(i);
+     //     }
+     // }
 
 // Atomic
     // Atomic<s32> atom = {200};

@@ -1,7 +1,7 @@
-#include <math.h>
 #include <stdio.h>
 #include "collections/slice.hpp"
 #include "collections/string.hpp"
+#include "core/math.hpp"
 
 namespace rg
 {

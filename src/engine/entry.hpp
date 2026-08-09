@@ -117,6 +117,7 @@ struct EngineContext
     TextureSystem tex_sys;
     VulkanContext vk_ctx;
     Renderer renderer;
+    EntitySystem en_sys;
     Window window;
     ThreadArena* frame_allocator;
     ThreadArena* persist_allocator;

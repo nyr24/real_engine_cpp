@@ -34,7 +34,7 @@ void Path::init(Allocator* alloc, StrView init_part, bool null_term)
     if (path_is_absolute(init_part))
     {
         sz capacity = init_part.count + 1;
-        this->init_capacity(alloc, capacity);
+        this->init(alloc, capacity);
         this->push(init_part);
         this->ensure_separator_at_end();
     }
@@ -58,7 +58,7 @@ void Path::init(Allocator* alloc, Slice<StrView> parts, bool null_term)
         {
            capacity += part->count;
         }
-        this->init_capacity(alloc, capacity);
+        this->init(alloc, capacity);
         this->push(parts[0]);
         this->ensure_separator_at_end();
         this->add_parts(parts.slice(1));
@@ -426,7 +426,7 @@ intern Maybe<DString> file_read_default(Allocator* alloc, Path* path, sz precomp
     defer(file_close(handle));
 
     if (precomputed_file_size == 0) precomputed_file_size = file_get_size(handle);
-    res.val.init_capacity(alloc, precomputed_file_size);
+    res.val.init(alloc, precomputed_file_size);
 
     sz read_bytes_all = 0;
     sz read_bytes_curr = 0;
@@ -477,7 +477,7 @@ intern Maybe<DString> file_read_mmap(Allocator* alloc, Path* path, sz precompute
     if (!file_memory_map(path, &mmap_entry, precomputed_file_size)) return res;
     defer(mmap_entry.unmap());
 
-    res.val.init_capacity(alloc, mmap_entry.size);
+    res.val.init(alloc, mmap_entry.size);
     res.val.push(mmap_entry.slice());
     res.is_ok = true;
     return res;

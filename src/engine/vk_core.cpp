@@ -50,7 +50,7 @@ bool init_instance(VulkanContext* vk_ctx)
 
 #ifdef RG_DEBUG
     DArray<CString> req_layers;
-    req_layers.init_capacity(talloc, MAX_REQ_LAYERS);
+    req_layers.init(talloc, MAX_REQ_LAYERS);
 	req_layers.push("VK_LAYER_KHRONOS_validation");
 
 	if (!add_validation_layers(&req_layers))
@@ -60,7 +60,7 @@ bool init_instance(VulkanContext* vk_ctx)
 #endif // RG_DEBUG
 
     DArray<CString> req_extensions;
-    req_extensions.init_capacity(talloc, MAX_REQ_EXTENSIONS);
+    req_extensions.init(talloc, MAX_REQ_EXTENSIONS);
 
     u32 platform_extensions_count;
 	CString* platform_extensions = glfwGetRequiredInstanceExtensions(&platform_extensions_count);
@@ -93,7 +93,8 @@ bool init_instance(VulkanContext* vk_ctx)
 intern bool add_validation_layers(DArray<CString>* req_layers)
 {
     DArray<VkLayerProperties> avail_layers;
-    avail_layers.tinit_capacity(MAX_AVAIL_LAYERS);
+    auto* talloc = get_temp_allocator();
+    avail_layers.init(talloc, MAX_AVAIL_LAYERS);
 	u32 avail_layer_count;
 
 	VK_CHECK(vkEnumerateInstanceLayerProperties(&avail_layer_count, null));
@@ -124,7 +125,8 @@ intern bool add_validation_layers(DArray<CString>* req_layers)
 intern bool check_req_extensions(DArray<CString>* req_extensions)
 {
     DArray<VkExtensionProperties> avail_extensions;
-    avail_extensions.tinit_capacity(MAX_AVAIL_EXTENSIONS);
+    auto* talloc = get_temp_allocator();
+    avail_extensions.init(talloc, MAX_AVAIL_EXTENSIONS);
 
 	u32 avail_ext_count;
 	VK_CHECK(vkEnumerateInstanceExtensionProperties(null, &avail_ext_count, null));
@@ -260,7 +262,7 @@ bool VulkanDevice::init(VulkanContext* ctx)
 	TEMP_ALLOC_SCOPE(talloc);
 
 	DArray<VkPhysicalDevice> phys_devs;
-	phys_devs.init_capacity(talloc, device_count);
+	phys_devs.init(talloc, device_count);
 	phys_devs.resize(device_count);
 
 	VK_CHECK(vkEnumeratePhysicalDevices(ctx->instance, &device_count, phys_devs.data));
@@ -303,7 +305,6 @@ bool VulkanDevice::init(VulkanContext* ctx)
 
 	// Here we're tracking how much queues were selected from each family.
 	DArray<u8> selected_queue_counts_by_family;
-	selected_queue_counts_by_family.init(talloc);
 
 	if (!find_queue_families(selected_phys_dev, ctx->surface, &selected_queue_counts_by_family, &dev->queue_indices))
 	{
@@ -312,7 +313,7 @@ bool VulkanDevice::init(VulkanContext* ctx)
 	}
 
 	DArray<QueueCount> compact_queue_fam_counts;
-	compact_queue_fam_counts.tinit_capacity(MAX_QUEUE_FAMILIES);
+	compact_queue_fam_counts.init(talloc, MAX_QUEUE_FAMILIES);
 	calc_required_queue_counts(selected_queue_counts_by_family.slice(), &compact_queue_fam_counts);
 
 	FArray<VkDeviceQueueCreateInfo, MAX_QUEUE_FAMILIES> queue_infos;
@@ -430,7 +431,7 @@ bool is_phys_device_suitable(
 
 	u32 avail_ext_count;
 	VK_CHECK(vkEnumerateDeviceExtensionProperties(dev, null, &avail_ext_count, null));
-	avail_extensions.init_capacity(talloc, (sz)avail_ext_count);
+	avail_extensions.init(talloc, (sz)avail_ext_count);
 	avail_extensions.resize((sz)avail_ext_count);
 
 	VK_CHECK(vkEnumerateDeviceExtensionProperties(dev, null, &avail_ext_count, &avail_extensions[0]));
@@ -530,8 +531,8 @@ intern bool find_queue_families(
 	QueueIndices* out_indices
 )
 {
-	ASSERT_INITIALIZED(selected_queue_counts_by_family);
-
+	ASSERT_MSG(selected_queue_counts_by_family->alloc == null, "Mustn't be initialized before");
+	
 	Arena* talloc = get_temp_allocator();
 	TEMP_ALLOC_SCOPE(talloc);
 
@@ -539,9 +540,10 @@ intern bool find_queue_families(
 	vkGetPhysicalDeviceQueueFamilyProperties(dev, &queue_fam_count, null);
 
 	DArray<VkQueueFamilyProperties> queue_families;
-	queue_families.init_capacity(talloc, queue_fam_count);
+	queue_families.init(talloc, queue_fam_count);
 	queue_families.resize(queue_fam_count);
 
+	selected_queue_counts_by_family->init(talloc, queue_fam_count);
 	selected_queue_counts_by_family->resize(queue_fam_count);
 	vkGetPhysicalDeviceQueueFamilyProperties(dev, &queue_fam_count, queue_families.data);
 
@@ -1984,7 +1986,7 @@ void VulkanShader::init_descriptor_state(EngineContext* ctx, const VulkanShaderC
 		}
 	}
 
-	this->descriptor_pools.init_capacity(ctx->persist_allocator, INIT_POOL_COUNT);
+	this->descriptor_pools.init(ctx->persist_allocator, INIT_POOL_COUNT);
 	this->allocate_pool(ctx);
 }
 
@@ -2034,7 +2036,7 @@ EntityShaderState VulkanShader::allocate_entity_resources(EngineContext* ctx)
 		EntityShaderState res;
 		res.pool_idx = (u16)i;
 		res.sets_count = (u16)alloc_res.count;
-		res.set_sets_start_idx((u32)alloc_res.start_index);
+		res.start_idx = (u32)alloc_res.start_index;
 		return res;
 	}
 
@@ -2045,14 +2047,14 @@ EntityShaderState VulkanShader::allocate_entity_resources(EngineContext* ctx)
 	EntityShaderState res;
 	res.pool_idx = (u16)i;
 	res.sets_count = (u16)alloc_res.count;
-	res.set_sets_start_idx((u32)alloc_res.start_index);
+	res.start_idx = (u32)alloc_res.start_index;
 	return res;
 }
 
 Slice<VkDescriptorSet> VulkanShader::get_entity_resources(EntityShaderState entity_state, sz curr_frame)
 {
 	Slice<VkDescriptorSet> sets = this->descriptor_pools[entity_state.pool_idx].get_sets(
-		entity_state.sets_start_idx(),
+		entity_state.start_idx,
 		entity_state.sets_count
 	);
 	return sets.slice(curr_frame * this->descriptor_layouts.count, this->descriptor_layouts.count);
@@ -2062,7 +2064,7 @@ void VulkanShader::destroy_entity_resources(VulkanContext* ctx, EntityShaderStat
 {
 	this->descriptor_pools[entity_state.pool_idx].free_sets(
 		ctx,
-		entity_state.sets_start_idx(),
+		entity_state.start_idx,
 		entity_state.sets_count
 	);
 }
@@ -2140,7 +2142,7 @@ void VulkanDescriptorPool::init(EngineContext* ctx, Slice<VkDescriptorPoolSize> 
 	};
 	VulkanContext* vk_ctx = &ctx->vk_ctx;
 	VK_CHECK(vkCreateDescriptorPool(vk_ctx->dev.log_dev, &descriptor_pool_ci, vk_ctx->vk_alloc, &this->handle));
-	this->sets.init_capacity(ctx->persist_allocator, max_sets);
+	this->sets.init(ctx->persist_allocator, max_sets);
 }
 
 Maybe<PoolAllocationResult> VulkanDescriptorPool::allocate_sets(VulkanDevice* dev, Slice<VkDescriptorSetLayout> layouts)
