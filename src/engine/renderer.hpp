@@ -115,7 +115,7 @@ struct ElementBuffer
 
 struct Camera
 {
-    static constexpr f32 DEFAULT_SPEED = 325.0f;
+    static constexpr f32 DEFAULT_SPEED = 128.0f;
     static constexpr f32 ZOOM_SPEED = 100.0f;
     static constexpr f32 ZOOM_MIN = 0.1f;
     static constexpr f32 ZOOM_MAX = 300.0f;
@@ -161,12 +161,12 @@ struct EntityTransforms
 	EntityTransforms() = default;
 	EntityTransforms(const EntityTransforms& rhs)
 	{
-		rg::mem_copy(this, &rhs, sizeof(EntityTransforms));
+		rg::mem_copy(this, &rhs, sizeof(*this));
 	}
 	EntityTransforms& operator=(const EntityTransforms& rhs)
 	{
 		ASSERT(this != &rhs);
-		rg::mem_copy(this, &rhs, sizeof(EntityTransforms));
+		rg::mem_copy(this, &rhs, sizeof(*this));
 		return *this;
 	}
 };
@@ -192,12 +192,12 @@ struct EntityTransformsTagged
 	EntityTransformsTagged() = default;
 	EntityTransformsTagged(const EntityTransformsTagged& rhs)
 	{
-		rg::mem_copy(this, &rhs, sizeof(EntityTransformsTagged));
+		rg::mem_copy(this, &rhs, sizeof(*this));
 	}
 	EntityTransformsTagged& operator=(const EntityTransformsTagged& rhs)
 	{
 		ASSERT(this != &rhs);
-		rg::mem_copy(this, &rhs, sizeof(EntityTransforms));
+		rg::mem_copy(this, &rhs, sizeof(*this));
 		return *this;
 	}
 

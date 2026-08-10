@@ -26,7 +26,7 @@ ConstantBuffer<PushConstantBlock> push_constant;
 VSOutput vertMain(VSInput input)
 {
     VSOutput output;
-    output.pos = mul(push_constant.mvp, float4(input.pos, 1.0));
+    output.pos = mul(float4(input.pos, 1.0), push_constant.mvp);
     output.normal = input.normal;
     output.tex_coord = input.tex_coord;
     return output;

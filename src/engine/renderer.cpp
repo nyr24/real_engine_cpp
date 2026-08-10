@@ -244,7 +244,7 @@ void Camera::handle_mouse_move(f32 delta_x, f32 delta_y)
 
 void Camera::handle_key_down(u32 key, Nanoseconds delta_time_ns)
 {
-	intern constexpr f32 DELTA_TIME_MULTIPLIER = (f32)1 / 100'000'000'0;
+	intern constexpr f32 DELTA_TIME_MULTIPLIER = (f32)1 / 1000'000'000;
 	f32 velocity = this->speed * delta_time_ns * DELTA_TIME_MULTIPLIER;
 
 	switch (key)
@@ -274,6 +274,7 @@ void Camera::handle_mouse_wheel(bool delta)
 {
 	// NOTE: TEMP
 	LOG_DEBUG("wheel event: delta: %u", (u32)delta);
+
 	if (delta)
 	{
 		this->zoom += Camera::ZOOM_SPEED;
@@ -375,6 +376,9 @@ void Entity::init(
 Mat4 Entity::get_model(const EntitySystem& en_sys, Slice<TransformType> transform_order)
 {
 	Mat4 model = Mat4::identity();
+	Quat quat;
+	// Mat4 rot_mat;
+	
 	for (TransformType order : transform_order)
 	{
 		switch (order)
@@ -386,11 +390,27 @@ Mat4 Entity::get_model(const EntitySystem& en_sys, Slice<TransformType> transfor
 				model.translate_inplace(en_sys.get_position(this->position_idx));
 				break;
 			case TransformType::ROTATION:
-				model *= quat_to_matrix(en_sys.get_rotation(this->rotation_idx));
+				// NOTE: TEMP (logging)
+			#if 0
+				LOG_DEBUG("** Quat: **");
+				quat = en_sys.get_rotation(this->rotation_idx);
+				quat.print();
+				rot_mat = quat_to_matrix(quat);
+				LOG_DEBUG("** Rotation mat: **");
+				rot_mat.print();
+				model *= rot_mat;
+			#else
+				quat = en_sys.get_rotation(this->rotation_idx);
+				model *= quat_to_matrix(quat);
+			#endif
 				break;
 			default: UNREACHABLE("Unknown transform type");
 		}
 	}
+#if 0
+	LOG_DEBUG("** Model mat: **");
+	model.print();
+#endif
 	return model;
 }
 
@@ -506,7 +526,7 @@ void EntitySystem::apply_rotations()
 {
 	Quat* rotation = this->rotations.begin();
 	Quat* rotations_end = this->rotations.end();
-	Vec3* rotation_update = this->rotation_updates.end();
+	Vec3* rotation_update = this->rotation_updates.begin();
 
 	while (rotation != rotations_end)
 	{
@@ -660,12 +680,13 @@ intern void perform_startup_load(Renderer* renderer)
 			{ 0.5, 0.2, 0.2 },
 		};
 
+		const Vec3 AXIS = { -0.5f, 0.5f, 0.0f };
 		const Array<Quat, TRANSFORM_COUNT> ROTATIONS = {
-			Quat::create_euler(30, -45, 0),
-			Quat::create_euler(30, 45, 0),
-			Quat::create_euler(90, 180, 0),
-			Quat::create_euler(-30, -45, 0),
-			Quat::create_euler(-90, -180, 0),
+			Quat::create_angle_axis(30, AXIS),
+			Quat::create_angle_axis(45, AXIS),
+			Quat::create_angle_axis(90, AXIS),
+			Quat::create_angle_axis(-30, AXIS),
+			Quat::create_angle_axis(-90, AXIS),
 		};
 
 		const Array<Vec3, TRANSFORM_COUNT> ROTATION_UPDATES = {
@@ -753,7 +774,7 @@ void Renderer::draw_frame()
 	glfwPollEvents();
 
 	// Apply physics
-	engine_ctx->en_sys.apply_velocities();
+	// engine_ctx->en_sys.apply_velocities();
 	engine_ctx->en_sys.apply_rotations();
 
 	// NOTE: temp 0 buffer, maybe should be different.

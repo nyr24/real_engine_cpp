@@ -110,7 +110,7 @@ void Vec2::negate_inplace()
 
 void Vec2::normalize_inplace()
 {
-    f32 mag_inv = 1 / this->magninute();
+    f32 mag_inv = 1 / this->magnitude();
     this->x *= mag_inv;
     this->y *= mag_inv;
 }
@@ -129,12 +129,12 @@ Vec2 Vec2::normalize()
     return res;
 }
 
-f32 Vec2::magninute()
+f32 Vec2::magnitude()
 {
-    return sqrt(this->magninute_square());
+    return sqrt(this->magnitude_squared());
 }
 
-f32 Vec2::magninute_square()
+f32 Vec2::magnitude_squared()
 {
     f32 x = this->x;
     f32 y = this->y;
@@ -148,7 +148,7 @@ Vec2 vec_direction(Vec2 a, Vec2 b)
 
 f32 vec_dist(Vec2 a, Vec2 b)
 {
-    return vec_direction(a, b).magninute();
+    return vec_direction(a, b).magnitude();
 }
 
 Vec2 operator+(Vec2 a, Vec2 b) { return vec_add(a, b); }
@@ -416,7 +416,7 @@ void Vec3::negate_inplace()
 
 void Vec3::normalize_inplace()
 {
-    f32 mag_inv = 1 / this->magninute();
+    f32 mag_inv = 1 / this->magnitude();
 #ifdef RG_FEATURE_SIMD_128
     __m128 a = _mm_load_ps(this->arr);
     __m128 b = _mm_set1_ps(mag_inv);
@@ -472,12 +472,12 @@ Vec3 vec_cross(Vec3 lhs, Vec3 rhs)
 #endif
 }
 
-f32 Vec3::magninute()
+f32 Vec3::magnitude()
 {
-    return sqrt(this->magninute_square());
+    return sqrt(this->magnitude_squared());
 }
 
-f32 Vec3::magninute_square()
+f32 Vec3::magnitude_squared()
 {
 #ifdef RG_FEATURE_SIMD_128
     __m128 a = _mm_load_ps(this->arr);
@@ -507,7 +507,7 @@ Vec3 vec_direction(Vec3 lhs, Vec3 rhs)
 
 f32 vec_dist(Vec3 a, Vec3 b)
 {
-    return vec_direction(a, b).magninute();
+    return vec_direction(a, b).magnitude();
 }
 
 Vec3 operator+(Vec3 a, Vec3 b) { return vec_add(a, b); }
@@ -642,7 +642,7 @@ void Vec4::div_inplace(Vec4 rhs)
 void Vec4::print(LogLevel level)
 {
     ScopedLogger lg(level);
-    LOG_SCOPED("{ %f %f %f %f }\n", x, y, z, w);
+    LOG_SCOPED("{ %f %f %f %f }", x, y, z, w);
 }
 
 // Math on primitives.
@@ -804,7 +804,7 @@ void Vec4::negate_inplace()
 
 void Vec4::normalize_inplace()
 {
-    f32 mag_inv = 1 / this->magninute();
+    f32 mag_inv = 1 / this->magnitude();
 #ifdef RG_FEATURE_SIMD_128
     __m128 a = _mm_load_ps(this->arr);
     __m128 b = _mm_set1_ps(mag_inv);
@@ -831,12 +831,12 @@ Vec4 Vec4::normalize()
     return res;
 }
 
-f32 Vec4::magninute()
+f32 Vec4::magnitude()
 {
-    return sqrt(this->magninute_square());
+    return sqrt(this->magnitude_squared());
 }
 
-f32 Vec4::magninute_square()
+f32 Vec4::magnitude_squared()
 {
 #ifdef RG_FEATURE_SIMD_128
     alignas(16) f32 load_buff[4];
@@ -868,7 +868,7 @@ Vec4 vec_direction(Vec4 a, Vec4 b)
 
 f32 vec_dist(Vec4 a, Vec4 b)
 {
-    return vec_direction(a, b).magninute();
+    return vec_direction(a, b).magnitude();
 }
 
 Vec4 operator+(Vec4 a, Vec4 b) { return vec_add(a, b); }
@@ -1419,6 +1419,16 @@ Quat Mat4::extract_rotation() const
 
 // Quaternion.
 
+Quat Quat::create_angle_axis(f32 angle_deg, Vec3 axis)
+{
+    axis.normalize_inplace();
+    f32 angle_half = rg::deg_to_rad(angle_deg) / 2;
+    f32 c = rg::cos(angle_half);
+    f32 s = rg::sin(angle_half);
+    axis *= s;
+    return { axis.x, axis.y, axis.z, c };
+}
+
 Quat Quat::create_euler(f32 pitch_deg, f32 yaw_deg, f32 roll_deg) 
 {
     f32 yaw = rg::deg_to_rad(yaw_deg);
@@ -1432,14 +1442,6 @@ Quat Quat::create_euler(f32 pitch_deg, f32 yaw_deg, f32 roll_deg)
     f32 c3 = cos(roll / 2.0f);
     f32 s3 = sin(roll / 2.0f);
 
-    // return {
-    //     s1 * c2 * c3 + c1 * s2 * s3,
-    //     c1 * s2 * c3 - s1 * c2 * s3,
-    //     c1 * c2 * s3 - s1 * s2 * c3,
-    //     c1 * c2 * c3 + s1 * s2 * s3
-    // };
-
-    // Strictly matches the YXZ evaluation sequence
     return {
         c1 * s2 * c3 + s1 * c2 * s3, // x
         s1 * c2 * c3 - c1 * s2 * s3, // y
@@ -1470,6 +1472,241 @@ Quat Quat::create_roll(f32 roll_deg)
     f32 c = cos(roll / 2.0f);
     f32 s = sin(roll / 2.0f);
     return { 0, 0, s, c };
+}
+
+Quat Quat::conjugate()
+{
+#ifdef RG_FEATURE_SIMD_128
+    Quat result;
+    __m128 q = _mm_load_ps(this->arr);
+    // Flip signs of x, y, z using a sign mask
+    __m128 mask = _mm_setr_ps(-1.0f, -1.0f, -1.0f, 1.0f);
+    _mm_store_ps(result.arr, _mm_mul_ps(q, mask));
+    return result;
+#else
+    return { -x, -y, -z, w };
+#endif
+}
+
+void Quat::inverse_inplace()
+{
+    f32 inv_mag = 1 / this->magnitude_squared();
+    Vec4 res = this->conjugate() * inv_mag;
+    mem_copy(this, &res, sizeof(res));
+}
+
+Quat Quat::inverse()
+{
+    Quat res;
+    res.inverse_inplace();
+    return res;
+}
+
+Vec3 Quat::rotate_point(Vec3 v)
+{
+    const Quat& q = *this; 
+    f32 qx = q.x;
+    f32 qy = q.y;
+    f32 qz = q.z;
+
+    f32 tx = 2.0 * (qy * v.z - qz * v.y);
+    f32 ty = 2.0 * (qz * v.x - qx * v.z);
+    f32 tz = 2.0 * (qx * v.y - qy * v.x);
+
+    f32 rx = v.x + q.w * tx + (qy * tz - qz * ty);
+    f32 ry = v.y + q.w * ty + (qz * tx - qx * tz);
+    f32 rz = v.z + q.w * tz + (qx * ty - qy * tx);
+
+    return {rx, ry, rz};
+}
+
+Quat Quat::normalize()
+{
+    Quat res;
+    res.normalize_inplace();
+    return res;
+}
+
+void Quat::normalize_inplace()
+{
+    f32 inv_mag = 1 / this->magnitude();
+#ifdef RG_FEATURE_SIMD_128
+    __m128 lhs = _mm_load_ps(this->arr);
+    __m128 rhs = _mm_set1_ps(inv_mag);
+    __m128 res = _mm_mul_ps(lhs, rhs);
+    _mm_store_ps(this->arr, res);
+#else
+    Vec4 rhs = Vec4::create_repeat(inv_mag);
+    Vec4* lhs = this;
+    *lhs *= rhs;
+#endif
+}
+
+void Quat::rotate(Vec3 angles_deg, Array<RotationAxis, 3> order)
+{
+    auto [pitch_deg, yaw_deg, roll_deg] = angles_deg.arr;
+
+    Quat x = Quat::create_pitch(pitch_deg);
+    Quat y = Quat::create_yaw(yaw_deg);
+    Quat z = Quat::create_roll(roll_deg);
+
+    for (RotationAxis axis : order)
+    {
+        switch (axis)
+        {
+            case RotationAxis::X:
+                *this *= x;
+                break;
+            case RotationAxis::Y:
+                *this *= y;
+                break;
+            case RotationAxis::Z:
+                *this *= z;
+                break;
+            default: UNREACHABLE("Unknown axis: %d", axis);
+        }
+    }
+}
+
+void Quat::rotate_x(f32 pitch_deg)
+{
+    f32 pitch = deg_to_rad(pitch_deg);
+    Quat x = Quat::create_pitch(pitch);
+    *this *= x;
+}
+
+void Quat::rotate_y(f32 yaw_deg)
+{
+    f32 yaw = deg_to_rad(yaw_deg);
+    Quat y = Quat::create_yaw(yaw);
+    *this *= y;
+}
+
+void Quat::rotate_z(f32 roll_deg)
+{
+    f32 roll = deg_to_rad(roll_deg);
+    Quat z = Quat::create_roll(roll);
+    *this *= z;
+}
+
+Quat& Quat::operator*=(Quat rhs)
+{
+    *this = *this * rhs;
+    return *this;
+}
+
+Quat operator*(Quat lhs, Quat rhs)
+{
+    Quat result;
+#ifdef RG_FEATURE_SIMD_128
+    __m128 l = _mm_load_ps(lhs.arr);
+    __m128 r = _mm_load_ps(rhs.arr);
+
+    __m128 l_wwww = _mm_shuffle_ps(l, l, _MM_SHUFFLE(3, 3, 3, 3));
+    __m128 l_xxxx = _mm_shuffle_ps(l, l, _MM_SHUFFLE(0, 0, 0, 0));
+    __m128 l_yyyy = _mm_shuffle_ps(l, l, _MM_SHUFFLE(1, 1, 1, 1));
+    __m128 l_zzzz = _mm_shuffle_ps(l, l, _MM_SHUFFLE(2, 2, 2, 2));
+
+    __m128 r_wzyx = _mm_shuffle_ps(r, r, _MM_SHUFFLE(3, 2, 1, 0));
+    __m128 r_zwxy = _mm_shuffle_ps(r, r, _MM_SHUFFLE(2, 3, 0, 1));
+    __m128 r_yxwz = _mm_shuffle_ps(r, r, _MM_SHUFFLE(1, 0, 3, 2));
+
+    __m128 m0 = _mm_mul_ps(l_wwww, r);
+    __m128 m1 = _mm_mul_ps(l_xxxx, r_wzyx);
+    __m128 m2 = _mm_mul_ps(l_yyyy, r_zwxy);
+    __m128 m3 = _mm_mul_ps(l_zzzz, r_yxwz);
+
+    // Sign patterns for multiplication components
+    __m128 s1 = _mm_setr_ps( 1.0f, -1.0f,  1.0f, -1.0f);
+    __m128 s2 = _mm_setr_ps( 1.0f,  1.0f, -1.0f, -1.0f);
+    __m128 s3 = _mm_setr_ps(-1.0f,  1.0f,  1.0f, -1.0f);
+
+    __m128 q_res = _mm_add_ps(m0, _mm_mul_ps(m1, s1));
+    q_res = _mm_add_ps(q_res, _mm_mul_ps(m2, s2));
+    q_res = _mm_add_ps(q_res, _mm_mul_ps(m3, s3));
+
+    _mm_store_ps(result.arr, q_res);
+#else
+    f32 x1 = lhs.x, y1 = lhs.y, z1 = lhs.z, w1 = lhs.w;
+    f32 x2 = rhs.x, y2 = rhs.y, z2 = rhs.z, w2 = rhs.w;
+
+    result.x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2;
+    result.y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2;
+    result.z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2;
+    result.w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2;
+#endif
+    return result;
+}
+
+// Mat4 quat_to_matrix(Quat quat)
+// {
+//     Mat4 mat;
+//     f32* m = mat.data;
+
+//     f32 x = quat.arr[0], y = quat.arr[1], z = quat.arr[2], w = quat.arr[3];
+
+//     f32 xx = x * x, xy = x * y, xz = x * z, xw = x * w;
+//     f32 yy = y * y, yz = y * z, yw = y * w;
+//     f32 zz = z * z, zw_val = z * w;
+
+//     m[0] = 1.0f - 2.0f * (yy + zz);
+//     m[1] = 2.0f * (xy - zw_val);
+//     m[2] = 2.0f * (xz + yw);
+//     m[3] = 0.0f;
+
+//     m[4] = 2.0f * (xy + zw_val);
+//     m[5] = 1.0f - 2.0f * (xx + zz);
+//     m[6] = 2.0f * (yz - xw);
+//     m[7] = 0.0f;
+
+//     m[8]  = 2.0f * (xz - yw);
+//     m[9]  = 2.0f * (yz + xw);
+//     m[10] = 1.0f - 2.0f * (xx + yy);
+//     m[11] = 0.0f;
+
+//     m[12] = 0.0f;
+//     m[13] = 0.0f;
+//     m[14] = 0.0f;
+//     m[15] = 1.0f;
+
+//     return mat;
+// }
+
+Mat4 quat_to_matrix(Quat quat) {
+    Mat4 mat;
+    f32* m = mat.data;
+
+    f32 x = quat.arr[0], y = quat.arr[1], z = quat.arr[2], w = quat.arr[3];
+    
+    f32 xx = x * x, xy = x * y, xz = x * z, xw = x * w;
+    f32 yy = y * y, yz = y * z, yw = y * w;
+    f32 zz = z * z, zw_val = z * w;
+
+    // Строка 0 (m[0]..m[3])
+    m[0] = 1.0f - 2.0f * (yy + zz);
+    m[1] = 2.0f * (xy + zw_val); // Знак изменен на +
+    m[2] = 2.0f * (xz - yw);     // Знак изменен на -
+    m[3] = 0.0f;
+
+    // Строка 1 (m[4]..m[7])
+    m[4] = 2.0f * (xy - zw_val); // Знак изменен на -
+    m[5] = 1.0f - 2.0f * (xx + zz);
+    m[6] = 2.0f * (yz + xw);     // Знак изменен на +
+    m[7] = 0.0f;
+
+    // Строка 2 (m[8]..m[11])
+    m[8] = 2.0f * (xz + yw);     // Знак изменен на +
+    m[9] = 2.0f * (yz - xw);     // Знак изменен на -
+    m[10] = 1.0f - 2.0f * (xx + yy);
+    m[11] = 0.0f;
+
+    // Строка 3 (m[12]..m[15]) - Компоненты переноса (Translation)
+    m[12] = 0.0f;
+    m[13] = 0.0f;
+    m[14] = 0.0f;
+    m[15] = 1.0f;
+
+    return mat;
 }
 
 Quat Quat::create_from_matrix(const Mat4& m)
@@ -1516,199 +1753,6 @@ Quat Quat::create_from_matrix(const Mat4& m)
 	default: // _silence a -_wswitch-default warning in _g_c_c. _should never actually get here. _assert is just for sanity.
 	    UNREACHABLE("Quat from matrix unknown biggest index");
 	}
-}
-
-/* TODO: test this also
-Quat Quat::create_from_matrix(const Mat4& m)
-{
-    // Fix: Diagonal offsets for Column-Major matrix layout
-    // m[0]=m00, m[5]=m11, m[10]=m22
-    f32 four_x_squared_minus1 = m[0] - m[5] - m[10];
-    f32 four_y_squared_minus1 = m[5] - m[0] - m[10];
-    f32 four_z_squared_minus1 = m[10] - m[0] - m[5];
-    f32 four_w_squared_minus1 = m[0] + m[5] + m[10];
-
-    s32 biggest_index = 0;
-    f32 four_biggest_squared_minus1 = four_w_squared_minus1;
-
-    if (four_x_squared_minus1 > four_biggest_squared_minus1)
-    {
-        four_biggest_squared_minus1 = four_x_squared_minus1;
-        biggest_index = 1;
-    }
-    if (four_y_squared_minus1 > four_biggest_squared_minus1)
-    {
-        four_biggest_squared_minus1 = four_y_squared_minus1;
-        biggest_index = 2;
-    }
-    if (four_z_squared_minus1 > four_biggest_squared_minus1)
-    {
-        four_biggest_squared_minus1 = four_z_squared_minus1;
-        biggest_index = 3;
-    }
-
-    f32 biggest_val = rg::sqrt(four_biggest_squared_minus1 + 1.0f) * 0.5f;
-    f32 mult = 0.25f / biggest_val;
-
-    switch (biggest_index)
-    {
-    case 0: // W is biggest
-        return { (m[6] - m[9]) * mult, (m[8] - m[2]) * mult, (m[1] - m[4]) * mult, biggest_val };
-    case 1: // X is biggest
-        return { biggest_val, (m[1] + m[4]) * mult, (m[8] + m[2]) * mult, (m[6] - m[9]) * mult }; // Fixed indices
-    case 2: // Y is biggest
-        return { (m[1] + m[4]) * mult, biggest_val, (m[6] + m[9]) * mult, (m[8] - m[2]) * mult }; // Fixed indices
-    case 3: // Z is biggest
-        return { (m[8] + m[2]) * mult, (m[6] + m[9]) * mult, biggest_val, (m[1] - m[4]) * mult }; // Fixed signs
-    default:
-        UNREACHABLE("Quat from matrix unknown biggest index");
-    }
-}
-*/
-
-Quat Quat::conjugate() const 
-{
-#ifdef RG_FEATURE_SIMD_128
-    Quat result;
-    __m128 q = _mm_load_ps(this->arr);
-    // Flip signs of x, y, z using a sign mask
-    __m128 mask = _mm_setr_ps(-1.0f, -1.0f, -1.0f, 1.0f);
-    _mm_store_ps(result.arr, _mm_mul_ps(q, mask));
-    return result;
-#else
-    return { -x, -y, -z, w };
-#endif
-}
-
-void Quat::rotate(Vec3 angles_deg, Array<RotationAxis, 3> order)
-{
-    auto [pitch, yaw, roll] = angles_deg.arr;
-    pitch = deg_to_rad(pitch);
-    yaw = deg_to_rad(yaw);
-    roll = deg_to_rad(roll);
-
-    Quat x = Quat::create_pitch(pitch);
-    Quat y = Quat::create_yaw(yaw);
-    Quat z = Quat::create_roll(roll);
-
-    for (RotationAxis axis : order)
-    {
-        switch (axis)
-        {
-            case RotationAxis::X:
-                *this *= x;
-                break;
-            case RotationAxis::Y:
-                *this *= y;
-                break;
-            case RotationAxis::Z:
-                *this *= z;
-                break;
-            default: UNREACHABLE("Unknown axis: %d", axis);
-        }
-    }
-}
-
-void Quat::rotate_x(f32 pitch_deg)
-{
-    f32 pitch = deg_to_rad(pitch_deg);
-    Quat x = Quat::create_pitch(pitch);
-    *this *= x;
-}
-
-void Quat::rotate_y(f32 yaw_deg)
-{
-    f32 yaw = deg_to_rad(yaw_deg);
-    Quat y = Quat::create_yaw(yaw);
-    *this *= y;
-}
-
-void Quat::rotate_z(f32 roll_deg)
-{
-    f32 roll = deg_to_rad(roll_deg);
-    Quat z = Quat::create_roll(roll);
-    *this *= z;
-}
-
-Quat operator*(Quat lhs, Quat rhs)
-{
-    Quat result;
-#ifdef RG_FEATURE_SIMD_128
-    __m128 l = _mm_load_ps(lhs.arr);
-    __m128 r = _mm_load_ps(rhs.arr);
-
-    __m128 l_wwww = _mm_shuffle_ps(l, l, _MM_SHUFFLE(3, 3, 3, 3));
-    __m128 l_xxxx = _mm_shuffle_ps(l, l, _MM_SHUFFLE(0, 0, 0, 0));
-    __m128 l_yyyy = _mm_shuffle_ps(l, l, _MM_SHUFFLE(1, 1, 1, 1));
-    __m128 l_zzzz = _mm_shuffle_ps(l, l, _MM_SHUFFLE(2, 2, 2, 2));
-
-    __m128 r_wzyx = _mm_shuffle_ps(r, r, _MM_SHUFFLE(3, 2, 1, 0));
-    __m128 r_zwxy = _mm_shuffle_ps(r, r, _MM_SHUFFLE(2, 3, 0, 1));
-    __m128 r_yxwz = _mm_shuffle_ps(r, r, _MM_SHUFFLE(1, 0, 3, 2));
-
-    __m128 m0 = _mm_mul_ps(l_wwww, r);
-    __m128 m1 = _mm_mul_ps(l_xxxx, r_wzyx);
-    __m128 m2 = _mm_mul_ps(l_yyyy, r_zwxy);
-    __m128 m3 = _mm_mul_ps(l_zzzz, r_yxwz);
-
-    // Sign patterns for multiplication components
-    __m128 s1 = _mm_setr_ps( 1.0f, -1.0f,  1.0f, -1.0f);
-    __m128 s2 = _mm_setr_ps( 1.0f,  1.0f, -1.0f, -1.0f);
-    __m128 s3 = _mm_setr_ps(-1.0f,  1.0f,  1.0f, -1.0f);
-
-    __m128 q_res = _mm_add_ps(m0, _mm_mul_ps(m1, s1));
-    q_res = _mm_add_ps(q_res, _mm_mul_ps(m2, s2));
-    q_res = _mm_add_ps(q_res, _mm_mul_ps(m3, s3));
-
-    _mm_store_ps(result.arr, q_res);
-#else
-    f32 x1 = lhs.x, y1 = lhs.y, z1 = lhs.z, w1 = lhs.w;
-    f32 x2 = rhs.x, y2 = rhs.y, z2 = rhs.z, w2 = rhs.w;
-
-    result.x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2;
-    result.y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2;
-    result.z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2;
-    result.w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2;
-#endif
-    return result;
-}
-
-Mat4 quat_to_matrix(Quat quat)
-{
-    Mat4 mat;
-    f32* m = mat.data;
-
-    f32 x = quat.arr[0], y = quat.arr[1], z = quat.arr[2], w = quat.arr[3];
-    
-    f32 xx = x * x, xy = x * y, xz = x * z, xw = x * w;
-    f32 yy = y * y, yz = y * z, yw = y * w;
-    f32 zz = z * z, zw_val = z * w;
-
-    // Row 0
-    m[0] = 1.0f - 2.0f * (yy + zz);
-    m[1] = 2.0f * (xy - zw_val);
-    m[2] = 2.0f * (xz + yw);
-    m[3] = 0.0f;
-
-    // Row 1
-    m[4] = 2.0f * (xy + zw_val);
-    m[5] = 1.0f - 2.0f * (xx + zz);
-    m[6] = 2.0f * (yz - xw);
-    m[7] = 0.0f;
-
-    // Row 2
-    m[8]  = 2.0f * (xz - yw);
-    m[9]  = 2.0f * (yz + xw);
-    m[10] = 1.0f - 2.0f * (xx + yy);
-    m[11] = 0.0f;
-
-    // Row 3 (Translation block remains completely baseline identity)
-    m[12] = 0.0f;
-    m[13] = 0.0f;
-    m[14] = 0.0f;
-    m[15] = 1.0f;
-
-    return mat;
 }
 
 // Underlying operations.

@@ -154,8 +154,8 @@ struct Vec2
     Vec2 normalize();
     void negate_inplace();
     void normalize_inplace();
-    f32 magninute();
-    f32 magninute_square();
+    f32 magnitude();
+    f32 magnitude_squared();
     void print(LogLevel level = LogLevel::DEBUG);
 
     Vec2 operator-() { Vec2 res(*this); res.negate(); return res; }
@@ -273,8 +273,8 @@ struct Vec3
     Vec3 normalize();
     void negate_inplace();
     void normalize_inplace();
-    f32 magninute();
-    f32 magninute_square();
+    f32 magnitude();
+    f32 magnitude_squared();
     void print(LogLevel level = LogLevel::DEBUG);
 
     Vec3 operator-() { Vec3 res(*this); res.negate(); return res; }
@@ -399,8 +399,8 @@ struct alignas(16) Vec4
     Vec4 normalize();
     void negate_inplace();
     void normalize_inplace();
-    f32 magninute();
-    f32 magninute_square();
+    f32 magnitude();
+    f32 magnitude_squared();
     void print(LogLevel level = LogLevel::DEBUG);
 
     Vec4 operator-() { Vec4 res(*this); res.negate(); return res; }
@@ -468,23 +468,36 @@ struct Quat : Vec4
     {
         return { 0, 0, 0, 1 };
     }
+    static Quat create_angle_axis(f32 angle_deg, Vec3 axis);
     static Quat create_euler(f32 pitch_deg, f32 yaw_deg, f32 roll_deg);
     static Quat create_pitch(f32 pitch_deg);
     static Quat create_yaw(f32 yaw_deg);
     static Quat create_roll(f32 roll_deg);
     static Quat create_from_matrix(const Mat4& mat);
 
+    Vec3 rotate_point(Vec3 point);
     void rotate(Vec3 angles_deg, Array<RotationAxis, 3> order);
     void rotate(f32 pitch_deg, f32 yaw_deg, f32 roll_deg, Array<RotationAxis, 3> order);
     void rotate_x(f32 pitch_deg);
     void rotate_y(f32 yaw_deg);
     void rotate_z(f32 roll_deg);
-    Quat conjugate() const; 
+    Quat conjugate(); 
+    Quat inverse();
+    void inverse_inplace();
+    Quat normalize();
+    void normalize_inplace();
+
+    Quat& operator*=(Quat rhs);
 };
 
-// Matrix4x4.
-// Multiplication order with vector: Matrix * Vector. (Row-major)
-// Implements right-handed [0, 1] perspective.
+Quat operator*(Quat lhs, Quat rhs);
+
+/*
+ Matrix4x4.
+ Stored and used in the shader as row-major.
+ Multiplication order with vector: Vector * Matrix.
+ Perspective: right-handed [0, 1].
+*/
 
 struct alignas(16) Mat4 : Array<f32, 16>
 {

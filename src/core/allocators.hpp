@@ -128,16 +128,43 @@ void vmem_free(Allocator* self, void* ptr);
 void vmem_display_info(Allocator* self);
 
 // Heap allocator - wrapper over c-stdlib allocator
-// Stateless, so can't handle alignment.
+// Only used for testing, so ASan and other tools can catch bugs better.
+
+struct HeapNode
+{
+    HeapNode* next;
+private:
+    BitInt<u64> bits;
+public:
+    u64 size() { return this->bits.get_mask(BIT_MASK_64_HIGH_56); }
+    u8 padding() { return (u8)this->bits.get_mask(BIT_MASK_64_LOW_8); };
+    Pair<u64, u8> size_and_padding() { return { this->size(), this->padding() }; }
+
+    void set_size(u64 new_size) { this->bits.set_mask(new_size, BIT_MASK_64_HIGH_56); }
+    void set_padding(u8 new_padding) { this->bits.set_mask(u64(new_padding), BIT_MASK_64_LOW_8); };
+    void set_size_and_padding(u64 size, u8 padding)
+    {
+        this->set_size(size);
+        this->set_padding(padding);
+    }
+    u8* mem_begin() { return (u8*)(this + sizeof(*this) + this->padding()); };
+    u8* mem_end() { return (u8*)this->mem_begin() + this->size(); };
+};
 
 struct HeapAlloc final : Allocator
 {
+    static constexpr sz DEFAULT_CAPACITY = 4096;
+    
+    HeapNode* root;
+    Mutex mutex;
+
     void init();
+    void destroy();
 };
 
 void* heap_allocate(Allocator* self, sz size, sz alignment = 0, bool zero_mem = false);
 void* heap_reallocate(Allocator* self, void* ptr, sz new_size, sz alignment = 0);
-[[noreturn]] bool heap_resize(Allocator* self, void* ptr, sz new_size, sz alignment = 0);
+bool heap_resize(Allocator* self, void* ptr, sz new_size, sz alignment = 0);
 void heap_free(Allocator* self, void* ptr);
 void heap_display_info(Allocator* self);
 

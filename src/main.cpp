@@ -1,6 +1,7 @@
 #include "core/basic.hpp"
 #include "core/conversions.hpp"
 #include "engine/entry.hpp"
+// #include "core/math.hpp"
 
 using namespace rg;
 
@@ -10,6 +11,10 @@ s32 main()
     if (!application_init(config)) PANIC("Failed to init application");
     defer(application_destroy());
     application_run();
+
+    // Quat q = Quat::create_euler(30.0f, 45.0f, 45.0f);
+    // Mat4 m = quat_to_matrix(q);
+    // printfn("%f %f", m[4], m[9]);
 
 // Bitsets.
      // HeapAlloc heap;

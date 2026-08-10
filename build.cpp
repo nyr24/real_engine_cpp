@@ -117,6 +117,10 @@ int main(int argc, char **argv)
         cmd.add_define("RG_HIDE_CURSOR");
     }
 
+    if (use_sanitizer) {
+        cmd.add_define("RG_ASAN");
+    }
+
     LocalArray<StrView> debug_defines;
     debug_defines.push("RG_DEBUG");
 
@@ -195,7 +199,7 @@ int main(int argc, char **argv)
             cmd.appendf("slangc %.*s ", (s32)path.count(), path.data());
             s32 dot_idx = file.name.find_first('.');
             StrView output_file_name = file.name.sub_view(0, dot_idx);
-            cmd.appendf("-target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name %s -o %s/%.*s.spv",
+            cmd.appendf("-target spirv -profile spirv_1_4 -emit-spirv-directly -matrix-layout-row-major -fvk-use-entrypoint-name %s -o %s/%.*s.spv",
                 shader_entry,
                 SHADERS_BUILD_DIR,
                 (s32)output_file_name.size, output_file_name.data);

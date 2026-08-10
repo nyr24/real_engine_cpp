@@ -491,57 +491,77 @@ const AllocatorVtable HEAP_VTABLE = {
 void HeapAlloc::init()
 {
     this->vtable = &HEAP_VTABLE;
+    this->root = null;
+    this->mutex.init();
+}
+
+void HeapAlloc::destroy()
+{
+    if (!this->root) return;
+
+    HeapNode* curr = this->root;
+    u8* ptr_to_free;
+    HeapNode* next;
+
+    while (curr)
+    {
+        next = curr->next;
+        ptr_to_free = (u8*)curr - curr->padding();
+        ::free(ptr_to_free);
+        curr = next;
+    }
+
+    this->root = null;
+    this->mutex.destroy();
 }
 
 void* heap_allocate(Allocator* self, sz size, sz alignment, bool zero_mem)
 {
     ASSERT_MSG(size >= 0, "Allocation size should be greater than zero");
-    
-    if (alignment > 0)
+
+    auto* heap = (HeapAlloc*)self;
+    HeapNode** place = &heap->root;
+
+    heap->mutex.lock();
+    defer(heap->mutex.unlock());
+
+    while (*place)
     {
-        alignment = alignment_for_allocation(alignment);
-        void* unaligned_ptr = malloc(size + alignment);  
-        void* aligned_ptr = align_ptr(unaligned_ptr, alignment);
-        if (zero_mem) mem_zero(aligned_ptr, size);
-        return aligned_ptr;
+        place = &(*place)->next;
     }
-    else
-    {
-        void* ret = malloc(size);
-        if (zero_mem) mem_zero(ret, size);
-        return ret;
-    }
+
+    alignment = alignment_for_allocation(alignment);
+    size = align(size, sizeof(void*));
+
+    HeapNode* ptr = (HeapNode*)::malloc(size + alignment + sizeof(HeapNode));
+    HeapNode* header = align_ptr(ptr + 1, alignment);
+    header--;
+    header->set_size(size);
+    sz padding = (uptr)header - (uptr)ptr;
+    header->set_padding((u8)padding);
+    header->next = null;
+    (*place) = header;
+
+    if (zero_mem) mem_zero(header->mem_begin(), size); 
+    return header->mem_begin();
 }
 
+// Made as no-op for simplicity.
+// Freeing memory happens at destroy()
 void heap_free(Allocator* self, void* ptr)
 {
-    ASSERT_MSG(ptr != null, "Pointer to free mustn't be null");
-    free(ptr);
-    ptr = null;
+    // ASSERT_MSG(ptr != null, "Pointer to free mustn't be null");
 }
 
-[[noreturn]]
 bool heap_resize(Allocator* self, void* ptr, sz new_size, sz alignment)
 {
-    PANIC("Can't reliably resize allocation from heap allocator");
+    return false;
 }
 
 void* heap_reallocate(Allocator* self, void* ptr, sz new_size, sz alignment)
 {
-    ASSERT_MSG(ptr != null, "Pointer must be non-null");
-    ASSERT_MSG(new_size > 0, "New size must be greater than zero");
-
-    if (alignment)
-    {
-        alignment = alignment_for_allocation(alignment);
-        ptr = realloc(ptr, new_size + alignment);
-        align_ptr(ptr, alignment);
-        return ptr;
-    }
-    else
-    {
-        return realloc(ptr, new_size);
-    }
+    auto* heap = (HeapAlloc*)self;
+    return heap_allocate(heap, new_size, alignment);
 }
 
 void heap_display_info(Allocator* self) {}
