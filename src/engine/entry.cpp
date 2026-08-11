@@ -15,11 +15,7 @@ intern constexpr sz APP_MEMORY_CAPACITY = PERSISTENT_MEMORY_CAPACITY + FRAME_MEM
 intern Context context;
 intern thread_local Arena* temp_allocator;
 intern EngineContext engine_context;
-#ifdef RG_ASAN
-intern HeapAlloc main_allocator;
-#else
 intern VmemAllocator* main_allocator;
-#endif
 
 intern void context_init(Allocator* allocator);
 intern void context_destroy();
@@ -68,13 +64,8 @@ Allocator* get_main_allocator()
 
 bool application_init(AppConfig config)
 {
-#ifdef RG_ASAN
-    main_allocator.init();
-    context_init(&main_allocator);
-#else
-    main_allocator = VmemAllocator::create(APP_MEMORY_CAPACITY));
+    main_allocator = VmemAllocator::create(APP_MEMORY_CAPACITY);
     context_init(main_allocator);
-#endif
     init_temp_allocator(context.allocator);
     if (!engine_context_init(&context, config)) return false;
     return true;
@@ -101,11 +92,7 @@ void application_destroy()
 {
     engine_context_destroy();
     context_destroy();
-#ifdef RG_ASAN
-    main_allocator.destroy();
-#else
     main_allocator->destroy();
-#endif
 }
 
 // Engine context.
@@ -144,6 +131,7 @@ bool engine_context_init(Context* ctx, AppConfig config)
 void engine_context_destroy()
 {
     EngineContext* engine_context = get_engine_context();
+	engine_context->vk_ctx.dev.wait_idle();
 
     engine_context->renderer.destroy();
 

@@ -117,21 +117,21 @@ void Vec2::normalize_inplace()
 
 Vec2 Vec2::negate()
 {
-    Vec2 res;
+    Vec2 res = *this;
     res.negate_inplace();
     return res;
 }
 
 Vec2 Vec2::normalize()
 {
-    Vec2 res;
+    Vec2 res = *this;
     res.normalize_inplace();
     return res;
 }
 
 f32 Vec2::magnitude()
 {
-    return sqrt(this->magnitude_squared());
+    return rg::sqrt(this->magnitude_squared());
 }
 
 f32 Vec2::magnitude_squared()
@@ -431,14 +431,14 @@ void Vec3::normalize_inplace()
 
 Vec3 Vec3::negate()
 {
-    Vec3 res;
+    Vec3 res = *this;
     res.negate_inplace();
     return res;
 }
 
 Vec3 Vec3::normalize()
 {
-    Vec3 res;
+    Vec3 res = *this;
     res.normalize_inplace();
     return res;
 }
@@ -819,21 +819,21 @@ void Vec4::normalize_inplace()
 
 Vec4 Vec4::negate()
 {
-    Vec4 res;
+    Vec4 res = *this;
     res.negate_inplace();
     return res;
 }
 
 Vec4 Vec4::normalize()
 {
-    Vec4 res;
+    Vec4 res = *this;
     res.normalize_inplace();
     return res;
 }
 
 f32 Vec4::magnitude()
 {
-    return sqrt(this->magnitude_squared());
+    return rg::sqrt(this->magnitude_squared());
 }
 
 f32 Vec4::magnitude_squared()
@@ -989,22 +989,6 @@ Mat4 Mat4::scale(Vec3 v) const
     return res;
 }
 
-// Mat4 Mat4::look_at(Vec3 eye, Vec3 target, Vec3 up)
-// {
-// 	Vec3 vz = (eye - target).normalize();
-// 	Vec3 vx = vec_cross(up, vz).normalize();
-// 	Vec3 vy = vec_cross(vz, vx);
-
-// 	return {
-// 		vx.x, vx.y, vx.z, 0,
-// 		vy.x, vy.y, vy.z, 0,
-// 		vz.x, vz.y, vz.z, 0,
-// 		vec_dot(-vx, eye), vec_dot(-vy, eye), vec_dot(-vz, eye), 1
-// 	};
-// }
-
-// NOTE: glm version
-
 Mat4 Mat4::look_at(Vec3 eye, Vec3 target, Vec3 up)
 {
 	Vec3 f = (target - eye).normalize();
@@ -1042,13 +1026,13 @@ Mat4 Mat4::ortho(f32 left, f32 right, f32 bottom, f32 top, f32 z_near, f32 z_far
 // Implements right-handed [0, 1] perspective
 Mat4 Mat4::perspective(f32 fovy, f32 aspect, f32 z_near, f32 z_far)
 {
-	f32 tanHalfFovy = tan(fovy / (f32)(2));
+	f32 tanHalfFovy = tan(fovy / 2.0f);
 	Mat4 res = {};
-	res[0] = (f32)(1) / (aspect * tanHalfFovy);
-	res[5] = (f32)(1) / (tanHalfFovy);
+	res[0] = 1.0f / (aspect * tanHalfFovy);
+	res[5] = 1.0f / (tanHalfFovy);
 	res[10] = - (z_far + z_near) / (z_far - z_near);
-	res[11] = - (f32)(1);
-	res[14] = - ((f32)(2) * z_far * z_near) / (z_far - z_near);
+	res[11] = - 1.0f;
+	res[14] = - (2.0f * z_far * z_near) / (z_far - z_near);
 	return res;
 }
 
@@ -1497,7 +1481,7 @@ void Quat::inverse_inplace()
 
 Quat Quat::inverse()
 {
-    Quat res;
+    Quat res = *this;
     res.inverse_inplace();
     return res;
 }
@@ -1522,7 +1506,7 @@ Vec3 Quat::rotate_point(Vec3 v)
 
 Quat Quat::normalize()
 {
-    Quat res;
+    Quat res = *this;
     res.normalize_inplace();
     return res;
 }

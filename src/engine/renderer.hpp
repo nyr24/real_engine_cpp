@@ -115,10 +115,11 @@ struct ElementBuffer
 
 struct Camera
 {
-    static constexpr f32 DEFAULT_SPEED = 128.0f;
-    static constexpr f32 ZOOM_SPEED = 100.0f;
-    static constexpr f32 ZOOM_MIN = 0.1f;
-    static constexpr f32 ZOOM_MAX = 300.0f;
+    static constexpr f32 DEFAULT_SPEED = 32.0f;
+    static constexpr f32 ZOOM_SPEED = deg_to_rad(1.0f);
+    static constexpr f32 DEFAULT_ZOOM = deg_to_rad(45.0f);
+    static constexpr f32 ZOOM_MIN = deg_to_rad(0.1f);
+    static constexpr f32 ZOOM_MAX = deg_to_rad(300.0f);
 
 	Vec3 pos;
 	Vec3 target;
@@ -132,7 +133,7 @@ struct Camera
 	f32 mouse_sensivity;
 	bool dirty;
 
-    void init(Vec3 pos, Vec3 target, f32 speed = DEFAULT_SPEED, f32 zoom = 45.0f);
+    void init(Vec3 pos, Vec3 target, f32 speed = DEFAULT_SPEED, f32 zoom = DEFAULT_ZOOM);
     Mat4 look_at();
     void handle_mouse_move(f32 delta_x, f32 delta_y);
     void handle_key_down(u32 key, Nanoseconds delta_time_ns);
@@ -303,7 +304,7 @@ struct Renderer
     SwapchainPresentResult begin_frame();
     void draw_frame();
     bool end_frame();
-    void update_view_perspective();
+    void update_view_projection();
     void destroy();
 
     void start_clock()

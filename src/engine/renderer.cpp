@@ -244,7 +244,7 @@ void Camera::handle_mouse_move(f32 delta_x, f32 delta_y)
 
 void Camera::handle_key_down(u32 key, Nanoseconds delta_time_ns)
 {
-	intern constexpr f32 DELTA_TIME_MULTIPLIER = (f32)1 / 1000'000'000;
+	intern constexpr f32 DELTA_TIME_MULTIPLIER = (f32)1 / 1000'000'00;
 	f32 velocity = this->speed * delta_time_ns * DELTA_TIME_MULTIPLIER;
 
 	switch (key)
@@ -272,9 +272,6 @@ void Camera::handle_key_down(u32 key, Nanoseconds delta_time_ns)
 // which matrix updates are triggerred by camera updates (view, proj, both)
 void Camera::handle_mouse_wheel(bool delta)
 {
-	// NOTE: TEMP
-	LOG_DEBUG("wheel event: delta: %u", (u32)delta);
-
 	if (delta)
 	{
 		this->zoom += Camera::ZOOM_SPEED;
@@ -481,6 +478,7 @@ void EntitySystem::init(Allocator* alloc, sz init_capacity)
 	this->scales.init(alloc, init_capacity);
 	this->rotations.init(alloc, init_capacity);
 	this->rotation_updates.init(alloc, init_capacity);
+	this->alloc = alloc;
 }
 
 u32 EntitySystem::add_position_and_velocity(Vec3 pos, Vec3 vel)
@@ -610,7 +608,7 @@ void Renderer::init(VkExtent2D init_area, ColorRGBA init_clear_color)
 	this->elem_buff.init(INIT_ELEM_BUFF_CAPACITY);
 
 	this->camera.init({ 0, 0.5, 4 }, DIRECTION_FAR);
-	this->update_view_perspective();
+	this->update_view_projection();
 
 	init_event_handlers(this, &engine_ctx->event_sys);
 
@@ -668,7 +666,7 @@ intern void perform_startup_load(Renderer* renderer)
 		auto* talloc = get_temp_allocator();
 		TEMP_ALLOC_SCOPE(talloc);
 
-		engine_ctx->tex_sys.load_new_textures_cpu_and_transfer_to_gpu(tex_configs.slice(), frame->transfer_cmd_buffs.slice());
+		engine_ctx->tex_sys.load_new_textures_cpu_and_transfer_to_gpu(tex_configs.slice(), frame->transfer_cmd_buffs[0]);
 
 		constexpr sz TRANSFORM_COUNT = 5;
 
@@ -774,8 +772,8 @@ void Renderer::draw_frame()
 	glfwPollEvents();
 
 	// Apply physics
-	// engine_ctx->en_sys.apply_velocities();
-	engine_ctx->en_sys.apply_rotations();
+	engine_ctx->en_sys.apply_velocities();
+	// engine_ctx->en_sys.apply_rotations();
 
 	// NOTE: temp 0 buffer, maybe should be different.
 	VulkanCmdBuffer* transfer_cmd_buff    = &frame->transfer_cmd_buffs[0];
@@ -795,7 +793,7 @@ void Renderer::draw_frame()
 		// {
 		// 	engine_ctx->input_sys.accept_move_events = true;
 		// }
-		this->update_view_perspective();
+		this->update_view_projection();
 	}
 
 	// TODO: remove copying data every frame, use task system.
@@ -1022,10 +1020,10 @@ intern void end_rendering(VulkanContext* vk_ctx, VulkanCmdBuffer cmd_buffer)
 
 // --- Global descriptors (view & projection matrices)
 
-void Renderer::update_view_perspective()
+void Renderer::update_view_projection()
 {
 	this->view = this->camera.look_at();
-	this->proj = Mat4::perspective(rg::deg_to_rad(45.0f), this->aspect_ratio(), 0.1f, 100.0f);
+	this->proj = Mat4::perspective(this->camera.zoom, this->aspect_ratio(), 0.1f, 100.0f);
 	this->set_resize_scheduled(false);
 	this->camera.dirty = false;
 }
@@ -1190,159 +1188,5 @@ intern GltfSampler get_default_gltf_sampler()
 {
 	return { .mag_filter = GltfSamplerMagFilter::LINEAR, .min_filter = GltfSamplerMinFilter::LINEAR_MIPMAP_LINEAR, .wrap_s = GltfSamplerWrapKind::REPEAT, .wrap_t = GltfSamplerWrapKind::REPEAT, };
 }
-
-// intern bool handle_model_load(EventContext ctx, void* listener)
-// {
-// 	Renderer* renderer = (Renderer*)listener;
-// 	u32 key                 = ctx.as_u32[0];
-
-// 	if (key == MODEL_LOAD_KEY)
-// 	{
-// 		Path[] paths     = f_arena.alloc_array(Path, 1);
-// 		Path? model_path = path::new(f_arena, MODELS_PATH +++ "scifi_helmet/SciFiHelmet.gltf");
-// 		if (catch model_path) return false;
-// 		paths[0] = model_path;
-
-// 		LoadModelsTaskData task_data = { .paths = paths, .engine_ctx->= renderer.engine_ctx-> };
-
-// 		BackgroundTask task = { .kind = LOAD_MODELS, .payload = { .load_models = task_data }, };
-// 		renderer_add_background_task(renderer, task);
-// 	}
-
-// 	return false;
-// }
-
-// --- Background task system ---
-
-// struct BackgroundTask
-// {
-// 	BackgroundTaskKind kind;
-// 	BackgroundTaskPayload payload;
-// }
-
-// enum BackgroundTaskKind
-// {
-// 	LOAD_MODELS
-// }
-
-// union BackgroundTaskPayload
-// {
-// 	BackgroundTaskLoadModels load_models;
-// }
-
-// struct BackgroundTaskLoadModels
-// {
-// 	Path[] paths;
-// }
-
-// intern void renderer_add_background_task(Renderer* self, BackgroundTask task)
-// {
-// 	self.background_tasks.push(task);
-// }
-
-// intern void renderer_process_background_tasks(void* arg)
-// {
-// 	Renderer* self = arg;
-// 	BackgroundTask task @noinit;
-
-// 	while (!self.background_tasks.is_empty())
-// 	{
-// 		task = self.background_tasks.pop_first_ensure();
-// 		switch (task.kind)
-// 		{
-// 			// NOTE: TEMP
-// 			case LOAD_MODELS: renderer_process_background_load_models_task(self, task.payload.load_models);
-// 			// case LOAD_MODELS: renderer_process_background_load_models_task_temp(self, task);
-// 			default: UNREACHABLE("TODO: execute background task with kind: %s", task.kind);
-// 		}
-// 	}
-
-// 	// TODO + THINK: wait for execution here?
-// }
-
-// intern void renderer_process_background_load_models_task(Renderer* self, BackgroundTaskLoadModels payload)
-// {
-// 	App* engine_ctx->                 = self.engine_ctx->
-// 	MainThreadPool* tpool         = &engine_ctx->tpool;
-// 	LoadModelsTaskData[] task_data = f_arena.alloc_array(LoadModelsTaskData, payload.paths.len);
-// 	ThreadTask[] thread_tasks     = f_arena.alloc_array(ThreadTask, payload.paths.len);
-
-// 	foreach (i, &task : thread_tasks)
-// 	{
-// 		task_data[i].path = payload.paths[i];
-// 		task_data[i].engine_ctx->= self.engine_ctx->
-// 		task.func = &gltf::load_model_task;
-// 		task.arg = &task_data[i];
-// 	}
-	
-// 	// Submit, without wait.
-// 	tpool.submit_task_many(thread_tasks);
-// }
-
-// <*
-//  Loads resources at application startup.
-// *>
-// intern void renderer_perform_startup_load(Renderer* renderer)
-// {
-// 	GeometryView cube_geometry = renderer.elem_buff.append_geometry_indexed(
-// 		engine::get_cube_vertices()[..],
-// 		engine::get_cube_indices(),
-// 	);
-
-// 	GltfSampler default_sampler = gltf::get_default_sampler();
-
-// 	// TODO: not effective, we're loading textures 1 by 1, creating threads for that.
-// 	// We should load them in 1 batch.
-// 	// TextureCreateConfig[*] tex_configs = {
-// 	// 	{ path::new(p_arena, engine::TEXTURES_PATH +++ "grass.jpg")!!, default_sampler, TEX_INDEX_INVALID, DIFFUSE },
-// 	// 	{ path::new(p_arena, engine::TEXTURES_PATH +++ "soil.jpg")!!, default_sampler, TEX_INDEX_INVALID, DIFFUSE },
-// 	// 	{ path::new(p_arena, engine::TEXTURES_PATH +++ "sand.jpg")!!, default_sampler, TEX_INDEX_INVALID, DIFFUSE },
-// 	// 	{ path::new(p_arena, engine::TEXTURES_PATH +++ "metal.jpg")!!, default_sampler, TEX_INDEX_INVALID, DIFFUSE },
-// 	// 	{ path::new(p_arena, engine::TEXTURES_PATH +++ "water.jpg")!!, default_sampler, TEX_INDEX_INVALID, DIFFUSE },
-// 	// 	{ path::new(p_arena, engine::TEXTURES_PATH +++ "stones.jpg")!!, default_sampler, TEX_INDEX_INVALID, DIFFUSE },
-// 	// };
-
-// 	App* engine_ctx->    = renderer.engine_ctx->
-// 	FrameData* frame = engine_ctx->vk_ctx.get_curr_frame_data();
-
-// 	cmd_buff_begin_recording_many(frame.transfer_cmd_buffs[..], frame.transfer_cmd_buff_states[..],);
-
-// 	t_arena.@temp_scope()
-// 	{
-// 		// engine_ctx->tex_sys.load_textures_cpu_and_transfer_to_gpu(
-// 		// 	engine_ctx->
-// 		// 	tex_configs[..],
-// 		// 	frame.transfer_cmd_buffs[..],
-// 		// 	frame.transfer_cmd_buff_states[..]
-// 		// );
-
-// 		// renderer.add_entity(cube_geometry, { tex_configs[0] }, entity::transform_tagged_create({ 0, 2, 0 }),);
-// 		// renderer.add_entity(cube_geometry, { tex_configs[1] }, entity::transform_tagged_create({ 2, 3.5, -3 }),);
-// 		// renderer.add_entity(cube_geometry, { tex_configs[2] }, entity::transform_tagged_create({ 0.7, -0.1, 0 }),);
-// 		// renderer.add_entity(cube_geometry, { tex_configs[3] }, entity::transform_tagged_create({ -0.1, 0.8, 0 }),);
-// 		// renderer.add_entity(cube_geometry, { tex_configs[4] }, entity::transform_tagged_create({ 0.4, 0.4, -1.0 }),);
-// 		// renderer.add_entity(cube_geometry, { tex_configs[5] }, entity::transform_tagged_create({ 0.7, 0.7, 1.0 }),);
-// 		// renderer.add_entity(cube_geometry, { tex_configs[2] }, entity::transform_tagged_create({ 0.7, 0.6, -3.0 }),);
-
-// 		// NOTE: TEMP -->
-// 		Path[] paths    = f_arena.alloc_array(Path, 1);
-// 		Path model_path = path::new(f_arena, MODELS_PATH +++ "scifi_helmet/SciFiHelmet.gltf")!!;
-// 		paths[0] = model_path;
-// 		LoadModelsTaskData task_data = { .paths = paths, .engine_ctx->= renderer.engine_ctx-> };
-// 		BackgroundTask task          = { .kind = LOAD_MODELS, .payload = { .load_models = task_data }, };
-// 		// TODO: this is not loading anything.
-// 		renderer_process_background_load_models_task(renderer, task);
-// 		// renderer_process_background_load_models_task_temp(renderer, task);
-// 		// NOTE: TEMP <--
-
-// 		cmd_buff_end_submit_reset_many(
-// 			frame.transfer_cmd_buffs[..],
-// 			frame.transfer_cmd_buff_states[..],
-// 			&engine_ctx->vk_ctx,
-// 			engine_ctx->vk_ctx.dev.transfer_queue,
-// 			true
-// 		);
-// 	};
-// }
 
 } // rg

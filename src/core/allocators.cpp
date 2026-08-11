@@ -80,7 +80,11 @@ const AllocatorVtable VMEM_VTABLE = {
 VmemAllocator* VmemAllocator::create(sz init_capacity)
 {
     init_capacity = rg::max(init_capacity, MIN_CAPACITY);
+#ifndef RG_ASAN
     auto* vmem = (VmemAllocator*)virtual_alloc(init_capacity + sizeof(VmemAllocator));
+#else
+    auto* vmem = (VmemAllocator*)::malloc(init_capacity + sizeof(VmemAllocator));
+#endif
     vmem->vtable = &VMEM_VTABLE;
     vmem->capacity = init_capacity;
     vmem->fallback_root = null;
@@ -103,7 +107,11 @@ void VmemAllocator::destroy()
 {
     this->fallback_free_all();
     this->mutex.destroy();
+#ifndef RG_ASAN
     virtual_free(this, this->capacity + sizeof(VmemAllocator));
+#else
+    ::free(this);
+#endif
 }
 
 void* vmem_allocate(Allocator* self, sz size_alloc, sz alignment, bool zero_mem)
@@ -691,7 +699,7 @@ void arena_display_info(Allocator* self)
 {
     Arena* arena = (Arena*)self;
     LOG_DEBUG("Arena allocator info:");
-    LOG_DEBUG("capacity: %ll, cursor: %ll, mark count: %ll",
+    LOG_DEBUG("capacity: %td, cursor: %td, mark count: %td",
         arena->capacity, arena->cursor, arena->mark_count);
 }
 

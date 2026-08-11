@@ -108,7 +108,7 @@ struct Window
 
 // Engine context.
 
-constexpr sz MAX_ENGINE_THREAD_POOL_TASKS = 64;
+constexpr sz MAX_THREAD_POOL_TASKS = 64;
 
 struct EngineContext
 {
@@ -121,7 +121,7 @@ struct EngineContext
     Window window;
     ThreadArena* frame_allocator;
     ThreadArena* persist_allocator;
-    ThreadPool<RG_THREAD_COUNT - 1, MAX_ENGINE_THREAD_POOL_TASKS> thread_pool;
+    ThreadPool<RG_THREAD_COUNT - 1, MAX_THREAD_POOL_TASKS> thread_pool;
     // NOTE: don't know, shared mutex is not very good idea
     Mutex mutex;
 };

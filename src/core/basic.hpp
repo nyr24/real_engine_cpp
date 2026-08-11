@@ -217,7 +217,7 @@ void set_log_scope(LogLevel level, CString fmt);
 void set_log_scope(LogLevel level);
 void reset_log_scope();
 
-#ifdef RG_DEBUG
+#if RG_DEBUG || RG_PRESERVE_LOGS
     #define LOG_INFO(fmt, ...) log_proc(LogLevel::INFO, fmt, ##__VA_ARGS__)
     #define LOG_TRACE(fmt, ...) log_proc(LogLevel::TRACE, fmt, ##__VA_ARGS__)
     #define LOG_DEBUG(fmt, ...) log_proc(LogLevel::DEBUG, fmt, ##__VA_ARGS__)

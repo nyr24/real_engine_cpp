@@ -19,6 +19,7 @@ const StrView COPY_ASSETS_OPT = "shaders";
 const StrView SANITIZER_OPT = "san";
 const StrView FORCE_REBUILD_OPT = "rebuild";
 const StrView HIDE_CURSOR_OPT = "no_cursor";
+const StrView PRESERVE_LOGS_OPT = "logs";
 
 int main(int argc, char **argv)
 {
@@ -28,6 +29,7 @@ int main(int argc, char **argv)
     bool use_sanitizer = false;
     bool force_rebuild = false;
     bool hide_cursor = false;
+    bool preserve_logs = false;
 
     if (argc > 1)
     {
@@ -37,6 +39,7 @@ int main(int argc, char **argv)
         use_sanitizer = is_argument_set(SANITIZER_OPT, argc, argv);
         force_rebuild = is_argument_set(FORCE_REBUILD_OPT, argc, argv);
         hide_cursor = is_argument_set(HIDE_CURSOR_OPT, argc, argv);
+        preserve_logs = is_argument_set(PRESERVE_LOGS_OPT, argc, argv);
     }
 
     if (!is_release) log_info("Starting debug build...\n");
@@ -73,7 +76,6 @@ int main(int argc, char **argv)
     shared_flags.push("-fno-exceptions");
     shared_flags.push("-fno-math-errno");
     shared_flags.push("-fstrict-aliasing");
-    // shared_flags.push("-fno-strict-aliasing");
 
     if (use_sanitizer)
     {
@@ -116,9 +118,11 @@ int main(int argc, char **argv)
         log_info("**hiding cursor**");
         cmd.add_define("RG_HIDE_CURSOR");
     }
-
     if (use_sanitizer) {
         cmd.add_define("RG_ASAN");
+    }
+    if (preserve_logs) {
+        cmd.add_define("RG_PRESERVE_LOGS");
     }
 
     LocalArray<StrView> debug_defines;

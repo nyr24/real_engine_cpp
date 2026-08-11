@@ -92,13 +92,13 @@ intern s32 worker(void* arg)
         while (tpool->task_queue.is_empty())
         {
             tpool->work_acquired.wait(&tpool->mutex);
-        }
-        if (tpool->is_stop_requested())
-        {
-            tpool->active_threads.unset(thread_idx);
-            tpool->thread_died.signal();
-            tpool->mutex.unlock();
-            break;
+            if (tpool->is_stop_requested())
+            {
+                tpool->active_threads.unset(thread_idx);
+                tpool->thread_died.signal();
+                tpool->mutex.unlock();
+                goto EXIT;
+            }
         }
         // Process the task.
         auto [task, is_ok] = tpool->task_queue.pop_safe();
@@ -111,6 +111,7 @@ intern s32 worker(void* arg)
         tpool->work_finished.signal();
     }
 
+    EXIT:
     return 0;
 }
 
@@ -177,22 +178,24 @@ void ThreadPool<THREAD_COUNT, MAX_TASKS>::await(bool called_from_thread_pool_thr
 template<sz THREAD_COUNT, sz MAX_TASKS>
 void ThreadPool<THREAD_COUNT, MAX_TASKS>::destroy()
 {
-    this->mutex.lock();
-    defer(this->mutex.unlock());
-    // TODO: Context->thread_id
-    this->set_stop();
-
-    while (this->active_threads.set_bit_count() != 0)
     {
-        this->work_acquired.broadcast();
-        this->thread_died.wait(&this->mutex);
-    }
+        this->mutex.lock();
+        defer(this->mutex.unlock());
+        this->set_stop();
 
-    this->active_threads.unset_all();
-    this->work_acquired.destroy();
-    this->work_finished.destroy();
-    this->thread_died.destroy();
-    this->tasks_in_progress = 0;
+        while (this->active_threads.set_bit_count() != 0)
+        {
+            this->work_acquired.broadcast();
+            this->thread_died.wait(&this->mutex);
+        }
+
+        this->active_threads.unset_all();
+        this->work_acquired.destroy();
+        this->work_finished.destroy();
+        this->thread_died.destroy();
+        this->tasks_in_progress = 0;
+    }
+    this->mutex.destroy();
 }
 
 

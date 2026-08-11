@@ -27,9 +27,13 @@ bool Texture::load_cpu(
 
 	ASSERT_MSG(this->load_state < TextureLoadState::LOADED_CPU_VISIBLE, "Texture init: it shouldn't be cpu loaded already, path: " FMT_PLACEHOLDER_LEN, FMT_DSTRING_VAL(this->path));
 
+	Arena* talloc = get_temp_allocator();
 	{
-		Arena* talloc = get_temp_allocator();
 		TEMP_ALLOC_SCOPE(talloc);
+
+		// NOTE: TEMP
+		LOG_DEBUG("Temp alloc state BEFORE: ");
+		allocator_display_info(talloc);
 
 		auto [texture_data, is_ok] = load_from_disk(this);
 		if (!is_ok)
@@ -44,7 +48,11 @@ bool Texture::load_cpu(
 		engine_ctx->mutex.lock();
 		this->buff_view = staging_buff->append_data(data_to_append.slice());
 		engine_ctx->mutex.unlock();
+
 	}
+	// NOTE: TEMP
+	LOG_DEBUG("Temp alloc state AFTER: ");
+	allocator_display_info(talloc);
 
 	this->load_state = TextureLoadState::LOADED_CPU_VISIBLE;
 
@@ -157,7 +165,7 @@ bool Texture::load_cpu_and_transfer_gpu(
 	return true;
 }
 
-intern s32 texture_load_cpu_and_transfer_gpu_task(void* arg)
+intern s32 texture_load_cpu_task(void* arg)
 {
 	auto* data = (TextureUploadTask*)arg;
 	if (!data->self->load_cpu(
@@ -166,7 +174,6 @@ intern s32 texture_load_cpu_and_transfer_gpu_task(void* arg)
 		data->staging_buff,
 		data->gltf_sampler
 	)) return 0;
-	data->self->cmd_transfer_to_gpu(data->cmd_buffer, data->vk_ctx, data->staging_buff);
 	return 1;
 }
 
@@ -217,12 +224,12 @@ void TextureSystem::init(Allocator* alloc, sz capacity)
 
 void TextureSystem::load_new_textures_cpu_and_transfer_to_gpu(
 	Slice<TextureCreateConfig> configs,
-	Slice<VulkanCmdBuffer> cmd_buffs
+	VulkanCmdBuffer cmd_buff
 )
 {
 	BENCH_SCOPE(b, "Texture loading");
-	
 	EngineContext* engine_ctx = get_engine_context();
+	
 	Arena* talloc = get_temp_allocator();
 	TEMP_ALLOC_SCOPE(talloc);
 
@@ -238,8 +245,6 @@ void TextureSystem::load_new_textures_cpu_and_transfer_to_gpu(
 
 	for (; curr_task != tasks_end;)
 	{
-		curr_cmd_buff = cmd_buffs[cmd_buff_idx];
-
 		auto [tex, idx] = this->textures.get_free_slot_and_idx();
 		curr_config->idx = idx;
 		curr_task->self = tex;
@@ -247,21 +252,27 @@ void TextureSystem::load_new_textures_cpu_and_transfer_to_gpu(
 		curr_task->vk_ctx = &engine_ctx->vk_ctx;
 		curr_task->staging_buff = &this->staging_buff;
 		curr_task->gltf_sampler = curr_config->gltf_sampler;
-		curr_task->cmd_buffer = curr_cmd_buff;
 
 		curr_thread_task->arg = curr_task;
-		curr_thread_task->fn = texture_load_cpu_and_transfer_gpu_task;
+		curr_thread_task->fn = texture_load_cpu_task;
 
 		++curr_task;
 		++curr_config;
 		++curr_thread_task;
-		// NOTE: its somehow possible to record a single buffer...
-		// wrap_inc_assume_pow_two(cmd_buff_idx, cmd_buffs.count);
 	}
 
 	engine_ctx->thread_pool.submit_task_many(thread_tasks);
 	// TODO: wait from IO thread.
 	engine_ctx->thread_pool.await();
+
+	// Transfer all to the gpu on the main thread.
+	curr_task = tasks.ptr;
+
+	for (; curr_task != tasks_end;)
+	{
+		curr_task->self->cmd_transfer_to_gpu(cmd_buff, &engine_ctx->vk_ctx, &this->staging_buff);
+		++curr_task;
+	}
 }
 
 inline StrView path_to_key(const Path& path)

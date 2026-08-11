@@ -158,7 +158,7 @@ struct Vec2
     f32 magnitude_squared();
     void print(LogLevel level = LogLevel::DEBUG);
 
-    Vec2 operator-() { Vec2 res(*this); res.negate(); return res; }
+    Vec2 operator-() { Vec2 res(*this); res.negate_inplace(); return res; }
     void operator+=(Vec2 b) { this->add_inplace(b); }
     void operator-=(Vec2 b) { this->sub_inplace(b); }
     void operator*=(Vec2 b) { this->mul_inplace(b); }
@@ -277,7 +277,7 @@ struct Vec3
     f32 magnitude_squared();
     void print(LogLevel level = LogLevel::DEBUG);
 
-    Vec3 operator-() { Vec3 res(*this); res.negate(); return res; }
+    Vec3 operator-() { Vec3 res(*this); res.negate_inplace(); return res; }
 
     void operator+=(Vec3 b) { this->add_inplace(b); }
     void operator-=(Vec3 b) { this->sub_inplace(b); }
@@ -403,7 +403,7 @@ struct alignas(16) Vec4
     f32 magnitude_squared();
     void print(LogLevel level = LogLevel::DEBUG);
 
-    Vec4 operator-() { Vec4 res(*this); res.negate(); return res; }
+    Vec4 operator-() { Vec4 res(*this); res.negate_inplace(); return res; }
 
     void operator+=(Vec4 b) { this->add_inplace(b); }
     void operator-=(Vec4 b) { this->sub_inplace(b); }

@@ -68,7 +68,6 @@ struct TextureUploadTask
 	VulkanContext* vk_ctx;
 	VulkanBufferCpu* staging_buff;
 	GltfSampler gltf_sampler;
-	VulkanCmdBuffer cmd_buffer;
 };
 
 // Texture system.
@@ -103,7 +102,7 @@ struct TextureSystem
 	// All textures are required to be new (not allocated on cpu / gpu) for this call.
 	void load_new_textures_cpu_and_transfer_to_gpu(
 		Slice<TextureCreateConfig> configs,
-		Slice<VulkanCmdBuffer> cmd_buffs
+		VulkanCmdBuffer cmd_buff
 	);
 	Maybe<Texture*> get_texture_by_path(const Path& path);
 	void remove_texture(TextureIdx idx);
