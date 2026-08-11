@@ -269,6 +269,8 @@ struct Vec3
     void div_inplace(f32 rhs);
     void mul_inplace(f32 rhs);
 
+    __m128 load() { return _mm_set_ps(0, z, y, x); }
+
     Vec3 negate();
     Vec3 normalize();
     void negate_inplace();

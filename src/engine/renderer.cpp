@@ -773,7 +773,7 @@ void Renderer::draw_frame()
 
 	// Apply physics
 	engine_ctx->en_sys.apply_velocities();
-	// engine_ctx->en_sys.apply_rotations();
+	engine_ctx->en_sys.apply_rotations();
 
 	// NOTE: temp 0 buffer, maybe should be different.
 	VulkanCmdBuffer* transfer_cmd_buff    = &frame->transfer_cmd_buffs[0];

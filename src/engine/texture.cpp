@@ -31,10 +31,6 @@ bool Texture::load_cpu(
 	{
 		TEMP_ALLOC_SCOPE(talloc);
 
-		// NOTE: TEMP
-		LOG_DEBUG("Temp alloc state BEFORE: ");
-		allocator_display_info(talloc);
-
 		auto [texture_data, is_ok] = load_from_disk(this);
 		if (!is_ok)
 		{
@@ -50,9 +46,6 @@ bool Texture::load_cpu(
 		engine_ctx->mutex.unlock();
 
 	}
-	// NOTE: TEMP
-	LOG_DEBUG("Temp alloc state AFTER: ");
-	allocator_display_info(talloc);
 
 	this->load_state = TextureLoadState::LOADED_CPU_VISIBLE;
 

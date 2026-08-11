@@ -172,13 +172,13 @@ Vec3 vec_add(Vec3 lhs, Vec3 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
     Vec3 res;
-    __m128 a = _mm_load_ps(lhs.arr);
-    __m128 b = _mm_load_ps(rhs.arr);
+    __m128 a = lhs.load();
+    __m128 b = rhs.load();
     __m128 add_res = _mm_add_ps(a, b);
     _mm_store_ps(res.arr, add_res);
     return res;
 #else
-    return { this->x + rhs.x, this->y + rhs.y, this->z + rhs.z };
+    return { lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z };
 #endif
 }
 
@@ -186,13 +186,13 @@ Vec3 vec_sub(Vec3 lhs, Vec3 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
     Vec3 res;
-    __m128 a = _mm_load_ps(lhs.arr);
-    __m128 b = _mm_load_ps(rhs.arr);
+    __m128 a = lhs.load();
+    __m128 b = rhs.load();
     __m128 sub_res = _mm_sub_ps(a, b);
     _mm_store_ps(res.arr, sub_res);
     return res;
 #else
-    return { this->x - rhs.x, this->y - rhs.y, this->z - rhs.z };
+    return { lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z };
 #endif
 }
 
@@ -200,13 +200,13 @@ Vec3 vec_mul(Vec3 lhs, Vec3 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
     Vec3 res;
-    __m128 a = _mm_load_ps(lhs.arr);
-    __m128 b = _mm_load_ps(rhs.arr);
+    __m128 a = lhs.load();
+    __m128 b = rhs.load();
     __m128 mul_res = _mm_mul_ps(a, b);
     _mm_store_ps(res.arr, mul_res);
     return res;
 #else
-    return { this->x * rhs.x, this->y * rhs.y, this->z * rhs.z };
+    return { lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z };
 #endif
 }
 
@@ -214,21 +214,21 @@ Vec3 vec_div(Vec3 lhs, Vec3 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
     Vec3 res;
-    __m128 a = _mm_load_ps(lhs.arr);
-    __m128 b = _mm_load_ps(rhs.arr);
+    __m128 a = lhs.load();
+    __m128 b = rhs.load();
     __m128 div_res = _mm_div_ps(a, b);
     _mm_store_ps(res.arr, div_res);
     return res;
 #else
-    return { this->x / rhs.x, this->y / rhs.y, this->z / rhs.z };
+    return { lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z };
 #endif
 }
 
 void Vec3::add_inplace(Vec3 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
-    __m128 a = _mm_load_ps(this->arr);
-    __m128 b = _mm_load_ps(rhs.arr);
+    __m128 a = this->load();
+    __m128 b = rhs.load();
     __m128 add_res = _mm_add_ps(a, b);
     _mm_store_ps(this->arr, add_res);
 #else
@@ -241,8 +241,8 @@ void Vec3::add_inplace(Vec3 rhs)
 void Vec3::sub_inplace(Vec3 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
-    __m128 a = _mm_load_ps(this->arr);
-    __m128 b = _mm_load_ps(rhs.arr);
+    __m128 a = this->load();
+    __m128 b = rhs.load();
     __m128 sub_res = _mm_sub_ps(a, b);
     _mm_store_ps(this->arr, sub_res);
 #else
@@ -255,8 +255,8 @@ void Vec3::sub_inplace(Vec3 rhs)
 void Vec3::mul_inplace(Vec3 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
-    __m128 a = _mm_load_ps(this->arr);
-    __m128 b = _mm_load_ps(rhs.arr);
+    __m128 a = this->load();
+    __m128 b = rhs.load();
     __m128 mul_res = _mm_mul_ps(a, b);
     _mm_store_ps(this->arr, mul_res);
 #else
@@ -269,8 +269,8 @@ void Vec3::mul_inplace(Vec3 rhs)
 void Vec3::div_inplace(Vec3 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
-    __m128 a = _mm_load_ps(this->arr);
-    __m128 b = _mm_load_ps(rhs.arr);
+    __m128 a = this->load();
+    __m128 b = rhs.load();
     __m128 div_res = _mm_div_ps(a, b);
     _mm_store_ps(this->arr, div_res);
 #else
@@ -292,13 +292,13 @@ Vec3 vec_add(Vec3 lhs, f32 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
     Vec3 res;
-    __m128 a = _mm_load_ps(lhs.arr);
+    __m128 a = lhs.load();
     __m128 b = _mm_set1_ps(rhs);
     __m128 add_res = _mm_add_ps(a, b);
     _mm_store_ps(res.arr, add_res);
     return res;
 #else
-    return { this->x + rhs.x, this->y + rhs.y, this->z + rhs.z };
+    return { lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z };
 #endif
 }
 
@@ -306,13 +306,13 @@ Vec3 vec_sub(Vec3 lhs, f32 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
     Vec3 res;
-    __m128 a = _mm_load_ps(lhs.arr);
+    __m128 a = lhs.load();
     __m128 b = _mm_set1_ps(rhs);
     __m128 sub_res = _mm_sub_ps(a, b);
     _mm_store_ps(res.arr, sub_res);
     return res;
 #else
-    return { this->x - rhs.x, this->y - rhs.y, this->z - rhs.z };
+    return { lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z };
 #endif
 }
 
@@ -320,13 +320,13 @@ Vec3 vec_mul(Vec3 lhs, f32 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
     Vec3 res;
-    __m128 a = _mm_load_ps(lhs.arr);
+    __m128 a = lhs.load();
     __m128 b = _mm_set1_ps(rhs);
     __m128 mul_res = _mm_mul_ps(a, b);
     _mm_store_ps(res.arr, mul_res);
     return res;
 #else
-    return { this->x * rhs.x, this->y * rhs.y, this->z * rhs.z };
+    return { lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z };
 #endif
 }
 
@@ -334,20 +334,20 @@ Vec3 vec_div(Vec3 lhs, f32 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
     Vec3 res;
-    __m128 a = _mm_load_ps(lhs.arr);
+    __m128 a = lhs.load();
     __m128 b = _mm_set1_ps(rhs);
     __m128 div_res = _mm_div_ps(a, b);
     _mm_store_ps(res.arr, div_res);
     return res;
 #else
-    return { this->x / rhs.x, this->y / rhs.y, this->z / rhs.z };
+    return { lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z };
 #endif
 }
 
 void Vec3::add_inplace(f32 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
-    __m128 a = _mm_load_ps(this->arr);
+    __m128 a = this->load();
     __m128 b = _mm_set1_ps(rhs);
     __m128 add_res = _mm_add_ps(a, b);
     _mm_store_ps(this->arr, add_res);
@@ -361,7 +361,7 @@ void Vec3::add_inplace(f32 rhs)
 void Vec3::sub_inplace(f32 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
-    __m128 a = _mm_load_ps(this->arr);
+    __m128 a = this->load();
     __m128 b = _mm_set1_ps(rhs);
     __m128 sub_res = _mm_sub_ps(a, b);
     _mm_store_ps(this->arr, sub_res);
@@ -375,7 +375,7 @@ void Vec3::sub_inplace(f32 rhs)
 void Vec3::mul_inplace(f32 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
-    __m128 a = _mm_load_ps(this->arr);
+    __m128 a = this->load();
     __m128 b = _mm_set1_ps(rhs);
     __m128 mul_res = _mm_mul_ps(a, b);
     _mm_store_ps(this->arr, mul_res);
@@ -389,7 +389,7 @@ void Vec3::mul_inplace(f32 rhs)
 void Vec3::div_inplace(f32 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
-    __m128 a = _mm_load_ps(this->arr);
+    __m128 a = this->load();
     __m128 b = _mm_set1_ps(rhs);
     __m128 div_res = _mm_div_ps(a, b);
     _mm_store_ps(this->arr, div_res);
@@ -403,7 +403,7 @@ void Vec3::div_inplace(f32 rhs)
 void Vec3::negate_inplace()
 {
 #ifdef RG_FEATURE_SIMD_128
-    __m128 a = _mm_load_ps(this->arr);
+    __m128 a = this->load();
     __m128 b = _mm_set1_ps(-1.0f);
     __m128 mul_res = _mm_mul_ps(a, b);
     _mm_store_ps(this->arr, mul_res);
@@ -418,7 +418,7 @@ void Vec3::normalize_inplace()
 {
     f32 mag_inv = 1 / this->magnitude();
 #ifdef RG_FEATURE_SIMD_128
-    __m128 a = _mm_load_ps(this->arr);
+    __m128 a = this->load();
     __m128 b = _mm_set1_ps(mag_inv);
     __m128 mul_res = _mm_mul_ps(a, b);
     _mm_store_ps(this->arr, mul_res);
@@ -446,11 +446,11 @@ Vec3 Vec3::normalize()
 f32 vec_dot(Vec3 lhs, Vec3 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
-    __m128 a = _mm_load_ps(lhs.arr);
-    __m128 b = _mm_load_ps(rhs.arr);
+    __m128 a = lhs.load();
+    __m128 b = rhs.load();
     return dot_f128(a, b);
 #else
-    return this->x * rhs.x + this->y * rhs.y + this->z * rhs.z;
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
 #endif
 }
 
@@ -458,16 +458,16 @@ Vec3 vec_cross(Vec3 lhs, Vec3 rhs)
 {
 #ifdef RG_FEATURE_SIMD_128
     Vec3 res;
-    __m128 a = _mm_load_ps(lhs.arr);
-    __m128 b = _mm_load_ps(rhs.arr);
+    __m128 a = lhs.load();
+    __m128 b = rhs.load();
     __m128 cross_res = cross_f128(a, b);
     _mm_store_ps(res.arr, cross_res);
     return res;
 #else
     return {
-        this->y * rhs.z - this->z * rhs.y,
-        this->z * rhs.x - this->x * rhs.z,
-        this->x * rhs.y - this->y * rhs.x,
+        lhs.y * rhs.z - lhs.z * rhs.y,
+        lhs.z * rhs.x - lhs.x * rhs.z,
+        lhs.x * rhs.y - lhs.y * rhs.x,
     };
 #endif
 }
@@ -480,8 +480,8 @@ f32 Vec3::magnitude()
 f32 Vec3::magnitude_squared()
 {
 #ifdef RG_FEATURE_SIMD_128
-    __m128 a = _mm_load_ps(this->arr);
-    __m128 b = _mm_load_ps(this->arr);
+    __m128 a = this->load();
+    __m128 b = this->load();
     return dot_f128(a, b);
 #else
     f32 x = this->x;
@@ -491,12 +491,12 @@ f32 Vec3::magnitude_squared()
 #endif
 }
 
-Vec3 vec_direction(Vec3 lhs, Vec3 rhs)
+Vec3 vec_direction(Vec3 a, Vec3 b)
 {
 #ifdef RG_FEATURE_SIMD_128
     Vec3 res;
-    __m128 a_ = _mm_load_ps(lhs.arr);
-    __m128 b_ = _mm_load_ps(rhs.arr);
+    __m128 a_ = a.load();
+    __m128 b_ = b.load();
     __m128 sub_res = _mm_sub_ps(b_, a_);
     _mm_store_ps(res.arr, sub_res);
     return res;
@@ -537,7 +537,7 @@ Vec4 vec_add(Vec4 lhs, Vec4 rhs)
     _mm_store_ps(res.arr, add_res);
     return res;
 #else
-    return { this->x + rhs.x, this->y + rhs.y, this->z + rhs.z };
+    return { lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z };
 #endif
 }
 
@@ -551,7 +551,7 @@ Vec4 vec_sub(Vec4 lhs, Vec4 rhs)
     _mm_store_ps(res.arr, add_res);
     return res;
 #else
-    return { this->x - rhs.x, this->y - rhs.y, this->z - rhs.z };
+    return { lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z };
 #endif
 }
 
@@ -565,7 +565,7 @@ Vec4 vec_mul(Vec4 lhs, Vec4 rhs)
     _mm_store_ps(res.arr, add_res);
     return res;
 #else
-    return { this->x * rhs.x, this->y * rhs.y, this->z * rhs.z };
+    return { lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z };
 #endif
 }
 
@@ -579,7 +579,7 @@ Vec4 vec_div(Vec4 lhs, Vec4 rhs)
     _mm_store_ps(res.arr, add_res);
     return res;
 #else
-    return { this->x / rhs.x, this->y / rhs.y, this->z / rhs.z };
+    return { lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z };
 #endif
 }
 
@@ -657,7 +657,7 @@ Vec4 vec_add(Vec4 lhs, f32 rhs)
     _mm_store_ps(res.arr, add_res);
     return res;
 #else
-    return { this->x + rhs.x, this->y + rhs.y, this->z + rhs.z };
+    return { lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z };
 #endif
 }
 
@@ -671,7 +671,7 @@ Vec4 vec_sub(Vec4 lhs, f32 rhs)
     _mm_store_ps(res.arr, add_res);
     return res;
 #else
-    return { this->x - rhs.x, this->y - rhs.y, this->z - rhs.z };
+    return { lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z };
 #endif
 }
 
@@ -685,7 +685,7 @@ Vec4 vec_mul(Vec4 lhs, f32 rhs)
     _mm_store_ps(res.arr, add_res);
     return res;
 #else
-    return { this->x * rhs.x, this->y * rhs.y, this->z * rhs.z };
+    return { lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z };
 #endif
 }
 
@@ -699,7 +699,7 @@ Vec4 vec_div(Vec4 lhs, f32 rhs)
     _mm_store_ps(res.arr, add_res);
     return res;
 #else
-    return { this->x / rhs.x, this->y / rhs.y, this->z / rhs.z };
+    return { lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z };
 #endif
 }
 
@@ -766,7 +766,7 @@ f32 vec_dot(Vec4 lhs, Vec4 rhs)
     __m128 b = _mm_load_ps(rhs.arr);
     return dot_f128(a, b);
 #else
-    return this->x * rhs.x + this->y * rhs.y + this->z * rhs.z;
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
 #endif
 }
 
@@ -781,9 +781,9 @@ Vec4 vec_cross(Vec4 lhs, Vec4 rhs)
     return res;
 #else
     return {
-        this->y * rhs.z - this->z * rhs.y,
-        this->z * rhs.x - this->x * rhs.z,
-        this->x * rhs.y - this->y * rhs.x,
+        lhs.y * rhs.z - lhs.z * rhs.y,
+        lhs.z * rhs.x - lhs.x * rhs.z,
+        lhs.x * rhs.y - lhs.y * rhs.x,
     };
 #endif
 }
@@ -839,16 +839,14 @@ f32 Vec4::magnitude()
 f32 Vec4::magnitude_squared()
 {
 #ifdef RG_FEATURE_SIMD_128
-    alignas(16) f32 load_buff[4];
-    rg::mem_copy(load_buff, this->arr, sizeof(f32) * 4);
-    __m128 a = _mm_load_ps(load_buff);
-    __m128 b = _mm_load_ps(load_buff);
+    __m128 a = _mm_load_ps(this->arr);
+    __m128 b = _mm_load_ps(this->arr);
     return dot_f128(a, b);
 #else
     f32 x = this->x;
     f32 y = this->y;
     f32 z = this->z;
-    return x*x + y*y + z*z;
+    return x*x + y*y + z*z + w*w;
 #endif
 }
 
