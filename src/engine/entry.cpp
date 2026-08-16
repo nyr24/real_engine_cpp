@@ -123,7 +123,7 @@ bool engine_context_init(Context* ctx, AppConfig config)
 
     engine_context->renderer.init({ config.window_width, config.window_height }, COLOR_BLACK_RGBA);
 
-    ctx->panic_handlers.push(application_destroy);
+    ctx->exit_callbacks.push(application_destroy);
 
     return true;
 }

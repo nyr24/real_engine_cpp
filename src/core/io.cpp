@@ -9,7 +9,7 @@ namespace rg
 // Path.
 
 intern void platform_process_cwd(Path* path, Allocator* alloc, sz add_cap = 0);
-intern sz get_steps_back_from_cwd_and_trim(StrView path);
+intern sz get_steps_back_from_cwd_and_trim(StrView* path);
 intern void path_trim_parts_from_end(Path* path, sz trim_count);
 intern StrView get_extension(StrView value);
 
@@ -83,7 +83,7 @@ void Path::add_parts(Slice<StrView> parts)
     ASSERT_INITIALIZED(this);
 
     StrView first_part = parts[0];
-    sz steps_back_from_cwd = get_steps_back_from_cwd_and_trim(first_part);
+    sz steps_back_from_cwd = get_steps_back_from_cwd_and_trim(&first_part);
     if (steps_back_from_cwd) path_trim_parts_from_end(this, steps_back_from_cwd);
     this->ensure_separator_at_end();
 
@@ -100,7 +100,7 @@ void Path::add_part(StrView part)
 {
     ASSERT_INITIALIZED(this);
 
-    sz steps_back_from_cwd = get_steps_back_from_cwd_and_trim(part);
+    sz steps_back_from_cwd = get_steps_back_from_cwd_and_trim(&part);
     if (steps_back_from_cwd) path_trim_parts_from_end(this, steps_back_from_cwd);
     this->ensure_separator_at_end();
     if (part.first() == PATH_SEPARATOR) part.trim_start_n(1);
@@ -197,25 +197,25 @@ intern void platform_process_cwd(Path* path, Allocator* alloc, sz add_cap)
 // Returns a number of steps it needs to take from the cwd.
 // . == 0, ./ == 0, ../ == 1, ../../ == 2, etc.
 // if it doesn't start with a dot - returns 0
-intern sz get_steps_back_from_cwd_and_trim(StrView input_path)
+intern sz get_steps_back_from_cwd_and_trim(StrView* input_path)
 {
-    if (path_is_absolute(input_path)) return 0;
-    if (input_path.first() != '.') return 0;
+    if (path_is_absolute(*input_path)) return 0;
+    if (input_path->first() != '.') return 0;
 
-    if (common_starts_with(input_path.ptr, input_path.count, RELATIVE_DIR_SELF))
+    if (input_path->starts_with(RELATIVE_DIR_SELF))
     {
-        input_path.trim_start_n(2);
+        input_path->trim_start_n(2);
         return 0;
     }
 
     sz steps = 0;
-    if (common_starts_with(input_path.ptr, input_path.count, RELATIVE_DIR_PARENT))
+    if (input_path->starts_with(RELATIVE_DIR_PARENT))
     {
-        input_path.trim_start_n(3);
+        input_path->trim_start_n(3);
         ++steps;
     }
 
-    ASSERT_MSG(input_path.first() != PATH_SEPARATOR, "Path separators should be trimmed");
+    ASSERT_MSG(input_path->first() != PATH_SEPARATOR, "Path separators should be trimmed");
     return steps;
 }
 

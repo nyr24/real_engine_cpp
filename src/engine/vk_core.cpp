@@ -1,3 +1,4 @@
+
 #include "volk/volk.h"
 #include "core/basic.hpp"
 #include "collections/farray.hpp"
@@ -11,13 +12,16 @@
 namespace rg
 {
 
+#ifdef RG_DEBUG
 intern constexpr sz MAX_REQ_LAYERS = 10;
 intern constexpr sz MAX_AVAIL_LAYERS = 64;
-intern constexpr sz MAX_REQ_EXTENSIONS = 10;
 intern constexpr sz MAX_AVAIL_EXTENSIONS = 164;
 
 intern bool add_validation_layers(DArray<CString>* out_layers);
 intern bool check_req_extensions(DArray<CString>* req_extensions);
+#endif // RG_DEBUG
+
+intern constexpr sz MAX_REQ_EXTENSIONS = 10;
 
 #ifdef RG_DEBUG
 intern void init_debug_logger(VulkanContext* ctx);
@@ -90,6 +94,7 @@ bool init_instance(VulkanContext* vk_ctx)
     return true;
 }
 
+#ifdef RG_DEBUG
 intern bool add_validation_layers(DArray<CString>* req_layers)
 {
     DArray<VkLayerProperties> avail_layers;
@@ -150,6 +155,7 @@ intern bool check_req_extensions(DArray<CString>* req_extensions)
 
 	return true;
 }
+#endif // RG_DEBUG
 
 #ifdef RG_DEBUG
 intern void init_debug_logger(VulkanContext* vk_ctx)
@@ -339,29 +345,34 @@ bool VulkanDevice::init(VulkanContext* ctx)
 		info->pQueuePriorities = &queue_priorities[i];
 	}
 
-	VkPhysicalDeviceFeatures device_features = { .samplerAnisotropy = VK_TRUE, };
-
-	VkPhysicalDeviceVulkan13Features device_features13 = {
+	VkPhysicalDeviceVulkan13Features dev_feat13 = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+		.pNext = null,
 		.synchronization2 = VK_TRUE,
 		.dynamicRendering = VK_TRUE,
 	};
 
-	VkPhysicalDeviceVulkan12Features device_features12 = {
+	VkPhysicalDeviceVulkan12Features dev_feat12 = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-		.pNext = &device_features13,
+		.pNext = &dev_feat13,
 		.descriptorIndexing = VK_TRUE,
+		.timelineSemaphore = VK_TRUE,
 		.bufferDeviceAddress = VK_TRUE,
+	};
+
+	VkPhysicalDeviceFeatures2 dev_feat = {
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+		.pNext = &dev_feat12,
 	};
 
 	VkDeviceCreateInfo device_ci = {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-		.pNext = &device_features12,
+		.pNext = &dev_feat,
 		.queueCreateInfoCount = (u32)queue_infos.count,
 		.pQueueCreateInfos = queue_infos.first_ref(),
 		.enabledExtensionCount = (u32)device_req_extensions.count,
 		.ppEnabledExtensionNames = device_req_extensions.data,
-		.pEnabledFeatures = &device_features,
+		.pEnabledFeatures = null,
 	};
 
 	VK_CHECK(vkCreateDevice(dev->phys_dev, &device_ci, ctx->vk_alloc, &dev->log_dev));
@@ -454,12 +465,15 @@ bool is_phys_device_suitable(
 		}
 	}
 
-	VkPhysicalDeviceFeatures dev_features;
-	vkGetPhysicalDeviceFeatures(dev, &dev_features);
+	VkPhysicalDeviceVulkan13Features supported_feat13 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES };
+	VkPhysicalDeviceVulkan12Features supported_feat12 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, &supported_feat13 };
+	VkPhysicalDeviceFeatures2 supported_feat = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, &supported_feat12 };
 
-	if (!dev_features.samplerAnisotropy)
+	vkGetPhysicalDeviceFeatures2(dev, &supported_feat);
+
+	if (!supported_feat13.dynamicRendering || !supported_feat13.synchronization2 || !supported_feat12.timelineSemaphore)
 	{
-		LOG_TRACE("Physical device does not have sampler_anisotropy, which is required feature, skipping...");
+		LOG_TRACE("Physical device lacks some required features, skipping...");
 		return false;
 	}
 
@@ -2376,7 +2390,7 @@ void VulkanDescriptorPool::destroy(VulkanContext* ctx)
 void map_vk_mem(VulkanDevice* dev, void** dest, VkDeviceMemory src, sz size_bytes, sz offset, VkMemoryMapFlags flags)
 {
 	VkResult res = vkMapMemory(dev->log_dev, src, offset, size_bytes, flags, dest);
-	ASSERT_MSG(res == VK_SUCCESS, "Failed to map vk memory, vkResult was: %d", res);
+	if (res != VK_SUCCESS) PANIC("Failed to map vk memory, vkResult was: %d", res);
 }
 
 void unmap_vk_mem(VulkanDevice* dev, VkDeviceMemory gpu_mem)

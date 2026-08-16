@@ -10,13 +10,13 @@ namespace rg
 #ifdef RG_PLATFORM_WIN32
     constexpr char PATH_SEPARATOR = '\\';
     constexpr char PATH_SEPARATOR_INVALID = '/';
-    inline StrView RELATIVE_DIR_SELF = { CSTR_SIZED(".\\") };
-    inline StrView RELATIVE_DIR_PARENT = { CSTR_SIZED("..\\") };
+    inline StrView RELATIVE_DIR_SELF = CSTR_SIZED(".\\");
+    inline StrView RELATIVE_DIR_PARENT = CSTR_SIZED("..\\");
 #else
     constexpr char PATH_SEPARATOR = '/';
     constexpr char PATH_SEPARATOR_INVALID = '\\';
-    inline StrView RELATIVE_DIR_SELF = { CSTR_SIZED("./") };
-    inline StrView RELATIVE_DIR_PARENT = { CSTR_SIZED("../") };
+    inline StrView RELATIVE_DIR_SELF = CSTR_SIZED("./");
+    inline StrView RELATIVE_DIR_PARENT = CSTR_SIZED("../");
 #endif
 
     constexpr sz PATH_DEFAULT_CAPACITY = 128;
@@ -29,8 +29,8 @@ namespace rg
 
         static Path create(Allocator* alloc, Slice<StrView> parts, bool null_term = false);
         static Path create(Allocator* alloc, StrView init_part, bool null_term = false);
-        void init(Allocator* alloc, Slice<StrView> parts, bool null_term = false);
         void init(Allocator* alloc, StrView init_part, bool null_term = false);
+        void init(Allocator* alloc, Slice<StrView> parts, bool null_term = false);
         // First part can contain relative offsets: "./", "../", "../../"
         void add_parts(Slice<StrView> part);
         void add_part(StrView part);

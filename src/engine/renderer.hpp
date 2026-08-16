@@ -115,7 +115,7 @@ struct ElementBuffer
 
 struct Camera
 {
-    static constexpr f32 DEFAULT_SPEED = 32.0f;
+    static constexpr f32 DEFAULT_SPEED = 16.0f;
     static constexpr f32 ZOOM_SPEED = deg_to_rad(1.0f);
     static constexpr f32 DEFAULT_ZOOM = deg_to_rad(45.0f);
     static constexpr f32 ZOOM_MIN = deg_to_rad(0.1f);

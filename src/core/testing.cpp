@@ -87,21 +87,21 @@ void thread_pool_test()
     defer(tpool.destroy());
 
     Array<Path, 16> file_paths;
-    file_paths[0].init(arena, StrView{ CSTR_SIZED("assets/temp/temp1.txt") });
-    file_paths[1].init(arena, StrView{ CSTR_SIZED("assets/temp/temp2.txt") });
-    file_paths[2].init(arena, StrView{ CSTR_SIZED("assets/temp/temp3.txt") });
-    file_paths[3].init(arena, StrView{ CSTR_SIZED("assets/temp/temp4.txt") });
-    file_paths[4].init(arena, StrView{ CSTR_SIZED("assets/temp/temp5.txt") });
-    file_paths[5].init(arena, StrView{ CSTR_SIZED("assets/temp/temp6.txt") });
-    file_paths[6].init(arena, StrView{ CSTR_SIZED("assets/temp/temp7.txt") });
-    file_paths[7].init(arena, StrView{ CSTR_SIZED("assets/temp/temp8.txt") });
-    file_paths[8].init(arena, StrView{ CSTR_SIZED("assets/temp/temp9.txt") });
-    file_paths[9].init(arena, StrView{ CSTR_SIZED("assets/temp/temp10.txt") });
-    file_paths[10].init(arena, StrView{ CSTR_SIZED("assets/temp/temp11.txt") });
-    file_paths[11].init(arena, StrView{ CSTR_SIZED("assets/temp/temp12.txt") });
-    file_paths[12].init(arena, StrView{ CSTR_SIZED("assets/temp/temp13.txt") });
-    file_paths[13].init(arena, StrView{ CSTR_SIZED("assets/temp/temp14.txt") });
-    file_paths[14].init(arena, StrView{ CSTR_SIZED("assets/temp/temp15.txt") });
+    file_paths[0].init(arena, CSTR_SIZED("assets/temp/temp1.txt"));
+    file_paths[1].init(arena, CSTR_SIZED("assets/temp/temp2.txt"));
+    file_paths[2].init(arena, CSTR_SIZED("assets/temp/temp3.txt"));
+    file_paths[3].init(arena, CSTR_SIZED("assets/temp/temp4.txt"));
+    file_paths[4].init(arena, CSTR_SIZED("assets/temp/temp5.txt"));
+    file_paths[5].init(arena, CSTR_SIZED("assets/temp/temp6.txt"));
+    file_paths[6].init(arena, CSTR_SIZED("assets/temp/temp7.txt"));
+    file_paths[7].init(arena, CSTR_SIZED("assets/temp/temp8.txt"));
+    file_paths[8].init(arena, CSTR_SIZED("assets/temp/temp9.txt"));
+    file_paths[9].init(arena, CSTR_SIZED("assets/temp/temp10.txt"));
+    file_paths[10].init(arena, CSTR_SIZED("assets/temp/temp11.txt"));
+    file_paths[11].init(arena, CSTR_SIZED("assets/temp/temp12.txt"));
+    file_paths[12].init(arena, CSTR_SIZED("assets/temp/temp13.txt"));
+    file_paths[13].init(arena, CSTR_SIZED("assets/temp/temp14.txt"));
+    file_paths[14].init(arena, CSTR_SIZED("assets/temp/temp15.txt"));
 
     tpool.submit_task({ thread_read_file, &file_paths[0] }); 
     tpool.submit_task({ thread_read_file, &file_paths[1] }); 

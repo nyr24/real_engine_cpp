@@ -19,10 +19,10 @@ namespace rg
     LOG_FATAL(message, args);
     va_end(args);
 
-    // Execute panic handlers.
+    // Execute exit callbacks.
     Context* context = get_context();
-    context->panic_handlers.foreach([](const auto& handler) {
-        handler();
+    context->exit_callbacks.foreach([](const auto& cb) {
+        cb();
     });
 
     exit(1);
@@ -37,6 +37,12 @@ namespace rg
     LOG_FATAL(message, args);
     va_end(args);
 
+    // Execute exit callbacks.
+    Context* context = get_context();
+    context->exit_callbacks.foreach([](const auto& cb) {
+        cb();
+    });
+
 #if defined(_MSC_VER) && !defined(__clang__) // MSVC
     __assume(false);
 #else // GCC, Clang
@@ -50,9 +56,9 @@ void assert_proc(bool expr, CString file, s32 line)
     {
         LOG_FATAL("Assertion failed in file: %s, line: %d", file, line);
 
-        // Execute panic handlers.
+        // Execute exit callbacks.
         Context* context = get_context();
-        context->panic_handlers.foreach([](const auto& handler) {
+        context->exit_callbacks.foreach([](const auto& handler) {
             handler();
         });
 
@@ -73,7 +79,7 @@ void assert_msg_proc(bool expr, CString file, s32 line, CString fmt, ...)
 
         // Execute panic handlers.
         Context* context = get_context();
-        context->panic_handlers.foreach([](const auto& handler) {
+        context->exit_callbacks.foreach([](const auto& handler) {
             handler();
         });
         

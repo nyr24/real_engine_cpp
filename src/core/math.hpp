@@ -3,9 +3,10 @@
 
 #include "core/basic.hpp"
 #include "collections/farray.hpp"
-#ifdef RG_FEATURE_SIMD_128
-#include <immintrin.h>
+#if defined(RG_FEATURE_SIMD_256) || defined(RG_FEATURE_SIMD_128)
+    #include <immintrin.h>
 #endif
+
 
 namespace rg
 {
@@ -81,25 +82,39 @@ constexpr Type pow(Type val, Type power)
 template<typename Type>
 constexpr Type ctz(Type val)
 {
-    return (Type)__builtin_ctz((u32)val);
-}
+    ASSERT_NON_ZERO(val);
 
-template<>
-constexpr u64 ctz(u64 val)
-{
-    return (u64)__builtin_ctzll(val);
+    if constexpr (sizeof(Type) <= 4)
+    {
+        return (Type)__builtin_ctz((u32)val);
+    }
+    else
+    {
+        return (Type)__builtin_ctzll((u64)val);
+    }
 }
 
 template<typename Type>
 constexpr Type clz(Type val)
 {
-    return (Type)__builtin_clz((u32)val);
-}
+    ASSERT_NON_ZERO(val);
 
-template<>
-constexpr u64 clz(u64 val)
-{
-    return (u64)__builtin_clzll((u32)val);
+    if constexpr (sizeof(Type) == 1)
+    {
+        return (Type)(__builtin_clz((u32)val) - 24);
+    }
+    else if constexpr (sizeof(Type) == 2)
+    {
+        return (Type)__builtin_clz((u32)val << 16);
+    }
+    else if constexpr (sizeof(Type) == 4)
+    {
+        return (Type)__builtin_clz((u32)val);
+    }
+    else
+    {
+        return (Type)__builtin_clzll((u64)val);
+    }
 }
 
 constexpr f64 PI = 3.14159265359;
@@ -535,7 +550,8 @@ struct alignas(16) Mat4 : Array<f32, 16>
 
 Mat4 quat_to_matrix(Quat q);
 
-Mat4 operator*(const Mat4& a, const Mat4& b);
+Mat4 mat_mul(const Mat4& RESTRICT a, const Mat4& RESTRICT b);
+Mat4 operator*(const Mat4& RESTRICT a, const Mat4& RESTRICT b);
 
 // Simd.
 

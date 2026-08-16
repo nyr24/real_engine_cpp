@@ -16,17 +16,17 @@ constexpr sz FRAMES_IN_FLIGHT = 2;
 constexpr VkClearDepthStencilValue CLEAR_DEPTH_VALUE = { .depth = 1.0f, .stencil = 0 };
 constexpr VkOffset2D OFFSET_START = { 0, 0 };
 
-const StrView SHADERS_PATH                           = { CSTR_SIZED("shaders/build") };
-const StrView ASSETS_PATH                            = { CSTR_SIZED("assets/") };
-const StrView TEXTURES_PATH                          = { CSTR_SIZED("assets/textures/") };
-const StrView MODELS_PATH                            = { CSTR_SIZED("assets/models/") };
+const StrView SHADERS_PATH                           = CSTR_SIZED("shaders/build");
+const StrView ASSETS_PATH                            = CSTR_SIZED("assets/");
+const StrView TEXTURES_PATH                          = CSTR_SIZED("assets/textures/");
+const StrView MODELS_PATH                            = CSTR_SIZED("assets/models/");
 
-const StrView VERTEX_SHADER_ENTRY_NAME              = { CSTR_SIZED("vertMain") };
-const StrView FRAGMENT_SHADER_ENTRY_NAME            = { CSTR_SIZED("fragMain") };
-const StrView COMPUTE_SHADER_ENTRY_NAME             = { CSTR_SIZED("compMain") };
-const StrView GEOMETRY_SHADER_ENTRY_NAME            = { CSTR_SIZED("geoMain") };
-const StrView TESSELATION_CONTROL_SHADER_ENTRY_NAME = { CSTR_SIZED("tesControlMain") };
-const StrView TESSELATION_EVAL_SHADER_ENTRY_NAME    = { CSTR_SIZED("tesEvalMain") };
+const StrView VERTEX_SHADER_ENTRY_NAME              = CSTR_SIZED("vertMain");
+const StrView FRAGMENT_SHADER_ENTRY_NAME            = CSTR_SIZED("fragMain");
+const StrView COMPUTE_SHADER_ENTRY_NAME             = CSTR_SIZED("compMain");
+const StrView GEOMETRY_SHADER_ENTRY_NAME            = CSTR_SIZED("geoMain");
+const StrView TESSELATION_CONTROL_SHADER_ENTRY_NAME = CSTR_SIZED("tesControlMain");
+const StrView TESSELATION_EVAL_SHADER_ENTRY_NAME    = CSTR_SIZED("tesEvalMain");
 
 struct AppConfig
 {

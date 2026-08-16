@@ -1,24 +1,46 @@
 #include "core/basic.hpp"
 #include "core/conversions.hpp"
 #include "engine/entry.hpp"
-// #include "core/math.hpp"
 
 using namespace rg;
 
 s32 main()
 {
+// TEST sandbox
+    // VmemAllocator* vmem = VmemAllocator::create(2 * GB);
+    // defer(vmem->destroy());
+    // init_temp_allocator(vmem, 64 * MB);
+
+    // Arena* arena = Arena::create(vmem);
+
+    // Path path_json;
+    // // path_json.init(arena, "../assets/models/scifi_helmet/SciFiHelmet.gltf");
+    // path_json.init(arena, "../assets/models/sponza/Sponza.gltf");
+
+    // {
+    //     BENCH_SCOPE(b, "myjson parsing");
+    //     auto [json, is_ok] = parse_json_from_path(&path_json);
+    //     if (!is_ok)
+    //     {
+    //         printfn("Failed to parse json :(");
+    //         return -1;
+    //     }
+    // }
+
+    // FString<100> str = { CSTR_SIZED("hello world bla bla") };
+    // printfn(FMT_PLACEHOLDER_LEN, FMT_FSTRING_VAL(str));
+    // printfn("count: %td", str.count);
+
+// TEST sandbox
+
+// NOTE: main app
     AppConfig config = { "ReAl EngiNe WinDow", 2560, 1440 };
     if (!application_init(config)) PANIC("Failed to init application");
     defer(application_destroy());
     application_run();
-
-    // Quat q = Quat::create_euler(30.0f, 45.0f, 45.0f);
-    // Mat4 m = quat_to_matrix(q);
-    // printfn("%f %f", m[4], m[9]);
+// NOTE: main app
 
 // Bitsets.
-     // HeapAlloc heap;
-     // heap.init();
      // Context* ctx = get_context();
 
      // const sz COUNT = 2048;

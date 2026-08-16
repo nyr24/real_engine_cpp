@@ -9,7 +9,7 @@
 namespace rg
 {
 
-constexpr sz MAX_PANIC_HANDLERS = 16;
+constexpr sz MAX_EXIT_CALLBACKS = 32;
 
 // Global, application-level context.
 
@@ -18,7 +18,7 @@ struct Context
     Allocator* allocator;
     XorshiftRng rng;
     Mutex logger_mutex;
-    RingBuffer<PanicHandler, MAX_PANIC_HANDLERS> panic_handlers;
+    RingBuffer<ExitCallback, MAX_EXIT_CALLBACKS> exit_callbacks;
 };
 
 intern constexpr sz DEFAULT_TEMP_STORAGE_CAPACITY = 64 * MB;

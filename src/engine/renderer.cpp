@@ -564,8 +564,7 @@ void EntitySystem::destroy()
 
 // Renderer.
 
-// NOTE: TEMP
-const u32 MODEL_LOAD_KEY = GLFW_KEY_M;
+constexpr sz ENTITY_COUNT = 128;
 
 intern void init_event_handlers(Renderer* self, EventSystem* ev_sys);;
 intern bool handle_mouse_move(EventContext ctx, void* listener);
@@ -652,12 +651,6 @@ intern void perform_startup_load(Renderer* renderer)
 		tex_configs.push({ Path::create(persist_alloc, parts.slice(), true), default_sampler, TEX_INDEX_INVALID, EntityTextureKind::DIFFUSE });
 	}
 
-	// NOTE: TEMP
-	for (const auto& conf : tex_configs)
-	{
-		LOG_TRACE("Will load texture from path: " FMT_PLACEHOLDER_LEN, FMT_DSTRING_VAL(conf.path));
-	}
-
 	FrameData* frame = vk_ctx->get_curr_frame_data();
 
 	cmd_buffer_begin_recording_many(frame->transfer_cmd_buffs.slice(), frame->transfer_cmd_buff_states.slice());
@@ -711,8 +704,6 @@ intern void perform_startup_load(Renderer* renderer)
 			{ -0.00002, -0.00007, -0.00007 },
 		};
 
-		constexpr sz ENTITY_COUNT = 32;
-
 		for (sz i = 0; i < ENTITY_COUNT; ++i)
 		{
 			TextureCreateConfig* conf = &tex_configs[context->rng.next_int_in_range(0, tex_configs.count - 1)];
@@ -746,6 +737,8 @@ intern void perform_startup_load(Renderer* renderer)
 	};
 }
 
+// TODO:
+// SwapchainPresentResult begin_frame(EngineContext* engine_ctx)
 SwapchainPresentResult Renderer::begin_frame()
 {
 	// renderer_process_background_tasks(&engine_ctx->vk_ctx.renderer);
@@ -758,6 +751,8 @@ SwapchainPresentResult Renderer::begin_frame()
 	return vk_ctx->swapchain.acquire_next_image_index(vk_ctx, frame->image_avail_sem);
 }
 
+// TODO:
+// void draw_frame(EngineContext* engine_ctx)
 void Renderer::draw_frame()
 {
 	EngineContext* engine_ctx = get_engine_context();

@@ -1104,16 +1104,16 @@ void Mat4::mul_inplace(const Mat4& rhs)
 #endif
 }
 
-Mat4 mat4_mul(const Mat4& lhs, const Mat4& rhs)
+Mat4 mat_mul(const Mat4& RESTRICT lhs, const Mat4& RESTRICT rhs)
 {
     Mat4 res = lhs;
     res.mul_inplace(rhs);
     return res;
 }
 
-Mat4 operator*(const Mat4& a, const Mat4& b)
+Mat4 operator*(const Mat4& RESTRICT a, const Mat4& RESTRICT b)
 {
-    return mat4_mul(a, b);
+    return mat_mul(a, b);
 }
 
 void Mat4::transpose_inplace()

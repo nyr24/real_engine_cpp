@@ -108,8 +108,6 @@ typedef time_t FileTimeUnit;
     #define DEBUG_BREAK()
 #endif //_DEBUG
 
-alias PanicHandler = void(*)();
-
 // Restrict (to avoid aliasing problems when accepting 2 identical pointer types).
 
 #if defined(__clang__) || defined(__GNUC__)
@@ -124,6 +122,8 @@ alias PanicHandler = void(*)();
 
 namespace rg
 {
+
+alias ExitCallback = void(*)();
 
 void assert_proc(bool expr, CString file, s32 line);
 void assert_msg_proc(bool expr, CString file, s32 line, CString fmt, ...);
@@ -175,8 +175,8 @@ void assert_msg_proc(bool expr, CString file, s32 line, CString fmt, ...);
 #define ASSUME(expr) __builtin_assume(expr);
 
 // Statically determine cstring length without doing costly strlen().
-#define CSTR_SIZED(cstr) cstr, sizeof(cstr) - 1
-#define CSTR_SIZED_NULL(cstr) cstr, sizeof(cstr)
+#define CSTR_SIZED(cstr) { cstr, sizeof(cstr) - 1 }
+#define CSTR_SIZED_NULL(cstr) { cstr, sizeof(cstr) }
 #define CARRAY_LEN(carr) sizeof(carr) / sizeof(carr[0])
 #define CARRAY_SIZED(carr) carr, CARRAY_LEN(carr)
 #define printn(msg) fputs(msg, stdout)
@@ -418,10 +418,12 @@ inline void _mem_move(void* dest, void* src, sz byte_size)
 
 #define mem_move(a, b, size) _mem_move((void*)a, (void*)b, size)
 
-inline bool mem_compare(void* a, void* b, sz byte_size)
+inline bool _mem_compare(void* a, void* b, sz byte_size)
 {
 	return memcmp(a, b, byte_size) == 0;
 }
+
+#define mem_compare(a, b, size) _mem_compare((void*)a, (void*)b, size)
 
 inline bool mem_compare_nullterm(CString a, CString b)
 {
@@ -667,6 +669,10 @@ struct ScopeBencher
 
 #define BENCH_SCOPE(var, name) \
 	ScopeBencher var(name);
+
+// Number can have digits, dot and minus, minus has the smallest ascii value.
+constexpr char MIN_VALID_NUMBER_CHAR = '-';
+constexpr char MAX_SPACE_CHAR = ' ' + 1;
 
 } // rg
 
