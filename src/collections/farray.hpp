@@ -9,13 +9,11 @@
 namespace rg
 {
 
-constexpr sz FARRAY_DEFAULT_CAPACITY = 16;
-
 /*
  Farray - fixed-capacity array type.
  It tracks count of allocated elements.
 */
-template<typename Type, sz CAPACITY = FARRAY_DEFAULT_CAPACITY>
+template<typename Type, sz CAPACITY>
 struct FArray
 {
     alignas(Type) Type data[CAPACITY];
@@ -74,13 +72,13 @@ struct FArray
     sz remain() const { return CAPACITY - this->count; }
     sz byte_size_used() const { return this->count * sizeof(Type); }
     constexpr sz byte_size_allocated() const { return CAPACITY * sizeof(Type); }
-    constexpr sz byte_size_all() const { return sizeof(FArray<Type>); }
+    constexpr sz byte_size_all() const { return sizeof(*this); }
 };
 
 template<typename Type, sz CAPACITY>
 constexpr FArray<Type, CAPACITY>::FArray(std::initializer_list<Type> init_list)
-    : count{(sz)init_list.size()}
 {
+    this->count = (sz)init_list.size();
     Type* start = this->data;    
     for (Type el : init_list)
     {
@@ -91,15 +89,15 @@ constexpr FArray<Type, CAPACITY>::FArray(std::initializer_list<Type> init_list)
 
 template<typename Type, sz CAPACITY>
 FArray<Type, CAPACITY>::FArray(const FArray& rhs)
-    : count{rhs.count}
 {
+    this->count = rhs.count;
     mem_copy(this->data, rhs.data, rhs.byte_size_used()); 
 }
 
 template<typename Type, sz CAPACITY>
 FArray<Type, CAPACITY>::FArray(FArray&& rhs)
-    : count{rhs.count}
 {
+    this->count = rhs.count;
     mem_copy(this->data, rhs.data, rhs.byte_size_used()); 
 }
 
@@ -379,7 +377,7 @@ void FArray<Type, CAPACITY>::foreach_split(const Type& splitter, void(*fn)(Slice
  There's no concept of used space for this structure,
  its assumed that you will always use all available slots.
 */
-template<typename Type, sz CAPACITY = FARRAY_DEFAULT_CAPACITY>
+template<typename Type, sz CAPACITY>
 struct Array
 {
     alignas(Type) Type data[CAPACITY];

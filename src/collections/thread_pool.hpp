@@ -49,7 +49,7 @@ struct ThreadPool
     sz tasks_in_progress;
     BitInt<u32> active_threads;
     BitInt<u32> init_stop;
-    Array<WorkerInput<THREAD_COUNT, MAX_TASKS>> worker_inputs;
+    Array<WorkerInput<THREAD_COUNT, MAX_TASKS>, THREAD_COUNT> worker_inputs;
 
     void init();
     void submit_task(const ThreadTask& task);

@@ -55,8 +55,8 @@ struct HashMap
     HashMap();
     HashMap(HashMap&& rhs);
     HashMap& operator=(HashMap&& rhs);
-    HashMap(const HashMap& rhs) = delete;
-    HashMap& operator=(const HashMap& rhs) = delete;
+    HashMap(const HashMap& rhs);
+    HashMap& operator=(const HashMap& rhs);
 
     void init(Allocator* alloc, sz init_capacity = DEFAULT_CAPACITY, f32 load_factor = DEFAULT_LOAD_FACTOR);
     void init_with_key_values(Allocator* alloc, Slice<HashMapKVPair<Key, Value>> pairs, sz add_capacity = 0, f32 load_factor = DEFAULT_LOAD_FACTOR);
@@ -91,36 +91,37 @@ private:
 
 template<typename Key, typename Value>
 HashMap<Key, Value>::HashMap()
-    : data{null}, alloc{null}, count{0}, capacity{0}, load_factor{0}
-{}
+{
+    mem_zero(this, sizeof(*this));
+}
+
+template<typename Key, typename Value>
+HashMap<Key, Value>::HashMap(const HashMap& rhs)
+{
+    mem_copy(this, &rhs, sizeof(*this));
+}
+
+template<typename Key, typename Value>
+HashMap<Key, Value>& HashMap<Key, Value>::operator=(const HashMap& rhs)
+{
+    ASSERT(this != &rhs);
+    mem_copy(this, &rhs, sizeof(*this));
+    return *this;
+}
 
 template<typename Key, typename Value>
 HashMap<Key, Value>::HashMap(HashMap&& rhs)
-    : data{rhs.data}, alloc{rhs.alloc}, count{rhs.count}, capacity{rhs.capacity}, load_factor{rhs.load_factor}
 {
-    rhs.data = null;
-    rhs.alloc = null;
-    rhs.count = 0;
-    rhs.capacity = 0;
-    rhs.load_factor = 0;
+    mem_copy(this, &rhs, sizeof(*this));
+    mem_zero(&rhs, sizeof(*this));
 }
 
 template<typename Key, typename Value>
 HashMap<Key, Value>& HashMap<Key, Value>::operator=(HashMap&& rhs)
 {
-    if (this == &rhs) return *this;
-
-    this->data = rhs.data;
-    this->alloc = rhs.alloc;
-    this->count = rhs.count;
-    this->capacity = rhs.capacity;
-    this->load_factor = rhs.load_factor;
-
-    rhs.data = null;
-    rhs.alloc = null;
-    rhs.count = 0;
-    rhs.capacity = 0;
-    rhs.load_factor = 0;
+    ASSERT(this != &rhs);
+    mem_copy(this, &rhs, sizeof(*this));
+    mem_zero(&rhs, sizeof(*this));
     return *this;
 }
 
@@ -253,8 +254,7 @@ Maybe<Value*> HashMap<Key, Value>::get(const Key& key)
 template<typename Key, typename Value>
 bool HashMap<Key, Value>::has(const Key& key)
 {
-    Value* val = this->get(key);
-    return val != null;
+    return this->get(key).is_ok;
 }
 
 template<typename Key, typename Value>
@@ -393,7 +393,7 @@ void HashMap<Key, Value>::foreach_pair(void(*fn)(const Pair<Key*, Value*>&))
     {
         pair_ref = iter.next_pair();
         if (!pair_ref.first || !pair_ref.second) return;
-        fn(*pair_ref);
+        fn(pair_ref);
     }
 }
 

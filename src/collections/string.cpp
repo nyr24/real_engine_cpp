@@ -2,6 +2,10 @@
 #include "collections/string.hpp"
 #include "core/context.hpp"
 
+#if defined(RG_FEATURE_SIMD_256) || defined(RG_FEATURE_SIMD_128)
+    #include <immintrin.h>
+#endif
+
 namespace rg
 {
 
@@ -36,21 +40,14 @@ bool StrView::starts_with(StrView input) const
 {
     ASSERT_INITIALIZED(this);
     ASSERT_INITIALIZED_VAL(input);
-    return common_starts_with<const char>(this->ptr, this->count, input);
+    return str_common_starts_with(this->ptr, this->count, input);
 }
 
-bool StrView::starts_with(CString input) const
+bool StrView::ends_with(StrView input) const
 {
     ASSERT_INITIALIZED(this);
-    if (!input || *input == '\0') return false;
-
-    const char* inp_curr = input;
-    const char* curr = this->begin();
-    const char* end = this->end();
-    for (; *inp_curr != '\0' && curr != end && *inp_curr == *curr; ++inp_curr, ++curr)
-    {
-    }
-    return *inp_curr == '\0';
+    ASSERT_INITIALIZED_VAL(input);
+    return str_common_ends_with(this->ptr, this->count, input);
 }
 
 StrView StrView::view(sz start, sz offset) const
@@ -69,6 +66,444 @@ StrView StrView::view_idx(sz start, sz end) const
     return { this->ptr + start, dist };
 }
 
+Maybe<sz> StrView::index_of(StrView seq) const
+{
+    return str_common_index_of(this->ptr, this->count, seq);
+}
+
+Maybe<sz> StrView::last_index_of(StrView seq) const
+{
+    return str_common_last_index_of(this->ptr, this->count, seq);
+}
+
+void StrView::trim_from_start_to_first_occur(char search, bool inclusive)
+{
+    return str_common_trim_from_start_to_first_occur(&this->ptr, &this->count, search, inclusive);
+}
+
+void StrView::trim_from_start_to_last_occur(char search, bool inclusive)
+{
+    return str_common_trim_from_start_to_last_occur(&this->ptr, &this->count, search, inclusive);
+}
+
+void StrView::trim_from_end_to_first_occur(char search, bool inclusive)
+{
+    return str_common_trim_from_end_to_first_occur(&this->ptr, &this->count, search, inclusive);
+}
+
+void StrView::trim_from_end_to_last_occur(char search, bool inclusive)
+{
+    return str_common_trim_from_end_to_last_occur(&this->ptr, &this->count, search, inclusive);
+}
+
+bool StrView::trim_sequence_start(StrView seq)
+{
+    return str_common_trim_sequence_start(&this->ptr, &this->count, seq);
+}
+
+bool StrView::trim_sequence_end(StrView seq)
+{
+    return str_common_trim_sequence_end(&this->ptr, &this->count, seq);
+}
+
+intern Maybe<sz> index_of_sv_128(StrView sv, char c);
+
+Maybe<sz> StrView::index_of(char c) const
+{
+    ASSERT_NON_EMPTY(this);
+
+#if RG_FEATURE_SIMD_128
+    if (this->count < CHAR_LANE_COUNT_256) return index_of_sv_128(*this, c);
+#endif
+
+    Maybe<sz> res;
+    const char* start = this->ptr;
+
+#if defined(RG_FEATURE_SIMD_256)
+    const __m256i search = _mm256_set1_epi8(c);
+    __m256i seq;
+    __m256i cmp_res;
+    sz match_idx = 0;
+    sz load_offset = 0;
+    const sz count = this->count;
+    u32 mask;
+    bool found = false;
+
+    while (this->count - load_offset >= CHAR_LANE_COUNT_256)
+    {
+        seq = _mm256_loadu_si256((const __m256i_u*)(start + load_offset));
+        cmp_res = _mm256_cmpeq_epi8(seq, search);
+        mask = (u32)_mm256_movemask_epi8(cmp_res);
+        if (mask == 0) goto NEXT_ITER;
+
+        match_idx += rg::ctz(mask);
+        found = true;
+        break;
+
+    NEXT_ITER:
+        match_idx += CHAR_LANE_COUNT_256;
+        load_offset += CHAR_LANE_COUNT_256;
+    }
+
+    if (found)
+    {
+        res.set_val(match_idx);
+        return res;
+    }
+#endif
+    while (load_offset < count && start[load_offset] != c)
+    {
+        load_offset++;
+    }
+
+    if (load_offset >= count) return res;
+    res.set_val(load_offset);
+    return res;
+}
+
+#if RG_FEATURE_SIMD_128
+intern Maybe<sz> index_of_sv_128(StrView sv, char c)
+{
+    Maybe<sz> res;
+    const char* start = sv.ptr;
+
+    const __m128i search = _mm_set1_epi8(c);
+    __m128i seq;
+    __m128i cmp_res;
+    sz match_idx = 0;
+    sz load_offset = 0;
+    const sz count = sv.count;
+    u16 mask;
+    bool found = false;
+
+    while (count - load_offset >= CHAR_LANE_COUNT_128)
+    {
+        seq = _mm_loadu_si128((const __m128i_u*)(start + load_offset));
+        cmp_res = _mm_cmpeq_epi8(seq, search);
+        mask = (u16)_mm_movemask_epi8(cmp_res);
+        if (mask == 0) goto NEXT_ITER;
+
+        match_idx += rg::ctz(mask);
+        found = true;
+        break;
+
+    NEXT_ITER:
+        match_idx += CHAR_LANE_COUNT_128;
+        load_offset += CHAR_LANE_COUNT_128;
+    }
+
+    if (found)
+    {
+        res.set_val(match_idx);
+        return res;
+    }
+
+    while (load_offset < count && start[load_offset] != c)
+    {
+        load_offset++;
+    }
+
+    if (load_offset >= count) return res;
+    res.set_val(load_offset);
+    return res;
+}
+#endif // RG_FEATURE_SIMD_128
+
+#if RG_FEATURE_SIMD_128
+intern Maybe<sz> last_index_of_sv_128(StrView sv, char c);
+#endif
+
+Maybe<sz> StrView::last_index_of(char c) const
+{
+    ASSERT_NON_EMPTY(this);
+
+#if RG_FEATURE_SIMD_128
+    if (this->count < CHAR_LANE_COUNT_256) return last_index_of_sv_128(*this, c);
+#endif
+
+    Maybe<sz> res;
+    const char* start = this->ptr;
+    const char* end = this->last_ref();
+
+#if defined(RG_FEATURE_SIMD_256)
+    const __m256i search = _mm256_set1_epi8(c);
+    __m256i seq;
+    __m256i cmp_res;
+    sz match_idx = this->count - 1;
+    sz load_offset = 0;
+    const sz count = this->count;
+    u32 mask;
+    bool found = false;
+
+    while (count - load_offset >= CHAR_LANE_COUNT_256)
+    {
+        seq = _mm256_loadu_si256((const __m256i_u*)(end - load_offset - CHAR_LANE_COUNT_256));
+        cmp_res = _mm256_cmpeq_epi8(seq, search);
+        mask = (u32)_mm256_movemask_epi8(cmp_res);
+        if (mask == 0) goto NEXT_ITER;
+
+        match_idx -= rg::clz(mask);
+        found = true;
+        break;
+
+    NEXT_ITER:
+        match_idx -= CHAR_LANE_COUNT_256;
+        load_offset += CHAR_LANE_COUNT_256;
+    }
+
+    if (found)
+    {
+        res.set_val(match_idx);
+        return res;
+    }
+#endif
+    if (load_offset == 0) load_offset = count - 1;
+
+    while (load_offset >= 0 && start[load_offset] != c)
+    {
+        load_offset--;
+    }
+
+    if (load_offset < 0) return res;
+    res.set_val(load_offset);
+    return res;
+}
+
+#if RG_FEATURE_SIMD_128
+Maybe<sz> last_index_of_sv_128(StrView sv, char c)
+{
+    Maybe<sz> res;
+    const char* start = sv.ptr;
+    const char* end = sv.last_ref();
+
+    const __m128i search = _mm_set1_epi8(c);
+    __m128i seq;
+    __m128i cmp_res;
+    sz match_idx = sv.count - 1;
+    sz load_offset = 0;
+    const sz count = sv.count;
+    u16 mask;
+    bool found = false;
+
+    while (count - load_offset >= CHAR_LANE_COUNT_128)
+    {
+        seq = _mm_loadu_si128((const __m128i_u*)(end - load_offset - CHAR_LANE_COUNT_128));
+        cmp_res = _mm_cmpeq_epi8(seq, search);
+        mask = (u16)_mm_movemask_epi8(cmp_res);
+        if (mask == 0) goto NEXT_ITER;
+
+        match_idx -= rg::clz(mask);
+        found = true;
+        break;
+
+    NEXT_ITER:
+        match_idx -= CHAR_LANE_COUNT_128;
+        load_offset += CHAR_LANE_COUNT_128;
+    }
+
+    if (found)
+    {
+        res.set_val(match_idx);
+        return res;
+    }
+
+    if (load_offset == 0) load_offset = count - 1;
+
+    while (load_offset >= 0 && start[load_offset] != c)
+    {
+        load_offset--;
+    }
+
+    if (load_offset < 0) return res;
+    res.set_val(load_offset);
+    return res;
+}
+#endif // RG_FEATURE_SIMD_128
+
+StrView StrView::slice_until_char(char c, bool inclusive)
+{
+    auto [idx, found] = this->index_of(c);
+    if (!found) return this->view();
+    if (inclusive && idx < this->count - 1) idx++;
+    return this->view_idx(0, idx);
+}
+
+void StrView::trim_until_char(char c, bool inclusive)
+{
+    auto [idx, found] = this->index_of(c);
+    if (!found) return;
+    if (inclusive && idx < this->count - 1) idx++;
+    this->ptr += idx;
+    this->count -= idx;
+}
+
+StrView StrView::slice_while_callback(bool(*cb)(char))
+{
+    ASSERT(this->count > 0);
+
+    const char* start = this->ptr;
+    const char* curr = start;
+    const char* end = this->end();
+
+    while (curr != end && cb(*curr))
+    {
+        ++curr;
+    }
+    return StrView{ start, curr - start };
+}
+
+StrView StrView::slice_while_callback_and_trim(bool(*cb)(char))
+{
+    StrView res = this->slice_while_callback(cb);
+    this->ptr += res.count;
+    this->count -= res.count;
+    return res;
+}
+
+StrView StrView::slice_until_callback(bool(*cb)(char))
+{
+    ASSERT(this->count > 0);
+
+    const char* start = this->ptr;
+    const char* curr = start;
+    const char* end = this->end();
+
+    while (curr != end && !cb(*curr))
+    {
+        ++curr;
+    }
+    return StrView{ start, curr - start };
+}
+
+StrView StrView::slice_until_callback_and_trim(bool(*cb)(char))
+{
+    StrView res = this->slice_until_callback(cb);
+    this->ptr += res.count;
+    this->count -= res.count;
+    return res;
+}
+
+void StrView::trim_space_start()
+{
+    this->skip_chars_threshold_start(MAX_SPACE_CHAR);
+}
+
+void StrView::skip_chars_threshold_start(char threshold)
+{
+    const char* start = this->ptr;
+    const char* curr = start;
+    const char* end = this->end();
+
+#if RG_FEATURE_SIMD_128
+    __m128i lhs;
+    const __m128i rhs = _mm_set1_epi8(threshold);
+    __m128i cmp_res;
+    sz first_non_space_idx = 0;
+    sz load_offset = 0;
+    u16 mask;
+    bool found = false;
+
+    while (this->count - load_offset >= CHAR_LANE_COUNT_128)
+    {
+        lhs = _mm_loadu_si128((const __m128i_u*)(start + load_offset));
+        cmp_res = _mm_cmpgt_epi8(lhs, rhs);
+        mask = (u16)_mm_movemask_epi8(cmp_res);
+
+        if (mask == 0) goto NEXT_ITER;
+
+        first_non_space_idx += rg::ctz(mask);
+        found = true;
+        break;
+
+    NEXT_ITER:
+        first_non_space_idx += CHAR_LANE_COUNT_128;
+        load_offset += CHAR_LANE_COUNT_128;
+    }
+
+    if (found)
+    {
+        this->ptr += first_non_space_idx;
+        this->count -= first_non_space_idx;
+        return;
+    }
+
+    curr += load_offset;
+#endif
+    while (curr != end && rg::is_space(*curr))
+    {
+        curr++;
+    }
+
+    sz dist = curr - start;
+    if (dist)
+    {
+        this->ptr += dist;
+        this->count -= dist;
+    }
+}
+
+void StrView::trim_space_end()
+{
+    const char* start = this->last_ref();
+    const char* curr = start;
+    const char* end = this->ptr;
+    constexpr char SPACE_THRESHOLD = ' ' + 1;
+
+#if RG_FEATURE_SIMD_128
+    __m128i lhs;
+    const __m128i rhs = _mm_set1_epi8(SPACE_THRESHOLD);
+    __m128i cmp_res;
+    sz first_non_space_idx = 0;
+    sz load_offset = 0;
+    u16 mask;
+    s32 clz;
+    bool found = false;
+
+    while (this->count - load_offset >= CHAR_LANE_COUNT_128)
+    {
+        lhs = _mm_loadu_si128((const __m128i_u*)(start - load_offset - CHAR_LANE_COUNT_128));
+        cmp_res = _mm_cmpgt_epi8(lhs, rhs);
+        mask = (u16)_mm_movemask_epi8(cmp_res);
+
+        if (mask == 0) goto NEXT_ITER;
+
+        clz = rg::clz(mask);
+
+        first_non_space_idx += clz;
+        found = true;
+        break;
+
+    NEXT_ITER:
+        first_non_space_idx += CHAR_LANE_COUNT_128;
+        load_offset += CHAR_LANE_COUNT_128;
+    }
+
+    if (found)
+    {
+        this->count -= first_non_space_idx;
+        return;
+    }
+
+    curr += load_offset;
+#endif
+    while (curr != end && rg::is_space(*curr))
+    {
+        curr--;
+    }
+
+    sz dist = curr - start;
+    if (dist)
+    {
+        this->count -= dist;
+    }
+}
+
+void StrView::trim_space_both()
+{
+    this->trim_space_start(); 
+    this->trim_space_end(); 
+}
+
 bool contains_non_ascii(const char* start, const char* end)
 {
     for (; start != end; ++start)
@@ -76,46 +511,6 @@ bool contains_non_ascii(const char* start, const char* end)
         if (*start > 0x7F) return true;
     }
     return false;
-}
-
-bool is_space(char c)
-{
-    // Bits set: 9 (tab), 10 (LF), 11 (VT), 12 (FF), 13 (CR), 32 (Space)
-    return (1ULL << c) & 0x200006200ULL;
-}
-
-void trim_space_start(const char** start, sz* count)
-{
-    const char* curr = *start;
-    const char* end = curr + *count;
-
-    while (curr != end && is_space(*curr)) { ++curr; }
-
-    sz dist = curr - *start;
-    if (dist)
-    {
-        *start += dist;
-        *count -= dist;
-    }
-}
-
-void trim_space_end(const char* start, sz* count)
-{
-    const char* end = start + *count - 1;
-    const char* curr = end;
-    while (curr != start && is_space(*curr)) { --curr; }
-
-    sz dist = end - curr;
-    if (dist)
-    {
-        *count -= dist;
-    }
-}
-
-void trim_space_both(const char** start, sz* count)
-{
-    trim_space_start(start, count); 
-    trim_space_end(*start, count); 
 }
 
 // DString.
@@ -145,38 +540,18 @@ void DString::init_view(Allocator* alloc, StrView str_view, sz additional_capaci
     }
 }
 
-void DString::push(StrView str_view)
+void DString::push(StrView sv)
 {
     ASSERT_MSG(this->is_initialized(), "Must be initialized first");
-    ASSERT_MSG(str_view.is_initialized(), "Must be valid string view");
+    ASSERT_MSG(sv.is_initialized(), "Must be valid string view");
 
-    // Remove duplicated null terminator.
-    if (this->is_null_term()) this->count--;
+    // Remove null redundant null char.
+    if (sv.is_null_term() && this->is_null_term()) this->count--;
 
-    this->reserve(str_view.count);
+    this->reserve(sv.count);
     char* copy_start = this->end();
-    mem_copy(copy_start, (void*)str_view.ptr, str_view.count);
-    this->count += str_view.count;
-}
-
-void DString::push(Slice<char> slice)
-{
-    ASSERT_INITIALIZED(this);
-    ASSERT_INITIALIZED_VAL(slice);
-    this->reserve(slice.count);
-    char* copy_start = this->end();
-    mem_copy(copy_start, slice.ptr, slice.count);
-    this->count += slice.count;
-}
-
-void DString::push(Slice<u8> slice)
-{
-    ASSERT_INITIALIZED(this);
-    ASSERT_INITIALIZED_VAL(slice);
-    this->reserve(slice.count);
-    char* copy_start = this->end();
-    mem_copy(copy_start, slice.ptr, slice.count);
-    this->count += slice.count;
+    mem_copy(copy_start, (void*)sv.ptr, sv.count);
+    this->count += sv.count;
 }
 
 void DString::push(CString cstr)
@@ -232,71 +607,37 @@ void DString::ensure_no_null_term()
     this->count--;
 }
 
-Slice<char> DString::slice_start_n(sz trim_count) const
-{
-    ASSERT_MSG(trim_count < this->count, "Shouldn't exceed inner count");
-    Slice<char> slice = this->slice();
-    slice.trim_start_n(trim_count);
-    return slice;
-}
-
 void DString::trim_end_n(sz trim_count)
 {
     ASSERT_MSG(trim_count < this->count, "Shouldn't exceed inner count");
-    common_trim_end_n(&this->data, &this->count, trim_count);
+    common_trim_end_n((const char**)&this->data, &this->count, trim_count);
 }
 
-Slice<char> DString::slice_sequence_start(Slice<char> trim_seq) const
+bool DString::starts_with(StrView input) const
 {
-    Slice<char> slice = this->slice();
-    slice.trim_sequence_start(trim_seq);
-    return slice;
+    return str_common_starts_with(this->data, this->count, input);
 }
 
-bool DString::trim_sequence_end(Slice<char> trim_seq)
+bool DString::ends_with(StrView input) const
 {
-    return common_trim_sequence_end(&this->data, &this->count, trim_seq);
+    return str_common_ends_with(this->data, this->count, input);
 }
 
-Slice<char> DString::slice_from_start_to_first_occur(const char& search, bool inclusive) const
+void DString::trim_from_end_to_first_occur(char search, bool inclusive)
 {
-    Slice<char> slice = this->slice();
-    slice.trim_from_start_to_first_occur(search, inclusive);
-    return slice;
+    return str_common_trim_from_end_to_first_occur((const char**)&this->data, &this->count, search, inclusive);
 }
 
-Slice<char> DString::slice_from_start_to_last_occur(const char& search, bool inclusive) const
+void DString::trim_from_end_to_last_occur(char search, bool inclusive)
 {
-    Slice<char> slice = this->slice();
-    slice.trim_from_start_to_last_occur(search, inclusive);
-    return slice;
+    return str_common_trim_from_end_to_last_occur((const char**)&this->data, &this->count, search, inclusive);
 }
 
-void DString::trim_from_end_to_first_occur(const char& search, bool inclusive)
+void DString::replace(char find, char replace)
 {
-    return common_trim_from_end_to_first_occur(&this->data, &this->count, search, inclusive);
-}
-
-void DString::trim_from_end_to_last_occur(const char& search, bool inclusive)
-{
-    return common_trim_from_end_to_last_occur(&this->data, &this->count, search, inclusive);
-}
-
-bool DString::starts_with(Slice<char> input) const
-{
-    return common_starts_with(this->data, this->count, input);
-}
-
-bool DString::ends_with(Slice<char> input) const
-{
-    return common_ends_with(this->data, this->count, input);
-}
-
-void DString::replace(const char& find, const char& replace)
-{
-    for (char* val = this->begin(); val != this->end(); ++val)
+    for (char& curr : *this)
     {
-        if (*val == find) *val = replace;
+        if (curr == find) curr = replace;
     }
 }
 
@@ -410,6 +751,141 @@ Utf8Codepoint Utf8CodepointIterator::next()
     }
 
     this->step(count_bytes);
+    return res;
+}
+
+// Common code.
+
+bool str_common_starts_with(const char* RESTRICT ptr, sz count, StrView seq)
+{
+    if (seq.count > count) return false;
+    return mem_compare((void*)ptr, (void*)seq.ptr, seq.byte_size());
+}
+
+bool str_common_ends_with(const char* RESTRICT ptr, sz count, StrView input)
+{
+    if (input.count > count) return false;
+    const char* start = ptr + (count - input.count);
+    return mem_compare(start, input.ptr, input.byte_size());
+}
+
+bool str_common_trim_sequence_start(const char** RESTRICT ptr, sz* count, StrView trim_seq)
+{
+    if (!str_common_starts_with(*ptr, *count, trim_seq)) return false;
+    *ptr += trim_seq.count;
+    *count -= trim_seq.count;
+    return true;
+}
+
+bool str_common_trim_sequence_end(const char** RESTRICT ptr, sz* count, StrView trim_seq)
+{
+    if (!str_common_ends_with(*ptr, *count, trim_seq)) return false;
+    *count -= trim_seq.count;
+    return true;
+}
+
+void str_common_trim_from_start_to_first_occur(const char** RESTRICT start, sz* count, char search, bool inclusive)
+{
+    auto [idx, found] = common_index_of(*start, *count, search);
+    if (!found || idx == 0) return;
+    if (!inclusive) idx++;
+    *start += idx;
+    *count -= idx;
+}
+
+void str_common_trim_from_start_to_last_occur(const char** RESTRICT start, sz* count, char search, bool inclusive)
+{
+    auto [idx, found] = common_last_index_of(*start, *count, search);
+    if (!found || idx == 0) return;
+    if (!inclusive) idx++;
+    *start += idx;
+    *count -= idx;
+}
+
+void str_common_trim_from_end_to_first_occur(const char** RESTRICT start, sz* count, char search, bool inclusive)
+{
+    auto [idx, found] = common_index_of(*start, *count, search);
+    if (!found || idx == 0) return;
+    if (inclusive) idx++;
+    *count = idx;
+}
+
+void str_common_trim_from_end_to_last_occur(const char** RESTRICT start, sz* count, char search, bool inclusive)
+{
+    auto [idx, found] = common_index_of(*start, *count, search);
+    if (!found || idx == 0) return;
+    if (inclusive) idx++;
+    *count = idx;
+}
+
+Maybe<sz> str_common_index_of(const char* RESTRICT start, sz count, StrView seq)
+{
+    if (seq.count == 1) return common_index_of(start, count, seq[0]);
+
+    Maybe<sz> res;
+    const char* curr;
+    const char* inp_curr = seq.at_ref(1);
+    const char match_start = seq[0];
+    const char* end = start + count;
+    const char* inp_end = seq.end();
+    sz i = 0;
+
+    for (; i < count && (count - i) >= seq.count; ++i)
+    {
+        if (start[i] == match_start)
+        {
+            curr = start + (i + 1);
+            while (inp_curr != inp_end && curr != end && *curr == *inp_curr)
+            {
+                ++curr;
+                ++inp_curr;
+            }
+            // Test for success.
+            if (inp_curr == inp_end)
+            {
+                res.set_val(i);
+                return res;
+            }
+            inp_curr = seq.at_ref(1);
+        }
+    }
+    return res;
+}
+
+Maybe<sz> str_common_last_index_of(const char* RESTRICT start, sz count, StrView seq)
+{
+    if (seq.count == 1) return common_last_index_of(start, count, seq[0]);
+
+    Maybe<sz> res;
+    char match_start = seq.last();
+    const char* curr;
+    const char* inp_curr = seq.last_ref() - 1;
+    const char* begin = start - 1;
+    const char* inp_begin = seq.begin() - 1;
+    sz i = count - 1;
+    sz j;
+
+    for (; i >= 0 && (i+1) >= seq.count; --i)
+    {
+        if (start[i] == match_start)
+        {
+            j = i;
+            curr = start + (j - 1);
+            while (inp_curr != inp_begin && curr != begin && *curr == *inp_curr)
+            {
+                --curr;
+                --inp_curr;
+                --j;
+            }
+            // Test for success.
+            if (inp_curr == inp_begin)
+            {
+                res.set_val(j + 1);
+                return res;
+            }
+            inp_curr = seq.last_ref() - 1;
+        }
+    }
     return res;
 }
 

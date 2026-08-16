@@ -48,8 +48,8 @@ struct HashSet
     HashSet();
     HashSet(HashSet&& rhs);
     HashSet& operator=(HashSet&& rhs);
-    HashSet(const HashSet& rhs) = delete;
-    HashSet& operator=(const HashSet& rhs) = delete;
+    HashSet(const HashSet& rhs);
+    HashSet& operator=(const HashSet& rhs);
 
     void init(Allocator* alloc, sz init_capacity = DEFAULT_CAPACITY, f32 load_factor = DEFAULT_LOAD_FACTOR);
     void init_with_values(Allocator* alloc, Slice<Type> values, sz add_capacity = 0, f32 load_factor = DEFAULT_LOAD_FACTOR);
@@ -80,36 +80,37 @@ private:
 
 template<typename Type>
 HashSet<Type>::HashSet()
-    : data{null}, alloc{null}, count{0}, capacity{0}, load_factor{0}
-{}
+{
+    mem_zero(this, sizeof(*this));
+}
+
+template<typename Type>
+HashSet<Type>::HashSet(const HashSet& rhs)
+{
+    mem_copy(this, &rhs, sizeof(*this));
+}
+
+template<typename Type>
+HashSet<Type>& HashSet<Type>::operator=(const HashSet& rhs)
+{
+    ASSERT(this != &rhs);
+    mem_copy(this, &rhs, sizeof(*this));
+    return *this;
+}
 
 template<typename Type>
 HashSet<Type>::HashSet(HashSet&& rhs)
-    : data{rhs.data}, alloc{rhs.alloc}, count{rhs.count}, capacity{rhs.capacity}, load_factor{rhs.load_factor}
 {
-    rhs.data = null;
-    rhs.alloc = null;
-    rhs.count = 0;
-    rhs.capacity = 0;
-    rhs.load_factor = 0;
+    mem_copy(this, &rhs, sizeof(*this));
+    mem_zero(&rhs, sizeof(*this));
 }
 
 template<typename Type>
 HashSet<Type>& HashSet<Type>::operator=(HashSet&& rhs)
 {
-    if (this == &rhs) return *this;
-
-    this->data = rhs.data;
-    this->alloc = rhs.alloc;
-    this->count = rhs.count;
-    this->capacity = rhs.capacity;
-    this->load_factor = rhs.load_factor;
-
-    rhs.data = null;
-    rhs.alloc = null;
-    rhs.count = 0;
-    rhs.capacity = 0;
-    rhs.load_factor = 0;
+    ASSERT(this != &rhs);
+    mem_copy(this, &rhs, sizeof(*this));
+    mem_zero(&rhs, sizeof(*this));
     return *this;
 }
 

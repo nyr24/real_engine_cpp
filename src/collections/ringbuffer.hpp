@@ -57,23 +57,21 @@ struct RingBuffer
 
 template<typename Type, sz CAPACITY>
 RingBuffer<Type, CAPACITY>::RingBuffer()
-    : read_idx{0}, write_idx{0}
-{}
+{
+    this->read_idx = 0;
+    this->write_idx = 0;
+}
 
 template<typename Type, sz CAPACITY>
 RingBuffer<Type, CAPACITY>::RingBuffer(const RingBuffer& rhs)
 {
-    mem_copy(this->data, rhs.data, sizeof(Type) * CAPACITY);
-    this->read_idx = rhs.read_idx;
-    this->write_idx = rhs.write_idx;
+    mem_copy(this, &rhs, sizeof(*this));
 }
 
 template<typename Type, sz CAPACITY>
 RingBuffer<Type, CAPACITY>& RingBuffer<Type, CAPACITY>::operator=(const RingBuffer& rhs)
 {
-    mem_copy(this->data, rhs.data, sizeof(Type) * CAPACITY);
-    this->read_idx = rhs.read_idx;
-    this->write_idx = rhs.write_idx;
+    mem_copy(this, &rhs, sizeof(*this));
     return *this;
 }
 

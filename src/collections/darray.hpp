@@ -81,50 +81,37 @@ struct DArray
 
 template<typename Type>
 DArray<Type>::DArray()
-    : data{null}, alloc{null}, count{0}, capacity{0}
 {
-}
-
-template<typename Type>
-DArray<Type>::DArray(DArray&& rhs)
-    : data{rhs.data}, alloc{rhs.alloc}, count{rhs.count}, capacity{rhs.capacity}
-{
-    rhs.data = null;
-    rhs.alloc = null;
-    rhs.count = 0;
-    rhs.capacity = 0;
+    mem_zero(this, sizeof(*this));
 }
 
 template<typename Type>
 DArray<Type>::DArray(const DArray& rhs)
-    : data{rhs.data}, alloc{rhs.alloc}, count{rhs.count}, capacity{rhs.capacity}
 {
+    mem_copy(this, &rhs, sizeof(*this));
 }
 
 template<typename Type>
 DArray<Type>& DArray<Type>::operator=(const DArray& rhs)
 {
-    ASSERT_MSG(this != &rhs, "You mustn't be an idiot");
-    this->data = rhs.data;
-    this->alloc = rhs.alloc;
-    this->count = rhs.count;
-    this->capacity = rhs.capacity;
+    ASSERT(this != &rhs);
+    mem_copy(this, &rhs, sizeof(*this));
     return *this;
+}
+
+template<typename Type>
+DArray<Type>::DArray(DArray&& rhs)
+{
+    mem_copy(this, &rhs, sizeof(*this));
+    mem_zero(&rhs, sizeof(*this));
 }
 
 template<typename Type>
 DArray<Type>& DArray<Type>::operator=(DArray&& rhs)
 {
-    ASSERT_MSG(this != &rhs, "You mustn't be an idiot");
-    this->data = rhs.data;
-    this->alloc = rhs.alloc;
-    this->count = rhs.count;
-    this->capacity = rhs.capacity;
-
-    rhs.data = null;
-    rhs.alloc = null;
-    rhs.count = 0;
-    rhs.capacity = 0;
+    ASSERT(this != &rhs);
+    mem_copy(this, &rhs, sizeof(*this));
+    mem_zero(&rhs, sizeof(*this));
     return *this;
 }
 

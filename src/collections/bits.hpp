@@ -46,6 +46,7 @@ private:
     Type storage;
 public:
     BitInt(): storage{0} {}
+    explicit BitInt(Type value): storage{value} {}
     Type get_mask(Type mask) const;
     void set_mask(Type value, Type mask);
     void set(sz idx);
@@ -452,7 +453,7 @@ public:
     bool is_all_set() const { return this->set_bit_count() == this->bit_capacity(); }
     bool is_any_set() const { return this->set_bit_count() > 0; }
     bool is_nothing_set() const { return this->set_bit_count() == 0; }
-    Pair<sz, sz> calc_indices(sz idx)
+    Pair<sz, sz> calc_indices(sz idx) const
     {
         Pair<sz, sz> res;
         res.first = idx / BUCKET_BIT_SIZE;
@@ -475,7 +476,7 @@ void DBitSet<BucketType>::destroy()
 {
     if (this->bit_buckets)
     {
-        allocator_free(this->alloc, this->bit_buckets);
+        allocator_free(this->alloc, this->bit_buckets.ptr);
         this->bit_buckets = {};
     }
 }

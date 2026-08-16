@@ -49,7 +49,7 @@ struct SlotArray
     void destroy();
 
     bool is_empty() { return this->bits.is_nothing_set(); }
-    bool is_full() { return this->bits.is_all_set(); }
+    bool is_full() { return this->bits.set_bit_count() == this->capacity; }
     bool is_initialized() { return this->alloc != null; }
     Type& operator[](sz idx) { return this->data[idx]; }
     Type* begin() { return this->data; };
@@ -92,6 +92,15 @@ sz SlotArray<Type>::add(const Type& val)
 }
 
 template<typename Type>
+void SlotArray<Type>::add(Slice<Type> vals)
+{
+    for (const Type& val : vals)
+    {
+        this->add(val);
+    }
+}
+
+template<typename Type>
 void SlotArray<Type>::remove(sz idx)
 {
     ASSERT_MSG(idx >= 0 && idx < this->capacity, "Must be in bounds");
@@ -101,20 +110,24 @@ void SlotArray<Type>::remove(sz idx)
 template<typename Type>
 sz SlotArray<Type>::get_free_slot_idx()
 {
-    auto [idx, is_found] = this->bits.find_first_zero_bit(true);
-    if (is_found) return idx;
+    if (this->is_full())
+    {
+        sz old_capacity = this->capacity;
+        this->resize(1);
+        this->bits.set(old_capacity);
+        return old_capacity;
+    }
 
-    sz old_capacity = this->capacity;
-    this->resize(old_capacity * 2);
-    this->bits.set(old_capacity);
-    return old_capacity;
+    auto [idx, is_found] = this->bits.find_first_zero_bit(true);
+    ASSERT_MSG(is_found, "Free bit must exist when not full");
+    return idx;
 }
 
 template<typename Type>
 Type* SlotArray<Type>::get_free_slot()
 {
     sz idx = this->get_free_slot_idx();
-    return this->data[idx];
+    return &this->data[idx];
 }
 
 template<typename Type>
@@ -130,9 +143,9 @@ Slice<Type*> SlotArray<Type>::get_free_slots(Allocator* alloc, sz count)
     ASSERT_GREATER_ZERO(count);
 
     auto res = Slice<Type*>::make(alloc, count);
-    for (Type* slot : res)
+    for (Type*& slot : res)
     {
-        *slot = this->get_free_slot();
+        slot = this->get_free_slot();
     }
     return res;
 }
@@ -184,11 +197,16 @@ template<typename Type>
 Maybe<Type*> SlotArray<Type>::Iter::next()
 {
     Maybe<Type*> res;
-    if (this->at_end()) return res;
-    // We need the opposite of ctz.
-    sz cto = this->bits->count_trailing_zeroes(this->pos);
-    this->pos = cto;
-    res.set_val(this->data_view[cto - 1]);
+    while (!this->at_end())
+    {
+        if (this->bits->is_set(this->pos))
+        {
+            res.set_val(&this->data_view[this->pos]);
+            this->pos++;
+            return res;
+        }
+        this->pos++;
+    }
     return res;
 }
 
